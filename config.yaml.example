@@ -1,0 +1,15 @@
+# DBAI Configuration Template
+# Copy this file to config.yaml and update with your settings
+
+database:
+  server: localhost
+  database: your_database_name
+  driver: ODBC Driver 17 for SQL Server
+  username: your_username
+  password: your_password
+
+llm:
+  provider: groq  # groq or openai
+  model: llama-3.1-8b-instant
+  temperature: 0.1
+  max_tokens: 2000
