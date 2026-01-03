@@ -417,7 +417,7 @@ def collect_and_download_diagnostics() -> Optional[str]:
 def build_ui():
     """Build and return the Gradio interface."""
     
-    with gr.Blocks(title="DBAI - Database AI Assistant", theme=gr.themes.Soft()) as demo:
+    with gr.Blocks(title="DBAI - Database AI Assistant") as demo:
         gr.Markdown("# 🤖 DBAI - Database AI Assistant")
         gr.Markdown("Ask questions about your database in natural language!")
         

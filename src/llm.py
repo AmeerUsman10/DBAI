@@ -6,8 +6,7 @@ import logging
 import json
 import re
 from typing import Optional, Any
-from langchain.chains import create_sql_query_chain
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -111,12 +110,35 @@ def make_sql_chain(llm, db):
         db: SQLDatabase instance
         
     Returns:
-        SQL query chain
+        SQL query chain function
     """
     try:
-        # Use LangChain's built-in SQL chain
-        chain = create_sql_query_chain(llm, db)
-        return chain
+        # Get schema information
+        schema = db.get_table_info()
+        
+        prompt = PromptTemplate(
+            input_variables=["question"],
+            template=SQL_PROMPT_TEMPLATE.replace("{schema}", schema)
+        )
+        
+        # Simple chain that formats prompt and calls LLM
+        def sql_chain(inputs: dict) -> dict:
+            question = inputs.get("question", "")
+            formatted_prompt = prompt.format(question=question)
+            response = llm.invoke(formatted_prompt)
+            
+            # Extract content from response
+            if hasattr(response, 'content'):
+                result = response.content
+            elif isinstance(response, str):
+                result = response
+            else:
+                result = str(response)
+            
+            return {"result": result}
+        
+        return sql_chain
+        
     except Exception as e:
         logger.error(f"Error creating SQL chain: {e}", exc_info=True)
         raise
