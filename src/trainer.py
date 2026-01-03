@@ -3,10 +3,11 @@ Training Module (Demo)
 Placeholder for model training and fine-tuning functionality.
 """
 import logging
+from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
-def train_model(training_data: list, config: dict = None) -> tuple[bool, str]:
+def train_model(training_data: list, config: dict = None) -> Tuple[bool, str]:
     """
     Placeholder for model training functionality.
     
@@ -27,7 +28,7 @@ def train_model(training_data: list, config: dict = None) -> tuple[bool, str]:
     
     return True, f"Demo: Would train on {len(training_data)} examples"
 
-def save_training_example(question: str, sql: str, result: str) -> tuple[bool, str]:
+def save_training_example(question: str, sql: str, result: str) -> Tuple[bool, str]:
     """
     Save a training example for future fine-tuning.
     

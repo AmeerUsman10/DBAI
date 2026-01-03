@@ -58,7 +58,7 @@ def read_excel_file(file_path: str) -> Tuple[bool, Any]:
             # Try both engines
             try:
                 df = pd.read_excel(file_path, engine='openpyxl')
-            except:
+            except Exception:
                 df = pd.read_excel(file_path, engine='xlrd')
         
         logger.info(f"Successfully read Excel file: {file_path}")

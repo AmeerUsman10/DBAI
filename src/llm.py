@@ -5,7 +5,7 @@ Prompt templates and chain factories for SQL, presentation, and description task
 import logging
 import json
 import re
-from typing import Optional, Any
+from typing import Optional, Any, Tuple
 from langchain_core.prompts import PromptTemplate
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ Please provide:
 
 Description:"""
 
-def validate_sql(query: str) -> tuple[bool, str]:
+def validate_sql(query: str) -> Tuple[bool, str]:
     """
     Validate SQL query for safety.
     
