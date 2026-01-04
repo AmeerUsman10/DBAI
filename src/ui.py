@@ -12,11 +12,14 @@ from pathlib import Path
 from dotenv import load_dotenv, set_key
 
 from src.providers import create_provider
-from src.database import reload_engine, test_connection, get_engine, run_query, get_sql_database
+from src.database import reload_engine, test_connection, get_engine, run_query, get_sql_database, load_metadata, save_metadata
 from src.llm import make_sql_chain, make_presentation_chain, make_describe_chain, extract_sql_from_response
 from src.uploader import process_excel_files, check_table_exists, import_dataframe_to_db
 from src.trainer import save_training_example
 from src.diagnostics import collect_diagnostics
+from src.clarity import analyze_query_clarity, needs_clarification
+from src.learnings import save_learning, get_learning_stats
+from src.quick_training import add_training_rule, get_training_stats, format_rules_display
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -25,6 +28,8 @@ load_dotenv()
 current_provider = None
 current_llm = None
 session_tokens = {"total": 0, "prompt": 0, "completion": 0}  # Token tracking
+pending_clarification = {"question": None, "options": [], "original_query": None}  # Clarification state
+last_query_info = {"question": None, "sql": None, "result": None}  # For corrections
 
 # Persona definitions
 PERSONAS = {
@@ -154,7 +159,7 @@ def extract_token_usage(response) -> dict:
 
 def chat_query(question: str, history: List, persona: str = "default") -> Tuple[str, List]:
     """
-    Process a natural language query and return SQL + results.
+    Process a natural language query with clarity checking and learning.
     
     Args:
         question: User's question
@@ -164,10 +169,48 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
     Returns:
         Tuple of (response, updated_history)
     """
-    global current_llm, current_provider, session_tokens
+    global current_llm, current_provider, session_tokens, pending_clarification
     
     if not question.strip():
         return "", history
+    
+    # Check if this is a response to a clarification request (user typed a number 1-4)
+    if pending_clarification["question"] and question.strip().isdigit():
+        choice_num = int(question.strip())
+        if 1 <= choice_num <= len(pending_clarification["options"]):
+            # User selected an option - use the clarified query
+            original_query = pending_clarification["original_query"]
+            question = pending_clarification["options"][choice_num - 1]
+            
+            # Clear pending state but remember original for learning
+            pending_clarification["question"] = None
+            pending_clarification["options"] = []
+            # Keep original_query for learning after successful execution
+    
+    # Analyze query clarity (skip if already clarified above)
+    if not pending_clarification.get("original_query"):
+        clarity_score, reason, clarifications = analyze_query_clarity(question)
+        
+        # If query needs clarification (score < 70)
+        if needs_clarification(clarity_score, threshold=70) and clarifications:
+            # Store clarification state
+            pending_clarification["question"] = question
+            pending_clarification["options"] = clarifications
+            pending_clarification["original_query"] = question
+            
+            # Generate clarification message
+            response = f"I'd like to better understand your query: **\"{question}\"**\n\n"
+            response += f"Could you clarify which of these you're looking for?\n\n"
+            
+            for i, option in enumerate(clarifications, 1):
+                response += f"**{i}.** {option}\n"
+            
+            response += "\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
+            
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": response})
+            
+            return "", history
     
     try:
         # Load config and initialize provider if needed
@@ -255,6 +298,19 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
                 response += f"**Result:** {result}"
         else:
             response = f"❌ **Error:** {result}"
+        
+        # Save learning if this was a clarified query
+        if pending_clarification.get("original_query") and success:
+            original = pending_clarification["original_query"]
+            save_learning(original, question, sql_query, "positive")
+            pending_clarification["original_query"] = None  # Clear after saving
+        
+        # Add learning and training stats
+        stats = get_learning_stats()
+        training_stats = get_training_stats()
+        
+        if stats["total"] > 0 or training_stats["total"] > 0:
+            response += f"\n\n<sub>🧠 Knowledge: {stats['total']} learned patterns · {training_stats['total']} training rules</sub>"
         
         # Add token usage info if available (only for OpenAI)
         if provider_name == 'openai' and response_tokens['total_tokens'] > 0:
@@ -533,7 +589,7 @@ def collect_and_download_diagnostics() -> Optional[str]:
 def build_ui():
     """Build and return the Gradio interface."""
     
-    with gr.Blocks(title="DBAI - Database AI Assistant") as demo:
+    with gr.Blocks(title="DBAI - Database AI Assistant", theme=gr.themes.Default()) as demo:
         gr.Markdown("# 🤖 DBAI - Database AI Assistant")
         gr.Markdown("Ask questions about your database in natural language!")
         
@@ -710,6 +766,62 @@ def build_ui():
                 gr.Markdown("Configure how the AI understands and interacts with your database.")
                 
                 with gr.Tabs():
+                    # Quick Training Tab (FREE-FORM INSTRUCTIONS)
+                    with gr.Tab("⚡ Quick Training"):
+                        gr.Markdown("""### Write Training Instructions in Plain English
+Tell the AI exactly how to interpret your queries. These rules apply immediately!
+
+**Examples:**
+- "When I ask 'total greige rcvd', always return meters of greige fabric received"
+- "When I say 'arrival yarn', I mean LBS of yarn received, not amount in PKR"
+- "Stock check should show current inventory in both LBS and bags"
+""")
+                        
+                        training_instruction = gr.Textbox(
+                            label="Training Instruction",
+                            placeholder='Example: When I ask "total arrival yarn", return total LBS received, NOT total amount in PKR.',
+                            lines=3
+                        )
+                        
+                        with gr.Row():
+                            add_training_btn = gr.Button("💾 Add Training Rule", variant="primary", size="lg")
+                            clear_training_input_btn = gr.Button("🔄 Clear", variant="secondary")
+                        
+                        training_status = gr.Markdown("")
+                        
+                        gr.Markdown("---")
+                        gr.Markdown("### Active Training Rules")
+                        training_rules_display = gr.Markdown("")
+                        
+                        def add_training(instruction):
+                            """Add a quick training rule."""
+                            success, msg = add_training_rule(instruction)
+                            
+                            if success:
+                                # Get stats to show in message
+                                stats = get_training_stats()
+                                display_msg = f"{msg}\n\n🎉 **New training event!** This rule is now active."
+                                return display_msg, format_rules_display(), ""
+                            else:
+                                return f"❌ {msg}", format_rules_display(), instruction
+                        
+                        add_training_btn.click(
+                            add_training,
+                            inputs=[training_instruction],
+                            outputs=[training_status, training_rules_display, training_instruction]
+                        )
+                        
+                        clear_training_input_btn.click(
+                            lambda: "",
+                            outputs=[training_instruction]
+                        )
+                        
+                        # Load rules on page load
+                        demo.load(
+                            format_rules_display,
+                            outputs=[training_rules_display]
+                        )
+                    
                     # System Instructions Tab
                     with gr.Tab("📝 System Instructions"):
                         gr.Markdown("""### Database Context
@@ -1044,7 +1156,6 @@ These descriptions help the AI understand your data better.""")
                             display_current_training,
                             outputs=[training_display]
                         )
-
                     
                     # Schema Analysis Tab
                     with gr.Tab("🔍 Auto-Analyze Schema"):
