@@ -110,10 +110,12 @@ def classify_query(query: str) -> Dict:
         logger.info(f"Detected breakdown request in query: {query}")
     
     # Detect department
-    if 'greige' in query_lower:
-        params['department'] = 'greige'
-    elif 'yarn' in query_lower and 'greige' in query_lower:
+    if 'greige' in query_lower and 'yarn' in query_lower:
         params['department'] = 'both'
+    elif 'greige' in query_lower:
+        params['department'] = 'greige'
+    elif 'yarn' in query_lower:
+        params['department'] = 'yarn'
     
     # Detect movement type
     for keyword, entry_type in MOVEMENT_TYPES.items():

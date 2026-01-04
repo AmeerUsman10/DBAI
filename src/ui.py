@@ -277,47 +277,58 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
     
     # Analyze query clarity (skip if already clarified above)
     if not pending_clarification.get("original_query"):
-        clarity_score, reason, clarifications = analyze_query_clarity(question)
+        # CLASSIFY FIRST to detect breakdown/template potential
+        classification = classify_query(question)
+        logger.info(f"Query classified as: {classification['type']} (confidence: {classification['confidence']}%)")
         
-        # Track clarity analysis
-        clarity_data = {
-            "score": clarity_score,
-            "needs_clarification": needs_clarification(clarity_score, threshold=70),
-            "reason": reason,
-            "clarifications_offered": clarifications
-        }
+        # Skip clarity check if breakdown detected or high-confidence template
+        skip_clarity = (
+            classification.get('params', {}).get('breakdown') or 
+            classification['confidence'] >= 80
+        )
         
-        # If query needs clarification (score < 70)
-        if needs_clarification(clarity_score, threshold=70) and clarifications:
-            # Store clarification state
-            pending_clarification["question"] = question
-            pending_clarification["options"] = clarifications
-            pending_clarification["original_query"] = question
+        if not skip_clarity:
+            clarity_score, reason, clarifications = analyze_query_clarity(question)
             
-            # Generate clarification message
-            response = f"I'd like to better understand your query: **\"{question}\"**\n\n"
-            response += f"Could you clarify which of these you're looking for?\n\n"
+            # Track clarity analysis
+            clarity_data = {
+                "score": clarity_score,
+                "needs_clarification": needs_clarification(clarity_score, threshold=70),
+                "reason": reason,
+                "clarifications_offered": clarifications
+            }
             
-            for i, option in enumerate(clarifications, 1):
-                response += f"**{i}.** {option}\n"
-            
-            response += "\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
-            
-            # Track clarification request
-            session_tracker.track_query(
-                user_question=question,
-                clarity_analysis=clarity_data,
-                llm_interaction=None,
-                execution=None,
-                response={"type": "clarification_request", "text": response},
-                performance={"total_time_ms": int((time.time() - start_time) * 1000)},
-                error=None
-            )
-            
-            history.append({"role": "user", "content": question})
-            history.append({"role": "assistant", "content": response})
-            
-            return "", history
+            # If query needs clarification (score < 70)
+            if needs_clarification(clarity_score, threshold=70) and clarifications:
+                # Store clarification state
+                pending_clarification["question"] = question
+                pending_clarification["options"] = clarifications
+                pending_clarification["original_query"] = question
+                
+                # Generate clarification message
+                response = f"I'd like to better understand your query: **\"{question}\"**\n\n"
+                response += f"Could you clarify which of these you're looking for?\n\n"
+                
+                for i, option in enumerate(clarifications, 1):
+                    response += f"**{i}.** {option}\n"
+                
+                response += "\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
+                
+                # Track clarification request
+                session_tracker.track_query(
+                    user_question=question,
+                    clarity_analysis=clarity_data,
+                    llm_interaction=None,
+                    execution=None,
+                    response={"type": "clarification_request", "text": response},
+                    performance={"total_time_ms": int((time.time() - start_time) * 1000)},
+                    error=None
+                )
+                
+                history.append({"role": "user", "content": question})
+                history.append({"role": "assistant", "content": response})
+                
+                return "", history
     
     try:
         # Load config and initialize provider if needed
@@ -348,9 +359,7 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         logger.info(f"USER QUERY: {question}")
         
         # HYBRID APPROACH: Try template-based generation first
-        classification = classify_query(question)
-        logger.info(f"Query classified as: {classification['type']} (confidence: {classification['confidence']}%)")
-        
+        # (classification already done before clarity check)
         sql_query = None
         llm_raw_response = None
         generation_method = "llm"  # Default

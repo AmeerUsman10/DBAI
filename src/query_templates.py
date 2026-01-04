@@ -170,45 +170,54 @@ def generate_aggregation_sql(params: Dict) -> str:
     """
     Generate aggregation/total query.
     
-    Template: SELECT (SELECT SUM(X) FROM Yarn) as 'Yarn Total',
-                     (SELECT SUM(Y) FROM Greige) as 'Greige Total'
+    BUSINESS RULE: Only include data from requested department.
+    - 'yarn total' → Only YarnData
+    - 'greige total' → Only GreigeData
+    - 'total' (both) → Both departments with subqueries
     """
     dept = params['department']
     movement_type = params['movement_type']
     
-    if dept == 'both':
-        # Multi-department - use subqueries (Training Rule #2)
+    if dept == 'yarn':
+        # Yarn only
+        where_clause = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
+        
+        sql = f"""SELECT 
+    SUM(LBS) as 'Total LBS',
+    SUM(AMOUNT) as 'Total PKR',
+    SUM(BAGS) as 'Total Bags',
+    COUNT(*) as 'Record Count'
+FROM YarnData
+{where_clause}"""
+        logger.info(f"Generated yarn-only aggregation SQL from template")
+    
+    elif dept == 'greige':
+        # Greige only
+        where_clause = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
+        
+        sql = f"""SELECT 
+    SUM(METER) as 'Total Meters',
+    SUM(AMOUNT) as 'Total PKR',
+    COUNT(*) as 'Record Count'
+FROM GreigeData
+{where_clause}"""
+        logger.info(f"Generated greige-only aggregation SQL from template")
+    
+    else:  # both
+        # Multi-department - use subqueries (Training Rule #2: NO JOIN)
         where_yarn = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
+        where_greige = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
         
         sql = f"""SELECT 
     (SELECT SUM(LBS) FROM YarnData {where_yarn}) as 'Yarn Total LBS',
     (SELECT SUM(AMOUNT) FROM YarnData {where_yarn}) as 'Yarn Total PKR',
     (SELECT SUM(BAGS) FROM YarnData {where_yarn}) as 'Yarn Total Bags',
     (SELECT COUNT(*) FROM YarnData {where_yarn}) as 'Yarn Count',
-    (SELECT SUM(METER) FROM GreigeData) as 'Greige Total Meters',
-    (SELECT SUM(AMOUNT) FROM GreigeData) as 'Greige Total PKR',
-    (SELECT COUNT(*) FROM GreigeData) as 'Greige Count'"""
+    (SELECT SUM(METER) FROM GreigeData {where_greige}) as 'Greige Total Meters',
+    (SELECT SUM(AMOUNT) FROM GreigeData {where_greige}) as 'Greige Total PKR',
+    (SELECT COUNT(*) FROM GreigeData {where_greige}) as 'Greige Count'"""
+        logger.info(f"Generated multi-department aggregation SQL from template")
     
-    elif dept == 'yarn':
-        table = 'YarnData'
-        where_clause = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
-        
-        sql = f"""SELECT 
-    SUM(LBS) as 'Yarn Total LBS',
-    SUM(AMOUNT) as 'Yarn Total PKR',
-    SUM(BAGS) as 'Yarn Total Bags',
-    COUNT(*) as 'Yarn Count'
-FROM {table}
-{where_clause}"""
-    
-    else:  # greige
-        sql = f"""SELECT 
-    SUM(METER) as 'Greige Total Meters',
-    SUM(AMOUNT) as 'Greige Total PKR',
-    COUNT(*) as 'Greige Count'
-FROM GreigeData"""
-    
-    logger.info(f"Generated aggregation SQL from template")
     return sql
 
 
