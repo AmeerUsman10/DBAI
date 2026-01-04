@@ -149,12 +149,12 @@ def analyze_query_clarity(query: str) -> Tuple[int, str, List[str]]:
         reasons.append("Total requested without specifying dimension")
     
     # Check for supplier queries without movement type (CRITICAL business rule)
-    supplier_keywords = ['top supplier', 'supplier rank', 'best supplier', 'supplier list']
+    supplier_keywords = ['top supplier', 'supplier rank', 'best supplier', 'supplier list', 'supplier']
     movement_keywords = ['arrival', 'issue', 'rejection', 'movement']
     
     if any(kw in query_lower for kw in supplier_keywords):
         if not any(mk in query_lower for mk in movement_keywords):
-            score -= 25
+            score -= 35  # CRITICAL: Must go below 70 threshold to trigger clarification
             reasons.append("Supplier query without movement type (arrival/issue/rejection)")
             vague_type = 'top_supplier'
     

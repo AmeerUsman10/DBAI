@@ -32,6 +32,7 @@ session_tokens = {"total": 0, "prompt": 0, "completion": 0}  # Token tracking
 session_tracker = get_session_tracker()  # Initialize session tracking
 pending_clarification = {"question": None, "options": [], "original_query": None}  # Clarification state
 last_query_info = {"question": None, "sql": None, "result": None}  # For corrections
+training_mode_enabled = False  # Live training mode toggle
 
 # Persona definitions
 PERSONAS = {
@@ -138,6 +139,81 @@ def save_config(config: dict) -> bool:
         return False
 
 # Chat Tab Functions
+def toggle_training_mode(enabled: bool) -> str:
+    """Toggle live training mode on/off."""
+    global training_mode_enabled
+    training_mode_enabled = enabled
+    
+    if enabled:
+        return "🎓 **Live Training Mode ACTIVE** - Feedback controls enabled"
+    else:
+        return "💬 Chat Mode - Standard responses"
+
+
+def submit_correction(feedback_type: str, correction_text: str) -> str:
+    """
+    Submit feedback/correction for the last AI response.
+    
+    Args:
+        feedback_type: 'thumbs_up', 'thumbs_down', or 'correction'
+        correction_text: User's correction or feedback
+        
+    Returns:
+        Confirmation message
+    """
+    global last_query_info, session_tracker
+    
+    if not last_query_info["question"]:
+        return "❌ No recent query to provide feedback on"
+    
+    try:
+        from src.quick_training import add_training_rule
+        
+        if feedback_type == "thumbs_up":
+            # Positive feedback - log but don't create rule
+            session_tracker.track_training_event(
+                event_type="positive_feedback",
+                details={"question": last_query_info["question"], "sql": last_query_info["sql"]}
+            )
+            return "✅ Positive feedback recorded - this approach will be reinforced"
+        
+        elif feedback_type == "thumbs_down" and correction_text.strip():
+            # Negative feedback with correction - create training rule
+            rule = f"CORRECTION: For queries like '{last_query_info['question']}': {correction_text.strip()}"
+            success, message = add_training_rule(rule)
+            
+            # Track in session
+            session_tracker.track_training_event(
+                event_type="correction_submitted",
+                details={
+                    "question": last_query_info["question"],
+                    "sql": last_query_info["sql"],
+                    "correction": correction_text.strip(),
+                    "rule_created": success
+                }
+            )
+            
+            if success:
+                return f"✅ Training rule created from your correction\n\n**Rule:** {rule}"
+            else:
+                return f"❌ {message}"
+        
+        elif feedback_type == "thumbs_down":
+            # Negative feedback without correction
+            session_tracker.track_training_event(
+                event_type="negative_feedback",
+                details={"question": last_query_info["question"], "sql": last_query_info["sql"]}
+            )
+            return "👎 Negative feedback recorded. Please provide a correction to create a training rule."
+        
+        else:
+            return "❌ Invalid feedback type"
+            
+    except Exception as e:
+        logger.error(f"Error submitting correction: {e}")
+        return f"❌ Error: {str(e)}"
+
+
 def extract_token_usage(response) -> dict:
     """Extract token usage from LLM response if available."""
     tokens = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
@@ -506,6 +582,15 @@ Keep it concise and factual."""
         logger.info(f"RESPONSE SENT: {len(response)} chars | Success: {success} | Tokens: {response_tokens.get('total_tokens', 0)}")
         logger.debug(f"RESPONSE PREVIEW: {response[:200]}")
         
+        # Save last query info for live training mode corrections
+        global last_query_info
+        last_query_info = {
+            "question": question,
+            "sql": sql_query,
+            "result": response,
+            "success": success
+        }
+        
         # Track complete query lifecycle
         total_time_ms = int((time.time() - start_time) * 1000)
         session_tracker.track_query(
@@ -861,6 +946,67 @@ def build_ui():
                 with gr.Row():
                     send_stop_btn = gr.Button("▶ Send", variant="primary", scale=2)
                     clear_btn = gr.Button("Clear Chat", size="sm", variant="secondary", scale=1)
+                
+                # Live Training Mode Controls
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        training_mode_toggle = gr.Checkbox(
+                            label="🎓 Live Training Mode",
+                            value=False,
+                            info="Enable feedback controls to improve AI responses in real-time"
+                        )
+                        training_mode_status = gr.Markdown("💬 Chat Mode - Standard responses")
+                    
+                    with gr.Column(scale=3, visible=False) as feedback_panel:
+                        gr.Markdown("### Provide Feedback on Last Response")
+                        with gr.Row():
+                            thumbs_up_btn = gr.Button("👍 Good Response", size="sm", scale=1)
+                            thumbs_down_btn = gr.Button("👎 Needs Improvement", size="sm", scale=1)
+                        
+                        correction_input = gr.Textbox(
+                            placeholder="Explain what was wrong and how it should be...",
+                            label="Correction / Feedback",
+                            lines=2,
+                            visible=False
+                        )
+                        submit_correction_btn = gr.Button("Submit Correction", visible=False, variant="primary")
+                        correction_status = gr.Markdown("")
+                
+                # Toggle training mode visibility
+                training_mode_toggle.change(
+                    lambda enabled: (
+                        gr.update(visible=enabled),
+                        "🎓 **Live Training Mode ACTIVE** - Feedback controls enabled" if enabled else "💬 Chat Mode - Standard responses"
+                    ),
+                    inputs=[training_mode_toggle],
+                    outputs=[feedback_panel, training_mode_status]
+                ).then(
+                    toggle_training_mode,
+                    inputs=[training_mode_toggle],
+                    outputs=[]
+                )
+                
+                # Thumbs up feedback
+                thumbs_up_btn.click(
+                    lambda: submit_correction("thumbs_up", ""),
+                    outputs=[correction_status]
+                )
+                
+                # Thumbs down - show correction input
+                thumbs_down_btn.click(
+                    lambda: (gr.update(visible=True), gr.update(visible=True), "👎 Please explain what was wrong..."),
+                    outputs=[correction_input, submit_correction_btn, correction_status]
+                )
+                
+                # Submit correction
+                submit_correction_btn.click(
+                    lambda text: submit_correction("thumbs_down", text),
+                    inputs=[correction_input],
+                    outputs=[correction_status]
+                ).then(
+                    lambda: (gr.update(value="", visible=False), gr.update(visible=False)),
+                    outputs=[correction_input, submit_correction_btn]
+                )
                 
                 # Query event tracking
                 is_running = gr.State(False)

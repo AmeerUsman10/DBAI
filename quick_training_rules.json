@@ -6,18 +6,23 @@
       "usage_count": 0
     },
     {
-      "instruction": "CRITICAL SQL SYNTAX: When querying multiple departments, use separate subqueries with ONE column each. CORRECT: SELECT (SELECT COUNT(*) FROM YarnData) as 'Yarn Count', (SELECT COUNT(*) FROM GreigeData) as 'Greige Count'. WRONG: SELECT (SELECT COUNT(*), SUM(LBS) FROM YarnData) - subqueries can only return ONE column. Each metric needs its own subquery. NEVER use JOIN for department summaries.",
+      "instruction": "CRITICAL SQL SYNTAX - NEVER USE JOIN FOR MULTI-DEPARTMENT QUERIES: When querying YarnData AND GreigeData together, use separate subqueries with ONE column each. CORRECT: SELECT (SELECT COUNT(*) FROM YarnData) as 'Yarn Count', (SELECT COUNT(*) FROM GreigeData) as 'Greige Count'. WRONG: Any JOIN between YarnData and GreigeData - this creates INFLATED COUNTS. Each department metric MUST be its own independent subquery. Each subquery returns EXACTLY ONE value. NO JOIN, NO UNION, NO FULL OUTER JOIN.",
       "added_at": "2026-01-04T11:40:00",
       "usage_count": 0
     },
     {
-      "instruction": "MOVEMENT TYPES REQUIRED: Database has 3 inventory movement types: ARRIVAL (incoming), ISSUE (outgoing), REJECTION (returned). When user asks 'top supplier' or 'supplier ranking' WITHOUT specifying movement type, STOP and ask: 'Which movement type? 1) Arrivals 2) Issues 3) Rejections 4) All combined'. This is MANDATORY for accurate business reporting.",
+      "instruction": "MOVEMENT TYPES: Database has 3 inventory movement types in ENTRY_TYPE column: 'Yarn Arrival' (incoming), 'Yarn Issue' (outgoing), 'Yarn Rejection' (returned). When filtering suppliers or generating totals, ALWAYS use WHERE ENTRY_TYPE = '<specific type>' if user specified arrival/issue/rejection. Never mix movement types in one query unless explicitly requested. Examples: WHERE ENTRY_TYPE = 'Yarn Arrival' for arrivals, WHERE ENTRY_TYPE = 'Yarn Issue' for issues.",
       "added_at": "2026-01-04T11:55:00",
+      "usage_count": 0
+    },
+    {
+      "instruction": "SEGMENTING BY ENTRY TYPE: When user asks for 'all entry types' or 'breakdown by type' or 'each movement type', use GROUP BY ENTRY_TYPE to show separate rows. CORRECT: SELECT ENTRY_TYPE, SUM(LBS), SUM(AMOUNT) FROM YarnData GROUP BY ENTRY_TYPE. This shows Arrival, Issue, Rejection as separate rows. WRONG: Just summing everything without GROUP BY - that combines all types into one total.",
+      "added_at": "2026-01-04T12:30:00",
       "usage_count": 0
     }
   ],
   "metadata": {
-    "total_rules": 3,
-    "last_updated": "2026-01-04T11:55:00"
+    "total_rules": 4,
+    "last_updated": "2026-01-04T12:30:00"
   }
 }
