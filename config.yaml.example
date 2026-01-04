@@ -9,7 +9,7 @@ database:
   password: your_password
 
 llm:
-  provider: groq  # groq or openai
-  model: llama-3.1-8b-instant
+  provider: openai  # groq or openai
+  model: gpt-4o-mini
   temperature: 0.1
   max_tokens: 2000

@@ -39,8 +39,8 @@ def load_config() -> dict:
                 'password': ''
             },
             'llm': {
-                'provider': 'groq',
-                'model': 'llama-3.1-8b-instant',
+                'provider': 'openai',
+                'model': 'gpt-4o-mini',
                 'temperature': 0.1,
                 'max_tokens': 2000
             }
@@ -429,17 +429,16 @@ def build_ui():
             with gr.Tab("💬 Chat"):
                 chatbot = gr.Chatbot(height=400, label="Conversation")
                 
-                with gr.Row():
-                    question_input = gr.Textbox(
-                        placeholder="Ask a question about your database...",
-                        label="Your Question",
-                        scale=4
-                    )
-                    submit_btn = gr.Button("Submit", variant="primary", scale=1)
+                question_input = gr.Textbox(
+                    placeholder="Ask a question about your database...",
+                    label="Your Question"
+                )
                 
                 with gr.Row():
-                    clear_btn = gr.Button("Clear Chat")
-                    stop_btn = gr.Button("⏹️ Stop", variant="stop")
+                    submit_btn = gr.Button("Send", variant="primary", scale=2)
+                    stop_btn = gr.Button("Stop", variant="stop", scale=1)
+                
+                clear_btn = gr.Button("Clear Chat", size="sm", variant="secondary")
                 
                 # Store the current query event for cancellation
                 query_event = submit_btn.click(
@@ -573,107 +572,250 @@ def build_ui():
                     outputs=[model_dropdown]
                 )
             
-            # Train Tab - Interactive Q&A
+            # Train Tab - AI Learning System
             with gr.Tab("🎓 Train"):
-                gr.Markdown("## Interactive Database Training")
-                gr.Markdown("Teach the AI about your database by answering its questions.")
+                gr.Markdown("## AI Database Training System")
+                gr.Markdown("*Interactive session to teach the AI about your database structure, relationships, and business logic.*")
+                
+                # Training conversation interface
+                training_chatbot = gr.Chatbot(
+                    value=[[None, "👋 Hi! I'm here to train the AI on your database. I'll ask you questions to understand your data structure, relationships, and business rules. Ready to begin?"]],
+                    height=400,
+                    label="Training Conversation"
+                )
                 
                 with gr.Row():
-                    with gr.Column(scale=1):
-                        start_training_btn = gr.Button("Start Training Session", variant="primary", size="lg")
-                        stop_training_btn = gr.Button("Stop Training", variant="stop")
-                        
-                    with gr.Column(scale=2):
-                        training_progress = gr.Textbox(
-                            label="Progress",
-                            value="Click 'Start Training Session' to begin",
-                            interactive=False,
-                            lines=2
-                        )
+                    training_input = gr.Textbox(
+                        placeholder="Type your answer or question here...",
+                        label="Your Response",
+                        scale=5
+                    )
+                    send_training_btn = gr.Button("Send", variant="primary", scale=1)
                 
-                ai_question = gr.Textbox(
-                    label="AI Question",
-                    placeholder="AI will ask questions about your database here...",
-                    interactive=False,
-                    lines=3
+                with gr.Row():
+                    view_knowledge_btn = gr.Button("📊 View Training Data", size="sm")
+                    reset_training_btn = gr.Button("🔄 Reset Training", size="sm", variant="secondary")
+                    export_training_btn = gr.Button("💾 Export Knowledge", size="sm")
+                
+                knowledge_display = gr.Markdown(
+                    label="AI Knowledge Base",
+                    visible=False
                 )
                 
-                user_answer = gr.Textbox(
-                    label="Your Answer",
-                    placeholder="Type your answer here...",
-                    lines=4
-                )
+                export_file = gr.File(label="Download Training Data", visible=False)
                 
-                submit_answer_btn = gr.Button("Submit Answer", variant="primary")
+                # Training state and functions
+                training_state = gr.State({
+                    "stage": 0,
+                    "knowledge": {},
+                    "conversation": []
+                })
                 
-                training_history = gr.Textbox(
-                    label="Training History",
-                    lines=10,
-                    interactive=False
-                )
-                
-                # Training functions
-                def start_training():
-                    questions = [
-                        "What is the main purpose of your database? What kind of data does it store?",
-                        "What are the most important tables in your database? List their names.",
-                        "Describe the relationships between your main tables. Which tables are connected and how?",
-                        "What are the common queries or questions users ask about this data?",
-                        "Are there any special business rules or constraints I should know about?"
-                    ]
-                    return questions[0], "Training started! Answer the questions below.", ""
-                
-                training_state = gr.State({"question_index": 0, "history": []})
-                
-                def submit_training_answer(answer, state):
-                    if not answer.strip():
-                        return gr.update(), gr.update(), gr.update()
+                def process_training_response(user_input, history, state):
+                    """Process user's training response and generate next question."""
+                    global current_llm, current_provider
                     
-                    questions = [
-                        "What is the main purpose of your database? What kind of data does it store?",
-                        "What are the most important tables in your database? List their names.",
-                        "Describe the relationships between your main tables. Which tables are connected and how?",
-                        "What are the common queries or questions users ask about this data?",
-                        "Are there any special business rules or constraints I should know about?"
-                    ]
+                    if not user_input.strip():
+                        return history, "", state
                     
-                    current_idx = state.get("question_index", 0)
-                    history = state.get("history", [])
+                    # Add user message to history
+                    history.append([user_input, None])
                     
-                    # Save current Q&A
-                    history.append(f"Q{current_idx + 1}: {questions[current_idx]}\nA: {answer}\n")
+                    # Initialize LLM if needed
+                    if current_llm is None:
+                        config = load_config()
+                        llm_config = config.get('llm', {})
+                        provider_name = llm_config.get('provider', 'openai')
+                        model = llm_config.get('model', 'gpt-4o-mini')
+                        current_provider = create_provider(provider_name)
+                        current_llm = current_provider.get_llm(model, 0.3, 2000)
                     
-                    # Move to next question
-                    next_idx = current_idx + 1
-                    
-                    if next_idx < len(questions):
-                        next_question = questions[next_idx]
-                        progress = f"Question {next_idx + 1} of {len(questions)}"
-                        state["question_index"] = next_idx
-                        state["history"] = history
-                        return next_question, progress, "\n".join(history), state, ""
-                    else:
-                        # Training complete
-                        final_history = "\n".join(history)
-                        # Save to file
+                    # Get database schema for context
+                    db = get_sql_database()
+                    schema_info = ""
+                    if db:
                         try:
-                            from pathlib import Path
-                            training_file = Path("training_data.txt")
-                            with open(training_file, "w") as f:
-                                f.write(final_history)
+                            schema_info = db.get_table_info()
                         except:
-                            pass
-                        return "Training session complete! ✅", "Completed all questions. Training data saved.", final_history, {"question_index": 0, "history": []}, ""
+                            schema_info = "(Database schema unavailable)"
+                    
+                    # Build training prompt
+                    conversation_context = "\n".join([f"User: {h[0]}\nAI: {h[1]}" for h in history[:-1] if h[1] is not None])
+                    
+                    training_prompt = f"""You are an AI assistant helping to learn about a user's database. Your goal is to gather comprehensive information about:
+1. Database purpose and domain
+2. Table names and their purposes
+3. Key relationships between tables
+4. Important columns and their meanings
+5. Business rules and constraints
+6. Common queries and use cases
+
+Database Schema:
+{schema_info}
+
+Conversation so far:
+{conversation_context}
+
+User's latest response: {user_input}
+
+Based on this, either:
+- Ask a thoughtful follow-up question to learn more
+- If you have enough information about a topic, ask about the next important aspect
+- After gathering comprehensive information, summarize your understanding
+
+Respond naturally and conversationally. Ask ONE specific question at a time.
+
+Response:"""
+                    
+                    try:
+                        response = current_llm.invoke(training_prompt)
+                        ai_response = response.content if hasattr(response, 'content') else str(response)
+                        
+                        # Update conversation history
+                        history[-1][1] = ai_response
+                        
+                        # Save to knowledge base
+                        state["conversation"].append({"user": user_input, "ai": ai_response})
+                        
+                        # Update knowledge extraction
+                        update_knowledge_base(state, user_input, ai_response)
+                        
+                        # Save to file
+                        save_training_data(state)
+                        
+                        return history, "", state
+                        
+                    except Exception as e:
+                        logger.error(f"Training error: {e}", exc_info=True)
+                        history[-1][1] = f"Error processing response: {str(e)}"
+                        return history, "", state
                 
-                start_training_btn.click(
-                    start_training,
-                    outputs=[ai_question, training_progress, training_history]
+                def update_knowledge_base(state, user_input, ai_response):
+                    """Extract and update structured knowledge from conversation."""
+                    # Simple keyword-based extraction
+                    lower_input = user_input.lower()
+                    
+                    if "table" in lower_input or "database" in lower_input:
+                        if "tables" not in state["knowledge"]:
+                            state["knowledge"]["tables"] = []
+                        state["knowledge"]["tables"].append(user_input)
+                    
+                    if "relationship" in lower_input or "connect" in lower_input or "join" in lower_input:
+                        if "relationships" not in state["knowledge"]:
+                            state["knowledge"]["relationships"] = []
+                        state["knowledge"]["relationships"].append(user_input)
+                    
+                    if "purpose" in lower_input or "used for" in lower_input:
+                        if "purpose" not in state["knowledge"]:
+                            state["knowledge"]["purpose"] = []
+                        state["knowledge"]["purpose"].append(user_input)
+                
+                def save_training_data(state):
+                    """Save training data to file."""
+                    try:
+                        from pathlib import Path
+                        import json
+                        
+                        training_file = Path("training_data.json")
+                        with open(training_file, "w") as f:
+                            json.dump({
+                                "conversation": state["conversation"],
+                                "knowledge": state["knowledge"],
+                                "timestamp": str(Path(training_file).stat().st_mtime if training_file.exists() else "new")
+                            }, f, indent=2)
+                    except Exception as e:
+                        logger.error(f"Failed to save training data: {e}")
+                
+                def view_training_knowledge(state):
+                    """Display structured knowledge learned by AI."""
+                    knowledge = state.get("knowledge", {})
+                    conversation = state.get("conversation", [])
+                    
+                    if not knowledge and not conversation:
+                        return "No training data available yet. Start a conversation to train the AI!", gr.update(visible=True)
+                    
+                    display = "# 📚 AI Knowledge Base\n\n"
+                    
+                    if knowledge:
+                        display += "## Structured Knowledge\n\n"
+                        for category, items in knowledge.items():
+                            display += f"### {category.title()}\n"
+                            for item in items:
+                                display += f"- {item}\n"
+                            display += "\n"
+                    
+                    if conversation:
+                        display += f"## Training Sessions\n\n"
+                        display += f"Total exchanges: {len(conversation)}\n\n"
+                        display += "### Recent Conversation\n\n"
+                        for i, exchange in enumerate(conversation[-5:], 1):
+                            display += f"**Q{i}:** {exchange['user']}\n\n"
+                            display += f"**A{i}:** {exchange['ai']}\n\n"
+                            display += "---\n\n"
+                    
+                    return display, gr.update(visible=True)
+                
+                def reset_training_session():
+                    """Reset the training conversation."""
+                    return [
+                        [None, "👋 Hi! I'm here to train the AI on your database. I'll ask you questions to understand your data structure, relationships, and business rules. Ready to begin?"]
+                    ], {"stage": 0, "knowledge": {}, "conversation": []}, "", gr.update(visible=False)
+                
+                def export_knowledge(state):
+                    """Export training data to downloadable file."""
+                    try:
+                        import tempfile
+                        import json
+                        from datetime import datetime
+                        
+                        data = {
+                            "exported_at": datetime.now().isoformat(),
+                            "conversation": state.get("conversation", []),
+                            "knowledge": state.get("knowledge", {})
+                        }
+                        
+                        temp_file = tempfile.NamedTemporaryFile(
+                            mode='w',
+                            suffix='.json',
+                            prefix='training_data_',
+                            delete=False
+                        )
+                        json.dump(data, temp_file, indent=2)
+                        temp_file.close()
+                        
+                        return gr.update(value=temp_file.name, visible=True)
+                    except Exception as e:
+                        logger.error(f"Export failed: {e}")
+                        return gr.update(visible=False)
+                
+                # Event handlers
+                send_training_btn.click(
+                    process_training_response,
+                    inputs=[training_input, training_chatbot, training_state],
+                    outputs=[training_chatbot, training_input, training_state]
                 )
                 
-                submit_answer_btn.click(
-                    submit_training_answer,
-                    inputs=[user_answer, training_state],
-                    outputs=[ai_question, training_progress, training_history, training_state, user_answer]
+                training_input.submit(
+                    process_training_response,
+                    inputs=[training_input, training_chatbot, training_state],
+                    outputs=[training_chatbot, training_input, training_state]
+                )
+                
+                view_knowledge_btn.click(
+                    view_training_knowledge,
+                    inputs=[training_state],
+                    outputs=[knowledge_display, knowledge_display]
+                )
+                
+                reset_training_btn.click(
+                    reset_training_session,
+                    outputs=[training_chatbot, training_state, training_input, knowledge_display]
+                )
+                
+                export_training_btn.click(
+                    export_knowledge,
+                    inputs=[training_state],
+                    outputs=[export_file]
                 )
             
 
