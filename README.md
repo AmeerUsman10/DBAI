@@ -103,17 +103,26 @@ If you encounter issues:
 
 This version includes an **amazing data training system** that makes your AI assistant smarter over time:
 
-### Quick Start
+### Quick Start Guides
+- **[QUICK_TRAINING_GUIDE.md](QUICK_TRAINING_GUIDE.md)** - ⚡ NEW! Write training rules in plain English
 - **[TRAINING_GUIDE.md](TRAINING_GUIDE.md)** - Complete system documentation
 - **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - User-friendly quick reference
 
 ### What It Does
-1. **Understands Business Context**: Pre-loaded with Pakistani textile terminology (PKR, LBS, greige, CT, PC)
-2. **Detects Vague Queries**: Automatically identifies when users need clarification
-3. **Learns from Interactions**: Saves successful query patterns for future use
-4. **Gets Smarter Over Time**: Each team member's clarifications help everyone else
+1. **⚡ Quick Training**: Write rules in plain English - "When I ask X, return Y"
+2. **Understands Business Context**: Pre-loaded with Pakistani textile terminology (PKR, LBS, greige, CT, PC)
+3. **Detects Vague Queries**: Automatically identifies when users need clarification
+4. **Learns from Interactions**: Saves successful query patterns for future use
+5. **Gets Smarter Over Time**: Each team member's clarifications help everyone else
 
-### Example Flow
+### Quick Training Example
+```
+You write: "When I ask 'total greige rcvd', always return meters of greige fabric received"
+Next query: "total greige rcvd"
+AI returns: "1,234,556 Meters" ✅ (follows your rule immediately!)
+```
+
+### Traditional Flow Example
 ```
 You: "supplier total"
 AI: Could you clarify which of these you're looking for?
