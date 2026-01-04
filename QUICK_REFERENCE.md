@@ -1,5 +1,21 @@
 # 🎯 DBAI Quick Reference Card
+## Training the AI
 
+### Interactive Column Training
+Navigate to **🎓 Train → 📊 Column Training** tab:
+
+1. Click **📥 Load Database Schema**
+2. Select a table from dropdown (e.g., YarnData)
+3. Select a column (e.g., SUPPLIER)
+4. Fill in:
+   - **Description**: "Supplier name for yarn/fabric orders"
+   - **Unit**: (leave empty if not applicable)
+   - **Examples**: "Ahmed Textile, XYZ Mills, ABC Fabrics"
+5. Click **💾 Save Training**
+
+Your training is instantly saved to [metadata.json](metadata.json) and the AI uses it immediately!
+
+---
 ## Common User Queries
 
 ### ✅ Good (Specific)

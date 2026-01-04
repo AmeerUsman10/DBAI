@@ -231,12 +231,45 @@ Shows all learnings used more than 10 times.
 
 ## 🎓 Training Tips
 
+### Using Interactive Column Training Tab
+
+**Location**: Navigate to **🎓 Train → 📊 Column Training**
+
+The easiest way to train the AI is through the interactive interface:
+
+**Step-by-Step**:
+
+1. **Load Your Schema**
+   - Click "📥 Load Database Schema"
+   - All tables appear in dropdown
+
+2. **Select & Train**
+   - Choose table (e.g., "YarnData")
+   - Choose column (e.g., "SUPPLIER")
+   - Fill in description, unit, examples
+   - Click "💾 Save Training"
+
+3. **See Results**
+   - Training appears in "Current Training Data"
+   - Saved instantly to metadata.json
+   - AI uses it in next query!
+
+**Example Training**:
+```
+Table: YarnData
+Column: AMOUNT
+Description: Total cost in Pakistani Rupees for yarn order. Used for spend analysis and supplier comparisons.
+Unit: PKR
+Examples: 150000, 285000, 42500
+```
+
 ### For End Users
 
 1. **Be Specific**: Instead of "total", say "total amount in PKR for last month"
 2. **Use Options**: When AI asks clarification, pick the closest option
 3. **Learn from Suggestions**: AI's clarifications teach you what it can do
 4. **Provide Feedback**: Correct answers help AI learn faster
+5. **Train Columns**: Use Column Training tab to teach AI about your database
 
 ### For Administrators
 
@@ -244,6 +277,7 @@ Shows all learnings used more than 10 times.
 2. **Update Metadata**: Add new terms, columns, patterns as business evolves
 3. **Monitor Clarity Scores**: If many queries score < 50, add more metadata
 4. **Categorize Manually**: Move important learnings to metadata for faster access
+5. **Train Key Columns**: Use Column Training tab for most-queried columns (SUPPLIER, AMOUNT, DATE)
 
 ---
 
