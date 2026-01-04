@@ -1,0 +1,245 @@
+{
+  "session_summary": {
+    "session_id": "20260104_124830",
+    "duration_minutes": 2.518764216666667,
+    "total_queries": 3,
+    "successful_queries": 3,
+    "failed_queries": 0,
+    "success_rate": 100.0,
+    "avg_response_time": 29.0,
+    "training_events": 1,
+    "errors": 0
+  },
+  "configuration": {
+    "tier1_enabled": true,
+    "tier2_enabled": true,
+    "capture_llm_prompts": true,
+    "capture_sample_data": true,
+    "capture_reasoning_chain": true,
+    "max_queries_in_memory": 50,
+    "auto_save_interval": 10
+  },
+  "full_state": {
+    "session_id": "20260104_124830",
+    "started_at": "2026-01-04T12:48:30.818021",
+    "total_queries": 3,
+    "total_errors": 0,
+    "total_successes": 3,
+    "current_state": {},
+    "last_query": {
+      "timestamp": "2026-01-04T12:49:27.713650",
+      "user_question": "Top suppliers across ALL movement types",
+      "success": true,
+      "execution_time_ms": 28,
+      "error": null,
+      "rows_returned": 10,
+      "llm_interaction": {
+        "provider": "template",
+        "model": "rule-based",
+        "temperature": 0.1,
+        "sql_generated": "SELECT TOP 10 Supplier, SUM(TotalAmount) as 'Total PKR', SUM(TotalQty) as 'Total Quantity', SUM(RecordCount) as 'Record Count'\nFROM (\n    SELECT SUPPLIER as Supplier, SUM(AMOUNT) as TotalAmount, SUM(LBS) as TotalQty, COUNT(*) as RecordCount\n    FROM YarnData\n    \n    GROUP BY SUPPLIER\n    \n    UNION ALL\n    \n    SELECT SUPP_NAME as Supplier, SUM(AMOUNT) as TotalAmount, SUM(METER) as TotalQty, COUNT(*) as RecordCount\n    FROM GreigeData\n    \n    GROUP BY SUPP_NAME\n) AS CombinedSuppliers\nGROUP BY Supplier\nORDER BY SUM(TotalAmount) DESC",
+        "tokens": {
+          "prompt_tokens": 303,
+          "completion_tokens": 116,
+          "total_tokens": 419
+        },
+        "generation_method": "template"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 10,
+        "execution_time_ms": 28,
+        "sample_data": []
+      },
+      "response": {
+        "type": "data",
+        "text": "The top suppliers across all movement types include MEKO TEX (PVT.) LTD (GREIGE) with a total procurement value of 3.20 billion PKR and a quantity of 6,683,762 units across 5,252 records, followed by XIAMEN MC GROUP CORP.LTD at 2.18 billion PKR and 6,671,664 units over 1,576 records. KAM INTERNATIONAL ranks third with a total of 2.17 billion PKR and 6,474,573 units across 2,865 records.\n\n---\n\n**Query Results** (10 rows)\n\n| Supplier                               | Total PKR     | Total Quantity | Record Count |\n| -------------------------------------- | ------------- | -------------- | ------------ |\n| MEKO TEX (PVT.) LTD (GREIGE)           | 3195950470.78 | 6683762        | 5252         |\n| XIAMEN MC GROUP CORP.LTD               | 2184678762.58 | 6671664        | 1576         |\n| KAM INTERNATIONAL                      | 2173197946.60 | 6474573        | 2865         |\n| GUL AHMED TEXTILE                      | 1544883800.00 | 5340500        | 686          |\n| ORIENT TEXTILE PVT LTD                 | 1011068983.00 | 2269310        | 645          |\n| AYESHA TEX                             | 859681262.61  | 3463378        | 1202         |\n| BISMILLAH TRADERS                      | 858082035.70  | 3314527        | 765          |\n| N.PCOTTON MILLS LTD                    | 840598000.00  | 2361800        | 276          |\n| AL-KARAM TEXTILE MILLS ( PRIVATE ) LTD | 468026071.50  | 1573284        | 476          |\n| HAMEEDA AND RASHEEDA BANO              | 395217602.01  | 1155053        | 441          |\n\n\n<sub>\ud83e\udde0 Knowledge: 17 learned patterns \u00b7 8 training rules \u00b7 \u26a1 Template</sub>\n\n<sub>\u26a1 Zero tokens used (template-based)</sub>",
+        "length_chars": 1642
+      },
+      "performance": {
+        "total_time_ms": 3893,
+        "query_time_ms": 28,
+        "tokens": {
+          "prompt_tokens": 303,
+          "completion_tokens": 116,
+          "total_tokens": 419
+        }
+      }
+    },
+    "session_timeline": [
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T12:48:55.529210",
+        "question": "top 10 suppliers",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T12:49:18.591490",
+        "question": "top 10 suppliers department wise",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T12:49:27.713650",
+        "question": "Top suppliers across ALL movement types",
+        "success": true
+      },
+      {
+        "type": "training",
+        "timestamp": "2026-01-04T12:50:56.595472",
+        "event_type": "correction_submitted"
+      }
+    ]
+  },
+  "all_queries": [
+    {
+      "timestamp": "2026-01-04T12:48:55.529210",
+      "user_question": "top 10 suppliers",
+      "success": true,
+      "execution_time_ms": 30,
+      "error": null,
+      "rows_returned": 10,
+      "clarity_analysis": {
+        "score": 70,
+        "needs_clarification": false,
+        "reason": "Query is somewhat clear: Short query - could be more specific; Ambiguous term: 'top'",
+        "clarifications_offered": [
+          "Top suppliers by ARRIVAL (incoming stock)",
+          "Top suppliers by ISSUE (outgoing/used stock)",
+          "Top suppliers by REJECTION (returned stock)",
+          "Top suppliers across ALL movement types"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "template",
+        "model": "rule-based",
+        "temperature": 0.1,
+        "sql_generated": "SELECT TOP 10 Supplier, SUM(TotalAmount) as 'Total PKR', SUM(TotalQty) as 'Total Quantity', SUM(RecordCount) as 'Record Count'\nFROM (\n    SELECT SUPPLIER as Supplier, SUM(AMOUNT) as TotalAmount, SUM(LBS) as TotalQty, COUNT(*) as RecordCount\n    FROM YarnData\n    \n    GROUP BY SUPPLIER\n    \n    UNION ALL\n    \n    SELECT SUPP_NAME as Supplier, SUM(AMOUNT) as TotalAmount, SUM(METER) as TotalQty, COUNT(*) as RecordCount\n    FROM GreigeData\n    \n    GROUP BY SUPP_NAME\n) AS CombinedSuppliers\nGROUP BY Supplier\nORDER BY SUM(TotalAmount) DESC",
+        "tokens": {
+          "prompt_tokens": 301,
+          "completion_tokens": 81,
+          "total_tokens": 382
+        },
+        "generation_method": "template"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 10,
+        "execution_time_ms": 30,
+        "sample_data": []
+      },
+      "response": {
+        "type": "data",
+        "text": "The top 10 suppliers account for a total procurement value of 12,000,000,000 PKR, with a combined total quantity of 33,000,000 units across 10,000 records. The leading supplier, MEKO TEX (PVT.) LTD (GREIGE), contributes 3,195,950,470.78 PKR and 6,683,762 units.\n\n---\n\n**Query Results** (10 rows)\n\n| Supplier                               | Total PKR     | Total Quantity | Record Count |\n| -------------------------------------- | ------------- | -------------- | ------------ |\n| MEKO TEX (PVT.) LTD (GREIGE)           | 3195950470.78 | 6683762        | 5252         |\n| XIAMEN MC GROUP CORP.LTD               | 2184678762.58 | 6671664        | 1576         |\n| KAM INTERNATIONAL                      | 2173197946.60 | 6474573        | 2865         |\n| GUL AHMED TEXTILE                      | 1544883800.00 | 5340500        | 686          |\n| ORIENT TEXTILE PVT LTD                 | 1011068983.00 | 2269310        | 645          |\n| AYESHA TEX                             | 859681262.61  | 3463378        | 1202         |\n| BISMILLAH TRADERS                      | 858082035.70  | 3314527        | 765          |\n| N.PCOTTON MILLS LTD                    | 840598000.00  | 2361800        | 276          |\n| AL-KARAM TEXTILE MILLS ( PRIVATE ) LTD | 468026071.50  | 1573284        | 476          |\n| HAMEEDA AND RASHEEDA BANO              | 395217602.01  | 1155053        | 441          |\n\n\n<sub>\ud83e\udde0 Knowledge: 16 learned patterns \u00b7 8 training rules \u00b7 \u26a1 Template</sub>\n\n<sub>\u26a1 Zero tokens used (template-based)</sub>",
+        "length_chars": 1514
+      },
+      "performance": {
+        "total_time_ms": 5197,
+        "query_time_ms": 30,
+        "tokens": {
+          "prompt_tokens": 301,
+          "completion_tokens": 81,
+          "total_tokens": 382
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T12:49:18.591490",
+      "user_question": "top 10 suppliers department wise",
+      "success": true,
+      "execution_time_ms": 0,
+      "error": null,
+      "clarity_analysis": {
+        "score": 60,
+        "needs_clarification": true,
+        "reason": "Query is somewhat clear: Grouping request without clear dimension; Ambiguous term: 'top'",
+        "clarifications_offered": [
+          "Top suppliers by ARRIVAL (incoming stock)",
+          "Top suppliers by ISSUE (outgoing/used stock)",
+          "Top suppliers by REJECTION (returned stock)",
+          "Top suppliers across ALL movement types"
+        ]
+      },
+      "response": {
+        "type": "clarification_request",
+        "text": "I'd like to better understand your query: **\"top 10 suppliers department wise\"**\n\nCould you clarify which of these you're looking for?\n\n**1.** Top suppliers by ARRIVAL (incoming stock)\n**2.** Top suppliers by ISSUE (outgoing/used stock)\n**3.** Top suppliers by REJECTION (returned stock)\n**4.** Top suppliers across ALL movement types\n\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
+      },
+      "performance": {
+        "total_time_ms": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-04T12:49:27.713650",
+      "user_question": "Top suppliers across ALL movement types",
+      "success": true,
+      "execution_time_ms": 28,
+      "error": null,
+      "rows_returned": 10,
+      "llm_interaction": {
+        "provider": "template",
+        "model": "rule-based",
+        "temperature": 0.1,
+        "sql_generated": "SELECT TOP 10 Supplier, SUM(TotalAmount) as 'Total PKR', SUM(TotalQty) as 'Total Quantity', SUM(RecordCount) as 'Record Count'\nFROM (\n    SELECT SUPPLIER as Supplier, SUM(AMOUNT) as TotalAmount, SUM(LBS) as TotalQty, COUNT(*) as RecordCount\n    FROM YarnData\n    \n    GROUP BY SUPPLIER\n    \n    UNION ALL\n    \n    SELECT SUPP_NAME as Supplier, SUM(AMOUNT) as TotalAmount, SUM(METER) as TotalQty, COUNT(*) as RecordCount\n    FROM GreigeData\n    \n    GROUP BY SUPP_NAME\n) AS CombinedSuppliers\nGROUP BY Supplier\nORDER BY SUM(TotalAmount) DESC",
+        "tokens": {
+          "prompt_tokens": 303,
+          "completion_tokens": 116,
+          "total_tokens": 419
+        },
+        "generation_method": "template"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 10,
+        "execution_time_ms": 28,
+        "sample_data": []
+      },
+      "response": {
+        "type": "data",
+        "text": "The top suppliers across all movement types include MEKO TEX (PVT.) LTD (GREIGE) with a total procurement value of 3.20 billion PKR and a quantity of 6,683,762 units across 5,252 records, followed by XIAMEN MC GROUP CORP.LTD at 2.18 billion PKR and 6,671,664 units over 1,576 records. KAM INTERNATIONAL ranks third with a total of 2.17 billion PKR and 6,474,573 units across 2,865 records.\n\n---\n\n**Query Results** (10 rows)\n\n| Supplier                               | Total PKR     | Total Quantity | Record Count |\n| -------------------------------------- | ------------- | -------------- | ------------ |\n| MEKO TEX (PVT.) LTD (GREIGE)           | 3195950470.78 | 6683762        | 5252         |\n| XIAMEN MC GROUP CORP.LTD               | 2184678762.58 | 6671664        | 1576         |\n| KAM INTERNATIONAL                      | 2173197946.60 | 6474573        | 2865         |\n| GUL AHMED TEXTILE                      | 1544883800.00 | 5340500        | 686          |\n| ORIENT TEXTILE PVT LTD                 | 1011068983.00 | 2269310        | 645          |\n| AYESHA TEX                             | 859681262.61  | 3463378        | 1202         |\n| BISMILLAH TRADERS                      | 858082035.70  | 3314527        | 765          |\n| N.PCOTTON MILLS LTD                    | 840598000.00  | 2361800        | 276          |\n| AL-KARAM TEXTILE MILLS ( PRIVATE ) LTD | 468026071.50  | 1573284        | 476          |\n| HAMEEDA AND RASHEEDA BANO              | 395217602.01  | 1155053        | 441          |\n\n\n<sub>\ud83e\udde0 Knowledge: 17 learned patterns \u00b7 8 training rules \u00b7 \u26a1 Template</sub>\n\n<sub>\u26a1 Zero tokens used (template-based)</sub>",
+        "length_chars": 1642
+      },
+      "performance": {
+        "total_time_ms": 3893,
+        "query_time_ms": 28,
+        "tokens": {
+          "prompt_tokens": 303,
+          "completion_tokens": 116,
+          "total_tokens": 419
+        }
+      }
+    }
+  ],
+  "all_errors": [],
+  "training_events": [
+    {
+      "timestamp": "2026-01-04T12:50:56.595472",
+      "type": "correction_submitted",
+      "details": {
+        "question": "Top suppliers across ALL movement types",
+        "sql": "SELECT TOP 10 Supplier, SUM(TotalAmount) as 'Total PKR', SUM(TotalQty) as 'Total Quantity', SUM(RecordCount) as 'Record Count'\nFROM (\n    SELECT SUPPLIER as Supplier, SUM(AMOUNT) as TotalAmount, SUM(LBS) as TotalQty, COUNT(*) as RecordCount\n    FROM YarnData\n    \n    GROUP BY SUPPLIER\n    \n    UNION ALL\n    \n    SELECT SUPP_NAME as Supplier, SUM(AMOUNT) as TotalAmount, SUM(METER) as TotalQty, COUNT(*) as RecordCount\n    FROM GreigeData\n    \n    GROUP BY SUPP_NAME\n) AS CombinedSuppliers\nGROUP BY Supplier\nORDER BY SUM(TotalAmount) DESC",
+        "correction": "once again wrong result. It should have been broken down by Supplier and for each supplier to entries, Griege and yarn and then 3 entries for each of that arrival, issue, rejection and then comes the rest of the data.",
+        "rule_created": true
+      }
+    }
+  ],
+  "recommendations": []
+}
