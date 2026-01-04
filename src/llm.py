@@ -135,7 +135,8 @@ def make_sql_chain(llm, db):
             else:
                 result = str(response)
             
-            return {"result": result}
+            # Return both result and raw response for token tracking
+            return {"result": result, "response": response}
         
         return sql_chain
         

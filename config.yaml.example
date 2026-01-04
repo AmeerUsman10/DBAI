@@ -2,7 +2,7 @@
 # Copy this file to config.yaml and update with your settings
 
 database:
-  server: localhost
+  server: localhost\\SQLEXPRESS
   database: your_database_name
   driver: ODBC Driver 18 for SQL Server
   username: your_username

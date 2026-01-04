@@ -24,6 +24,7 @@ load_dotenv()
 # Global state
 current_provider = None
 current_llm = None
+session_tokens = {"total": 0, "prompt": 0, "completion": 0}  # Token tracking
 
 # Persona definitions
 PERSONAS = {
@@ -130,6 +131,27 @@ def save_config(config: dict) -> bool:
         return False
 
 # Chat Tab Functions
+def extract_token_usage(response) -> dict:
+    """Extract token usage from LLM response if available."""
+    tokens = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    
+    try:
+        # OpenAI responses have usage_metadata or response_metadata
+        if hasattr(response, 'response_metadata'):
+            usage = response.response_metadata.get('token_usage', {})
+            tokens['prompt_tokens'] = usage.get('prompt_tokens', 0)
+            tokens['completion_tokens'] = usage.get('completion_tokens', 0)
+            tokens['total_tokens'] = usage.get('total_tokens', 0)
+        elif hasattr(response, 'usage_metadata'):
+            usage = response.usage_metadata
+            tokens['prompt_tokens'] = getattr(usage, 'input_tokens', 0)
+            tokens['completion_tokens'] = getattr(usage, 'output_tokens', 0)
+            tokens['total_tokens'] = tokens['prompt_tokens'] + tokens['completion_tokens']
+    except Exception as e:
+        logger.debug(f"Could not extract token usage: {e}")
+    
+    return tokens
+
 def chat_query(question: str, history: List, persona: str = "default") -> Tuple[str, List]:
     """
     Process a natural language query and return SQL + results.
@@ -137,11 +159,12 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
     Args:
         question: User's question
         history: Chat history
+        persona: Selected persona
         
     Returns:
         Tuple of (response, updated_history)
     """
-    global current_llm, current_provider
+    global current_llm, current_provider, session_tokens
     
     if not question.strip():
         return "", history
@@ -168,15 +191,25 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
             history.append({"role": "assistant", "content": response})
             return "", history
         
+        # Track tokens for this response
+        response_tokens = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        
         # Generate SQL
         sql_chain = make_sql_chain(current_llm, db)
-        sql_response = sql_chain({"question": question})
+        sql_response_obj = sql_chain({"question": question})
+        
+        # Extract token usage from SQL generation
+        if isinstance(sql_response_obj, dict) and 'response' in sql_response_obj:
+            tokens = extract_token_usage(sql_response_obj['response'])
+            response_tokens['prompt_tokens'] += tokens['prompt_tokens']
+            response_tokens['completion_tokens'] += tokens['completion_tokens']
+            response_tokens['total_tokens'] += tokens['total_tokens']
         
         # Extract SQL from response
-        if isinstance(sql_response, dict):
-            sql_query = sql_response.get('result', '')
+        if isinstance(sql_response_obj, dict):
+            sql_query = sql_response_obj.get('result', '')
         else:
-            sql_query = str(sql_response)
+            sql_query = str(sql_response_obj)
         
         sql_query = extract_sql_from_response(sql_query)
         
@@ -209,6 +242,15 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
                 response += f"**Result:** {result}"
         else:
             response = f"❌ **Error:** {result}"
+        
+        # Add token usage info if available (only for OpenAI)
+        if provider_name == 'openai' and response_tokens['total_tokens'] > 0:
+            session_tokens['prompt'] += response_tokens['prompt_tokens']
+            session_tokens['completion'] += response_tokens['completion_tokens']
+            session_tokens['total'] += response_tokens['total_tokens']
+            
+            response += f"\n\n---\n**Tokens:** {response_tokens['total_tokens']} (Prompt: {response_tokens['prompt_tokens']}, Completion: {response_tokens['completion_tokens']})"
+            response += f" | **Session Total:** {session_tokens['total']:,} tokens"
         
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
@@ -705,20 +747,73 @@ Let the AI analyze your database schema and generate training data automatically
                         
                         analyze_btn = gr.Button("🚀 Analyze Database Schema", variant="primary", size="lg")
                         analysis_output = gr.Markdown("")
+                        history_table = gr.Dataframe(
+                            headers=["Timestamp", "Database", "Tables", "Status"],
+                            label="📜 Analysis History",
+                            interactive=False
+                        )
+                        
+                        def load_analysis_history():
+                            """Load analysis history from JSON file."""
+                            try:
+                                history_file = Path(__file__).parent.parent / "schema_analysis_history.json"
+                                if history_file.exists():
+                                    with open(history_file, 'r') as f:
+                                        content = f.read().strip()
+                                        if content:
+                                            return json.loads(content)
+                            except Exception as e:
+                                logger.error(f"Error loading analysis history: {e}")
+                            return []
+                        
+                        def save_analysis_history(analysis_data):
+                            """Save analysis to history file."""
+                            try:
+                                history_file = Path(__file__).parent.parent / "schema_analysis_history.json"
+                                history = load_analysis_history()
+                                history.insert(0, analysis_data)  # Add to beginning
+                                with open(history_file, 'w') as f:
+                                    json.dump(history, f, indent=2)
+                            except Exception as e:
+                                logger.error(f"Error saving analysis history: {e}")
+                        
+                        def format_history_table():
+                            """Format history for display in table."""
+                            history = load_analysis_history()
+                            if not history:
+                                return []
+                            
+                            rows = []
+                            for item in history:
+                                rows.append([
+                                    item.get('timestamp', 'N/A'),
+                                    item.get('database', 'N/A'),
+                                    item.get('tables_count', 'N/A'),
+                                    item.get('status', 'N/A')
+                                ])
+                            return rows
                         
                         def analyze_schema():
                             """Analyze database schema automatically."""
+                            from datetime import datetime
+                            
                             try:
                                 db = get_sql_database()
                                 if not db:
-                                    return "❌ Database not available"
+                                    return "❌ Database not available", format_history_table()
                                 
                                 schema = db.get_table_info()
+                                
+                                # Get database info
+                                config = load_config()
+                                db_name = config.get('database', {}).get('database', 'Unknown')
+                                
+                                # Count tables in schema
+                                tables_count = len([line for line in schema.split('\n') if line.strip().startswith('CREATE TABLE')])
                                 
                                 # Use LLM to analyze schema
                                 global current_llm, current_provider
                                 if current_llm is None:
-                                    config = load_config()
                                     llm_config = config.get('llm', {})
                                     provider_name = llm_config.get('provider', 'openai')
                                     model = llm_config.get('model', 'gpt-4o-mini')
@@ -740,17 +835,71 @@ Provide a comprehensive analysis:"""
                                 response = current_llm.invoke(prompt)
                                 analysis = response.content if hasattr(response, 'content') else str(response)
                                 
-                                # Save as system instructions
-                                save_system_instructions(f"Auto-generated analysis:\n\n{analysis}")
+                                # Save to history
+                                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                analysis_data = {
+                                    'timestamp': timestamp,
+                                    'database': db_name,
+                                    'tables_count': tables_count,
+                                    'status': 'Completed',
+                                    'analysis': analysis,
+                                    'schema': schema
+                                }
+                                save_analysis_history(analysis_data)
                                 
-                                return f"## ✅ Analysis Complete\n\n{analysis}\n\n---\n\n*Analysis saved to system instructions.*"
+                                # Save as system instructions
+                                save_system_instructions(f"Auto-generated analysis ({timestamp}):\n\n{analysis}")
+                                
+                                output = f"## ✅ Analysis Complete\n\n{analysis}\n\n---\n\n*Analysis saved to system instructions and history.*"
+                                return output, format_history_table()
                                 
                             except Exception as e:
                                 logger.error(f"Schema analysis error: {e}", exc_info=True)
-                                return f"❌ Error: {str(e)}"
+                                
+                                # Save error to history
+                                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                analysis_data = {
+                                    'timestamp': timestamp,
+                                    'database': config.get('database', {}).get('database', 'Unknown'),
+                                    'tables_count': 0,
+                                    'status': f'Error: {str(e)}',
+                                    'analysis': '',
+                                    'schema': ''
+                                }
+                                save_analysis_history(analysis_data)
+                                
+                                return f"❌ Error: {str(e)}", format_history_table()
+                        
+                        def show_history_item(evt: gr.SelectData):
+                            """Show selected analysis from history."""
+                            try:
+                                history = load_analysis_history()
+                                if evt.index[0] < len(history):
+                                    item = history[evt.index[0]]
+                                    output = f"""## 📜 Analysis from {item['timestamp']}
+**Database:** {item['database']}  
+**Tables:** {item['tables_count']}  
+**Status:** {item['status']}
+
+---
+
+{item.get('analysis', 'No analysis available')}"""
+                                    return output
+                            except Exception as e:
+                                logger.error(f"Error showing history item: {e}")
+                                return "❌ Error loading analysis"
+                            return ""
+                        
+                        # Load history on startup
+                        history_table.value = format_history_table()
                         
                         analyze_btn.click(
                             analyze_schema,
+                            outputs=[analysis_output, history_table]
+                        )
+                        
+                        history_table.select(
+                            show_history_item,
                             outputs=[analysis_output]
                         )
                     
