@@ -24,6 +24,64 @@ load_dotenv()
 current_provider = None
 current_llm = None
 
+# Persona definitions
+PERSONAS = {
+    "default": {
+        "name": "Default Assistant",
+        "prompt": "You are a helpful AI assistant for database queries. Provide clear, accurate answers."
+    },
+    "data_analyst": {
+        "name": "Data Analyst",
+        "prompt": "You are a senior data analyst. Provide detailed, technical answers. Focus on data quality, integrity, statistical insights, and trends. Use technical terminology and explain data patterns."
+    },
+    "business_executive": {
+        "name": "Business Executive",
+        "prompt": "You are a business executive. Provide high-level summaries focused on KPIs, business impact, and strategic insights. Keep answers concise and actionable. Emphasize ROI and business value."
+    },
+    "inventory_manager": {
+        "name": "Inventory Manager",
+        "prompt": "You are an inventory manager. Focus on stock levels, supplier performance, reorder points, and supply chain logistics. Provide practical recommendations for inventory optimization."
+    },
+    "sql_expert": {
+        "name": "SQL Expert",
+        "prompt": "You are a SQL database expert. Focus on query optimization, indexing strategies, and database performance. Explain technical details about joins, subqueries, and execution plans."
+    },
+    "financial_analyst": {
+        "name": "Financial Analyst",
+        "prompt": "You are a financial analyst. Focus on financial metrics, cost analysis, profitability, cash flow, and financial trends. Provide insights on financial performance and risks."
+    },
+    "operations_manager": {
+        "name": "Operations Manager",
+        "prompt": "You are an operations manager. Focus on efficiency, throughput, bottlenecks, and process optimization. Provide actionable recommendations to improve operational performance."
+    },
+    "compliance_officer": {
+        "name": "Compliance Officer",
+        "prompt": "You are a compliance and data governance officer. Focus on data privacy, regulatory compliance, audit trails, and data security. Highlight any compliance concerns."
+    }
+}
+
+def load_system_instructions() -> str:
+    """Load system instructions from file."""
+    try:
+        instructions_file = Path(__file__).parent.parent / "system_instructions.txt"
+        if instructions_file.exists():
+            with open(instructions_file, 'r') as f:
+                return f.read().strip()
+    except Exception as e:
+        logger.error(f"Error loading system instructions: {e}")
+    return ""
+
+def save_system_instructions(instructions: str) -> Tuple[bool, str]:
+    """Save system instructions to file."""
+    try:
+        instructions_file = Path(__file__).parent.parent / "system_instructions.txt"
+        with open(instructions_file, 'w') as f:
+            f.write(instructions)
+        return True, "✅ System instructions saved successfully!"
+    except Exception as e:
+        logger.error(f"Error saving system instructions: {e}")
+        return False, f"❌ Error: {str(e)}"
+
 def load_config() -> dict:
     """Load configuration from config.yaml."""
     config_path = Path(__file__).parent.parent / "config.yaml"
@@ -427,6 +485,14 @@ def build_ui():
         with gr.Tabs():
             # Chat Tab
             with gr.Tab("💬 Chat"):
+                with gr.Row():
+                    persona_selector = gr.Dropdown(
+                        choices=[(p["name"], k) for k, p in PERSONAS.items()],
+                        value="default",
+                        label="🎭 Persona",
+                        scale=1
+                    )
+                
                 chatbot = gr.Chatbot(height=400, label="Conversation")
                 
                 with gr.Row():
@@ -440,34 +506,15 @@ def build_ui():
                     clear_btn = gr.Button("Clear Chat", size="sm", variant="secondary", scale=1)
                 
                 # Query event tracking
-                query_event = None
-                
-                def toggle_button_and_query(question, history, is_running):
-                    """Handle send/stop toggle and query execution"""
-                    if is_running:
-                        # Stop was clicked
-                        return history, question, False, gr.update(value="▶ Send", variant="primary")
-                    else:
-                        # Send was clicked
-                        return chat_query(question, history)
-                
-                def update_button_during_query():
-                    """Update button to Stop mode"""
-                    return gr.update(value="⏹ Stop", variant="stop"), True
-                
-                def update_button_after_query(result):
-                    """Update button back to Send mode"""
-                    return result[0], result[1], False, gr.update(value="▶ Send", variant="primary")
-                
                 is_running = gr.State(False)
                 
                 # Handle button click
                 send_stop_btn.click(
-                    update_button_during_query,
+                    lambda: (gr.update(value="⏹ Stop", variant="stop"), True),
                     outputs=[send_stop_btn, is_running]
                 ).then(
                     chat_query,
-                    inputs=[question_input, chatbot],
+                    inputs=[question_input, chatbot, persona_selector],
                     outputs=[question_input, chatbot]
                 ).then(
                     lambda: (False, gr.update(value="▶ Send", variant="primary")),
@@ -475,11 +522,11 @@ def build_ui():
                 )
                 
                 question_input.submit(
-                    update_button_during_query,
+                    lambda: (gr.update(value="⏹ Stop", variant="stop"), True),
                     outputs=[send_stop_btn, is_running]
                 ).then(
                     chat_query,
-                    inputs=[question_input, chatbot],
+                    inputs=[question_input, chatbot, persona_selector],
                     outputs=[question_input, chatbot]
                 ).then(
                     lambda: (False, gr.update(value="▶ Send", variant="primary")),
@@ -602,268 +649,149 @@ def build_ui():
                     outputs=[model_dropdown]
                 )
             
-            # Train Tab - AI Learning System
+            # Train Tab - Quick Setup
             with gr.Tab("🎓 Train"):
-                gr.Markdown("## AI Database Training System")
-                gr.Markdown("*Interactive session to teach the AI about your database structure, relationships, and business logic.*")
+                gr.Markdown("## AI Training & Configuration")
+                gr.Markdown("Configure how the AI understands and interacts with your database.")
                 
-                # Training conversation interface
-                training_chatbot = gr.Chatbot(
-                    value=[{"role": "assistant", "content": "👋 Hi! I'm here to train the AI on your database. I'll ask you questions to understand your data structure, relationships, and business rules. Ready to begin?"}],
-                    height=400,
-                    label="Training Conversation"
-                )
-                
-                with gr.Row():
-                    training_input = gr.Textbox(
-                        placeholder="Type your answer or question here...",
-                        label="Your Response",
-                        scale=5
-                    )
-                
-                with gr.Row():
-                    train_send_stop_btn = gr.Button("▶ Send", variant="primary", scale=2)
-                    reset_training_btn = gr.Button("🔄 Reset Training", size="sm", variant="secondary", scale=1)
-                
-                with gr.Row():
-                    view_knowledge_btn = gr.Button("📊 View Training Data", size="sm")
-                    export_training_btn = gr.Button("💾 Export Knowledge", size="sm")
-                
-                knowledge_display = gr.Markdown(
-                    label="AI Knowledge Base",
-                    visible=False
-                )
-                
-                export_file = gr.File(label="Download Training Data", visible=False)
-                
-                # Training state and functions
-                training_state = gr.State({
-                    "stage": 0,
-                    "knowledge": {},
-                    "conversation": []
-                })
-                
-                def process_training_response(user_input, history, state):
-                    """Process user's training response and generate next question."""
-                    global current_llm, current_provider
-                    
-                    if not user_input.strip():
-                        return history, "", state
-                    
-                    # Add user message to history
-                    history.append({"role": "user", "content": user_input})
-                    
-                    # Initialize LLM if needed
-                    if current_llm is None:
-                        config = load_config()
-                        llm_config = config.get('llm', {})
-                        provider_name = llm_config.get('provider', 'openai')
-                        model = llm_config.get('model', 'gpt-4o-mini')
-                        current_provider = create_provider(provider_name)
-                        current_llm = current_provider.get_llm(model, 0.3, 2000)
-                    
-                    # Get database schema for context
-                    db = get_sql_database()
-                    schema_info = ""
-                    if db:
-                        try:
-                            schema_info = db.get_table_info()
-                        except:
-                            schema_info = "(Database schema unavailable)"
-                    
-                    # Build training prompt
-                    conversation_context = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history[:-1]])
-                    
-                    training_prompt = f"""You are an AI assistant helping to learn about a user's database. Your goal is to gather comprehensive information about:
-1. Database purpose and domain
-2. Table names and their purposes
-3. Key relationships between tables
-4. Important columns and their meanings
-5. Business rules and constraints
-6. Common queries and use cases
+                with gr.Tabs():
+                    # System Instructions Tab
+                    with gr.Tab("📝 System Instructions"):
+                        gr.Markdown("""### Database Context
+Provide information about your database to help the AI understand your data better.""")
+                        
+                        instructions_input = gr.Textbox(
+                            label="System Instructions",
+                            placeholder="""Example:
+This is a textile manufacturing database with the following main tables:
+- GreigeData: Contains information about greige fabric suppliers and inventory
+- YarnData: Tracks yarn suppliers, types, and stock levels
+- Orders: Customer orders and delivery tracking
 
-Database Schema:
-{schema_info}
-
-Conversation so far:
-{conversation_context}
-
-User's latest response: {user_input}
-
-Based on this, either:
-- Ask a thoughtful follow-up question to learn more
-- If you have enough information about a topic, ask about the next important aspect
-- After gathering comprehensive information, summarize your understanding
-
-Respond naturally and conversationally. Ask ONE specific question at a time.
-
-Response:"""
-                    
-                    try:
-                        response = current_llm.invoke(training_prompt)
-                        ai_response = response.content if hasattr(response, 'content') else str(response)
-                        
-                        # Add AI response to history
-                        history.append({"role": "assistant", "content": ai_response})
-                        
-                        # Save to knowledge base
-                        state["conversation"].append({"user": user_input, "ai": ai_response})
-                        
-                        # Update knowledge extraction
-                        update_knowledge_base(state, user_input, ai_response)
-                        
-                        # Save to file
-                        save_training_data(state)
-                        
-                        return history, "", state
-                        
-                    except Exception as e:
-                        logger.error(f"Training error: {e}", exc_info=True)
-                        error_msg = f"Error processing response: {str(e)}"
-                        history.append({"role": "assistant", "content": error_msg})
-                        return history, "", state
-                
-                def update_knowledge_base(state, user_input, ai_response):
-                    """Extract and update structured knowledge from conversation."""
-                    # Simple keyword-based extraction
-                    lower_input = user_input.lower()
-                    
-                    if "table" in lower_input or "database" in lower_input:
-                        if "tables" not in state["knowledge"]:
-                            state["knowledge"]["tables"] = []
-                        state["knowledge"]["tables"].append(user_input)
-                    
-                    if "relationship" in lower_input or "connect" in lower_input or "join" in lower_input:
-                        if "relationships" not in state["knowledge"]:
-                            state["knowledge"]["relationships"] = []
-                        state["knowledge"]["relationships"].append(user_input)
-                    
-                    if "purpose" in lower_input or "used for" in lower_input:
-                        if "purpose" not in state["knowledge"]:
-                            state["knowledge"]["purpose"] = []
-                        state["knowledge"]["purpose"].append(user_input)
-                
-                def save_training_data(state):
-                    """Save training data to file."""
-                    try:
-                        from pathlib import Path
-                        import json
-                        
-                        training_file = Path("training_data.json")
-                        with open(training_file, "w") as f:
-                            json.dump({
-                                "conversation": state["conversation"],
-                                "knowledge": state["knowledge"],
-                                "timestamp": str(Path(training_file).stat().st_mtime if training_file.exists() else "new")
-                            }, f, indent=2)
-                    except Exception as e:
-                        logger.error(f"Failed to save training data: {e}")
-                
-                def view_training_knowledge(state):
-                    """Display structured knowledge learned by AI."""
-                    knowledge = state.get("knowledge", {})
-                    conversation = state.get("conversation", [])
-                    
-                    if not knowledge and not conversation:
-                        return "No training data available yet. Start a conversation to train the AI!", gr.update(visible=True)
-                    
-                    display = "# 📚 AI Knowledge Base\n\n"
-                    
-                    if knowledge:
-                        display += "## Structured Knowledge\n\n"
-                        for category, items in knowledge.items():
-                            display += f"### {category.title()}\n"
-                            for item in items:
-                                display += f"- {item}\n"
-                            display += "\n"
-                    
-                    if conversation:
-                        display += f"## Training Sessions\n\n"
-                        display += f"Total exchanges: {len(conversation)}\n\n"
-                        display += "### Recent Conversation\n\n"
-                        for i, exchange in enumerate(conversation[-5:], 1):
-                            display += f"**Q{i}:** {exchange['user']}\n\n"
-                            display += f"**A{i}:** {exchange['ai']}\n\n"
-                            display += "---\n\n"
-                    
-                    return display, gr.update(visible=True)
-                
-                def reset_training_session():
-                    """Reset the training conversation."""
-                    return [
-                        {"role": "assistant", "content": "👋 Hi! I'm here to train the AI on your database. I'll ask you questions to understand your data structure, relationships, and business rules. Ready to begin?"}
-                    ], {"stage": 0, "knowledge": {}, "conversation": []}, "", gr.update(visible=False)
-                
-                def export_knowledge(state):
-                    """Export training data to downloadable file."""
-                    try:
-                        import tempfile
-                        import json
-                        from datetime import datetime
-                        
-                        data = {
-                            "exported_at": datetime.now().isoformat(),
-                            "conversation": state.get("conversation", []),
-                            "knowledge": state.get("knowledge", {})
-                        }
-                        
-                        temp_file = tempfile.NamedTemporaryFile(
-                            mode='w',
-                            suffix='.json',
-                            prefix='training_data_',
-                            delete=False
+Key business rules:
+- Minimum stock level for yarn is 1000 kg
+- Greige fabric lead time is 30 days
+- Priority customers get 20% discount""",
+                            lines=15,
+                            value=load_system_instructions()
                         )
-                        json.dump(data, temp_file, indent=2)
-                        temp_file.close()
                         
-                        return gr.update(value=temp_file.name, visible=True)
-                    except Exception as e:
-                        logger.error(f"Export failed: {e}")
-                        return gr.update(visible=False)
-                
-                train_is_running = gr.State(False)
-                
-                # Event handlers with toggle button
-                train_send_stop_btn.click(
-                    lambda: (gr.update(value="⏹ Stop", variant="stop"), True),
-                    outputs=[train_send_stop_btn, train_is_running]
-                ).then(
-                    process_training_response,
-                    inputs=[training_input, training_chatbot, training_state],
-                    outputs=[training_chatbot, training_input, training_state]
-                ).then(
-                    lambda: (False, gr.update(value="▶ Send", variant="primary")),
-                    outputs=[train_is_running, train_send_stop_btn]
-                )
-                
-                training_input.submit(
-                    lambda: (gr.update(value="⏹ Stop", variant="stop"), True),
-                    outputs=[train_send_stop_btn, train_is_running]
-                ).then(
-                    process_training_response,
-                    inputs=[training_input, training_chatbot, training_state],
-                    outputs=[training_chatbot, training_input, training_state]
-                ).then(
-                    lambda: (False, gr.update(value="▶ Send", variant="primary")),
-                    outputs=[train_is_running, train_send_stop_btn]
-                )
-                
-                view_knowledge_btn.click(
-                    view_training_knowledge,
-                    inputs=[training_state],
-                    outputs=[knowledge_display, knowledge_display]
-                )
-                
-                reset_training_btn.click(
-                    reset_training_session,
-                    outputs=[training_chatbot, training_state, training_input, knowledge_display]
-                )
-                
-                export_training_btn.click(
-                    export_knowledge,
-                    inputs=[training_state],
-                    outputs=[export_file]
-                )
+                        with gr.Row():
+                            save_instructions_btn = gr.Button("💾 Save Instructions", variant="primary")
+                            clear_instructions_btn = gr.Button("🗑️ Clear", variant="secondary")
+                        
+                        instructions_status = gr.Markdown("")
+                        
+                        def save_instructions(text):
+                            success, msg = save_system_instructions(text)
+                            return msg
+                        
+                        save_instructions_btn.click(
+                            save_instructions,
+                            inputs=[instructions_input],
+                            outputs=[instructions_status]
+                        )
+                        
+                        clear_instructions_btn.click(
+                            lambda: ("", "Instructions cleared"),
+                            outputs=[instructions_input, instructions_status]
+                        )
+                    
+                    # Schema Analysis Tab
+                    with gr.Tab("🔍 Auto-Analyze Schema"):
+                        gr.Markdown("""### Automatic Schema Analysis
+Let the AI analyze your database schema and generate training data automatically.""")
+                        
+                        analyze_btn = gr.Button("🚀 Analyze Database Schema", variant="primary", size="lg")
+                        analysis_output = gr.Markdown("")
+                        
+                        def analyze_schema():
+                            """Analyze database schema automatically."""
+                            try:
+                                db = get_sql_database()
+                                if not db:
+                                    return "❌ Database not available"
+                                
+                                schema = db.get_table_info()
+                                
+                                # Use LLM to analyze schema
+                                global current_llm, current_provider
+                                if current_llm is None:
+                                    config = load_config()
+                                    llm_config = config.get('llm', {})
+                                    provider_name = llm_config.get('provider', 'openai')
+                                    model = llm_config.get('model', 'gpt-4o-mini')
+                                    current_provider = create_provider(provider_name)
+                                    current_llm = current_provider.get_llm(model, 0.3, 2000)
+                                
+                                prompt = f"""Analyze this database schema and provide:
+1. Overview of what this database is for
+2. Key tables and their purposes
+3. Important relationships between tables
+4. Common query patterns that would be useful
+5. Suggested system instructions for an AI assistant
+
+Schema:
+{schema}
+
+Provide a comprehensive analysis:"""
+                                
+                                response = current_llm.invoke(prompt)
+                                analysis = response.content if hasattr(response, 'content') else str(response)
+                                
+                                # Save as system instructions
+                                save_system_instructions(f"Auto-generated analysis:\n\n{analysis}")
+                                
+                                return f"## ✅ Analysis Complete\n\n{analysis}\n\n---\n\n*Analysis saved to system instructions.*"
+                                
+                            except Exception as e:
+                                logger.error(f"Schema analysis error: {e}", exc_info=True)
+                                return f"❌ Error: {str(e)}"
+                        
+                        analyze_btn.click(
+                            analyze_schema,
+                            outputs=[analysis_output]
+                        )
+                    
+                    # Example Queries Tab
+                    with gr.Tab("📚 Example Queries"):
+                        gr.Markdown("""### Example Query Library
+Add example queries to help the AI learn patterns.""")
+                        
+                        example_question = gr.Textbox(label="Question", placeholder="What are the top 5 suppliers?")
+                        example_sql = gr.Textbox(label="SQL Query", placeholder="SELECT TOP 5 * FROM Suppliers ORDER BY TotalOrders DESC", lines=3)
+                        add_example_btn = gr.Button("➕ Add Example", variant="primary")
+                        examples_display = gr.Markdown("No examples yet")
+                        
+                        def add_example(question, sql):
+                            if not question or not sql:
+                                return "Please provide both question and SQL"
+                            
+                            # Load existing examples
+                            examples_file = Path(__file__).parent.parent / "example_queries.json"
+                            examples = []
+                            if examples_file.exists():
+                                import json
+                                with open(examples_file, 'r') as f:
+                                    examples = json.load(f)
+                            
+                            examples.append({"question": question, "sql": sql})
+                            
+                            with open(examples_file, 'w') as f:
+                                json.dump(examples, f, indent=2)
+                            
+                            # Display examples
+                            display = "## Example Queries\n\n"
+                            for i, ex in enumerate(examples, 1):
+                                display += f"**{i}. {ex['question']}**\n```sql\n{ex['sql']}\n```\n\n"
+                            
+                            return display
+                        
+                        add_example_btn.click(
+                            add_example,
+                            inputs=[example_question, example_sql],
+                            outputs=[examples_display]
+                        )
             
 
             
