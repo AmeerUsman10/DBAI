@@ -174,8 +174,8 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         config = load_config()
         llm_config = config.get('llm', {})
         
-        provider_name = llm_config.get('provider', 'groq')
-        model = llm_config.get('model', 'llama-3.1-8b-instant')
+        provider_name = llm_config.get('provider', 'openai')
+        model = llm_config.get('model', 'gpt-4o-mini')
         temperature = llm_config.get('temperature', 0.1)
         max_tokens = llm_config.get('max_tokens', 2000)
         
@@ -222,20 +222,33 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
             
             if isinstance(result, dict):
                 if 'columns' in result and 'rows' in result:
-                    response += f"**Results:** ({len(result['rows'])} rows)\n\n"
+                    response += f"**Query Results** ({len(result['rows'])} rows)\n\n"
                     
-                    # Create simple table
+                    # Create properly formatted table
                     if result['rows']:
+                        # Calculate column widths for better alignment
+                        col_widths = {}
+                        for i, col in enumerate(result['columns']):
+                            col_widths[i] = max(
+                                len(str(col)),
+                                max((len(str(row[i])) for row in result['rows'][:20]), default=0)
+                            )
+                        
                         # Header
-                        response += "| " + " | ".join(result['columns']) + " |\n"
-                        response += "|" + "|".join(["---" for _ in result['columns']]) + "|\n"
+                        header_cells = [str(col).ljust(col_widths[i]) for i, col in enumerate(result['columns'])]
+                        response += "| " + " | ".join(header_cells) + " |\n"
+                        
+                        # Separator
+                        separator_cells = ["-" * col_widths[i] for i in range(len(result['columns']))]
+                        response += "| " + " | ".join(separator_cells) + " |\n"
                         
                         # Rows (limit to 20)
                         for row in result['rows'][:20]:
-                            response += "| " + " | ".join(str(v) for v in row) + " |\n"
+                            row_cells = [str(v).ljust(col_widths[i]) for i, v in enumerate(row)]
+                            response += "| " + " | ".join(row_cells) + " |\n"
                         
                         if len(result['rows']) > 20:
-                            response += f"\n_... and {len(result['rows']) - 20} more rows_"
+                            response += f"\n*Showing 20 of {len(result['rows'])} rows*"
                 else:
                     response += f"**Result:** {result.get('message', 'Success')}"
             else:
@@ -249,8 +262,7 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
             session_tokens['completion'] += response_tokens['completion_tokens']
             session_tokens['total'] += response_tokens['total_tokens']
             
-            response += f"\n\n---\n**Tokens:** {response_tokens['total_tokens']} (Prompt: {response_tokens['prompt_tokens']}, Completion: {response_tokens['completion_tokens']})"
-            response += f" | **Session Total:** {session_tokens['total']:,} tokens"
+            response += f"\n\n<sub>🔹 Tokens: {response_tokens['total_tokens']} · Session: {session_tokens['total']:,}</sub>"
         
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
@@ -372,13 +384,13 @@ def load_settings() -> Tuple:
     db_config = config.get('database', {})
     
     return (
-        llm_config.get('provider', 'groq'),
-        llm_config.get('model', 'llama-3.1-8b-instant'),
+        llm_config.get('provider', 'openai'),
+        llm_config.get('model', 'gpt-4o-mini'),
         llm_config.get('temperature', 0.1),
         llm_config.get('max_tokens', 2000),
         db_config.get('server', 'localhost'),
         db_config.get('database', 'master'),
-        db_config.get('driver', 'ODBC Driver 17 for SQL Server'),
+        db_config.get('driver', 'ODBC Driver 18 for SQL Server'),
         db_config.get('username', ''),
         db_config.get('password', '')
     )
@@ -584,14 +596,14 @@ def build_ui():
                 
                 with gr.Row():
                     provider_dropdown = gr.Dropdown(
-                        choices=["groq", "openai"],
+                        choices=["openai", "groq"],
                         label="Provider",
-                        value="groq"
+                        value="openai"
                     )
                     model_dropdown = gr.Dropdown(
                         choices=[],
                         label="Model",
-                        value="",
+                        value="gpt-4o-mini",
                         allow_custom_value=True
                     )
                 
@@ -635,7 +647,7 @@ def build_ui():
                 with gr.Row():
                     db_driver = gr.Textbox(
                         label="Driver",
-                        value="ODBC Driver 17 for SQL Server"
+                        value="ODBC Driver 18 for SQL Server"
                     )
                 
                 with gr.Row():
@@ -688,7 +700,7 @@ def build_ui():
                 
                 # Update model list when provider changes
                 demo.load(
-                    lambda: get_available_models("groq"),
+                    lambda: get_available_models("openai"),
                     outputs=[model_dropdown]
                 )
             
@@ -747,73 +759,20 @@ Let the AI analyze your database schema and generate training data automatically
                         
                         analyze_btn = gr.Button("🚀 Analyze Database Schema", variant="primary", size="lg")
                         analysis_output = gr.Markdown("")
-                        history_table = gr.Dataframe(
-                            headers=["Timestamp", "Database", "Tables", "Status"],
-                            label="📜 Analysis History",
-                            interactive=False
-                        )
-                        
-                        def load_analysis_history():
-                            """Load analysis history from JSON file."""
-                            try:
-                                history_file = Path(__file__).parent.parent / "schema_analysis_history.json"
-                                if history_file.exists():
-                                    with open(history_file, 'r') as f:
-                                        content = f.read().strip()
-                                        if content:
-                                            return json.loads(content)
-                            except Exception as e:
-                                logger.error(f"Error loading analysis history: {e}")
-                            return []
-                        
-                        def save_analysis_history(analysis_data):
-                            """Save analysis to history file."""
-                            try:
-                                history_file = Path(__file__).parent.parent / "schema_analysis_history.json"
-                                history = load_analysis_history()
-                                history.insert(0, analysis_data)  # Add to beginning
-                                with open(history_file, 'w') as f:
-                                    json.dump(history, f, indent=2)
-                            except Exception as e:
-                                logger.error(f"Error saving analysis history: {e}")
-                        
-                        def format_history_table():
-                            """Format history for display in table."""
-                            history = load_analysis_history()
-                            if not history:
-                                return []
-                            
-                            rows = []
-                            for item in history:
-                                rows.append([
-                                    item.get('timestamp', 'N/A'),
-                                    item.get('database', 'N/A'),
-                                    item.get('tables_count', 'N/A'),
-                                    item.get('status', 'N/A')
-                                ])
-                            return rows
                         
                         def analyze_schema():
                             """Analyze database schema automatically."""
-                            from datetime import datetime
-                            
                             try:
                                 db = get_sql_database()
                                 if not db:
-                                    return "❌ Database not available", format_history_table()
+                                    return "❌ Database not available"
                                 
                                 schema = db.get_table_info()
-                                
-                                # Get database info
-                                config = load_config()
-                                db_name = config.get('database', {}).get('database', 'Unknown')
-                                
-                                # Count tables in schema
-                                tables_count = len([line for line in schema.split('\n') if line.strip().startswith('CREATE TABLE')])
                                 
                                 # Use LLM to analyze schema
                                 global current_llm, current_provider
                                 if current_llm is None:
+                                    config = load_config()
                                     llm_config = config.get('llm', {})
                                     provider_name = llm_config.get('provider', 'openai')
                                     model = llm_config.get('model', 'gpt-4o-mini')
@@ -835,116 +794,89 @@ Provide a comprehensive analysis:"""
                                 response = current_llm.invoke(prompt)
                                 analysis = response.content if hasattr(response, 'content') else str(response)
                                 
-                                # Save to history
-                                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                analysis_data = {
-                                    'timestamp': timestamp,
-                                    'database': db_name,
-                                    'tables_count': tables_count,
-                                    'status': 'Completed',
-                                    'analysis': analysis,
-                                    'schema': schema
-                                }
-                                save_analysis_history(analysis_data)
-                                
                                 # Save as system instructions
-                                save_system_instructions(f"Auto-generated analysis ({timestamp}):\n\n{analysis}")
+                                save_system_instructions(f"Auto-generated analysis:\n\n{analysis}")
                                 
-                                output = f"## ✅ Analysis Complete\n\n{analysis}\n\n---\n\n*Analysis saved to system instructions and history.*"
-                                return output, format_history_table()
+                                return f"## ✅ Analysis Complete\n\n{analysis}\n\n---\n\n*Analysis saved to system instructions.*"
                                 
                             except Exception as e:
                                 logger.error(f"Schema analysis error: {e}", exc_info=True)
-                                
-                                # Save error to history
-                                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                analysis_data = {
-                                    'timestamp': timestamp,
-                                    'database': config.get('database', {}).get('database', 'Unknown'),
-                                    'tables_count': 0,
-                                    'status': f'Error: {str(e)}',
-                                    'analysis': '',
-                                    'schema': ''
-                                }
-                                save_analysis_history(analysis_data)
-                                
-                                return f"❌ Error: {str(e)}", format_history_table()
-                        
-                        def show_history_item(evt: gr.SelectData):
-                            """Show selected analysis from history."""
-                            try:
-                                history = load_analysis_history()
-                                if evt.index[0] < len(history):
-                                    item = history[evt.index[0]]
-                                    output = f"""## 📜 Analysis from {item['timestamp']}
-**Database:** {item['database']}  
-**Tables:** {item['tables_count']}  
-**Status:** {item['status']}
-
----
-
-{item.get('analysis', 'No analysis available')}"""
-                                    return output
-                            except Exception as e:
-                                logger.error(f"Error showing history item: {e}")
-                                return "❌ Error loading analysis"
-                            return ""
-                        
-                        # Load history on startup
-                        history_table.value = format_history_table()
+                                return f"❌ Error: {str(e)}"
                         
                         analyze_btn.click(
                             analyze_schema,
-                            outputs=[analysis_output, history_table]
-                        )
-                        
-                        history_table.select(
-                            show_history_item,
                             outputs=[analysis_output]
                         )
                     
                     # Example Queries Tab
-                    with gr.Tab("📚 Example Queries"):
-                        gr.Markdown("""### Example Query Library
-Add example queries to help the AI learn patterns.""")
+                    with gr.Tab("📚 Auto-Generate Examples"):
+                        gr.Markdown("""### Intelligent Query Generator
+Automatically generate relevant example queries by analyzing your database schema.""")
                         
-                        example_question = gr.Textbox(label="Question", placeholder="What are the top 5 suppliers?")
-                        example_sql = gr.Textbox(label="SQL Query", placeholder="SELECT TOP 5 * FROM Suppliers ORDER BY TotalOrders DESC", lines=3)
-                        add_example_btn = gr.Button("➕ Add Example", variant="primary")
-                        examples_display = gr.Markdown("No examples yet")
+                        generate_btn = gr.Button("🤖 Generate Example Queries", variant="primary", size="lg")
+                        examples_output = gr.Markdown("")
                         
-                        def add_example(question, sql):
-                            if not question or not sql:
-                                return "Please provide both question and SQL"
-                            
-                            # Load existing examples
-                            examples_file = Path(__file__).parent.parent / "example_queries.json"
-                            examples = []
-                            if examples_file.exists():
-                                try:
-                                    with open(examples_file, 'r') as f:
-                                        content = f.read().strip()
-                                        if content:
-                                            examples = json.loads(content)
-                                except json.JSONDecodeError:
-                                    examples = []
-                            
-                            examples.append({"question": question, "sql": sql})
-                            
-                            with open(examples_file, 'w') as f:
-                                json.dump(examples, f, indent=2)
-                            
-                            # Display examples
-                            display = "## Example Queries\n\n"
-                            for i, ex in enumerate(examples, 1):
-                                display += f"**{i}. {ex['question']}**\n```sql\n{ex['sql']}\n```\n\n"
-                            
-                            return display
+                        def generate_example_queries():
+                            """Auto-generate example queries based on schema analysis."""
+                            try:
+                                db = get_sql_database()
+                                if not db:
+                                    return "❌ Database not available"
+                                
+                                schema = db.get_table_info()
+                                
+                                # Use LLM to generate example queries
+                                global current_llm, current_provider
+                                if current_llm is None:
+                                    config = load_config()
+                                    llm_config = config.get('llm', {})
+                                    provider_name = llm_config.get('provider', 'openai')
+                                    model = llm_config.get('model', 'gpt-4o-mini')
+                                    current_provider = create_provider(provider_name)
+                                    current_llm = current_provider.get_llm(model, 0.3, 2000)
+                                
+                                prompt = f"""Analyze this database schema and generate 8-10 practical example questions that users would commonly ask.
+
+Schema:
+{schema}
+
+For each question, provide:
+1. A natural language question
+2. The SQL Server query that answers it
+
+Format each example as:
+**Q: [Natural language question]**
+```sql
+[SQL Server query]
+```
+
+Focus on:
+- Common business queries (totals, counts, summaries)
+- Date-based analysis (monthly, yearly trends)
+- Comparisons and rankings
+- Aggregations by category
+- Inventory/stock queries
+- Supplier/vendor analysis
+
+Generate the examples now:"""
+                                
+                                response = current_llm.invoke(prompt)
+                                examples = response.content if hasattr(response, 'content') else str(response)
+                                
+                                # Save to file
+                                examples_file = Path(__file__).parent.parent / "auto_generated_examples.md"
+                                with open(examples_file, 'w') as f:
+                                    f.write(examples)
+                                
+                                return f"## ✅ Examples Generated\n\n{examples}\n\n---\n\n*Examples saved to auto_generated_examples.md*"
+                                
+                            except Exception as e:
+                                logger.error(f"Example generation error: {e}", exc_info=True)
+                                return f"❌ Error: {str(e)}"
                         
-                        add_example_btn.click(
-                            add_example,
-                            inputs=[example_question, example_sql],
-                            outputs=[examples_display]
+                        generate_btn.click(
+                            generate_example_queries,
+                            outputs=[examples_output]
                         )
             
 
