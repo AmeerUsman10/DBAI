@@ -9,8 +9,124 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 import importlib.metadata
+import re
+from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
+
+def analyze_recent_logs(limit: int = 100) -> Dict:
+    """
+    Analyze recent log entries for errors, warnings, and user queries.
+    
+    Args:
+        limit: Number of recent log lines to analyze
+        
+    Returns:
+        Dict with analysis results including errors, warnings, queries, and SQL statements
+    """
+    project_root = Path(__file__).parent.parent
+    log_path = project_root / "logs" / "diagnostics.log"
+    
+    analysis = {
+        "errors": [],
+        "warnings": [],
+        "user_queries": [],
+        "sql_queries": [],
+        "database_operations": [],
+        "recent_activity": [],
+        "summary": ""
+    }
+    
+    if not log_path.exists():
+        analysis["summary"] = "No diagnostics log found"
+        return analysis
+    
+    try:
+        with open(log_path, 'r') as f:
+            lines = f.readlines()
+            recent_lines = lines[-limit:] if len(lines) > limit else lines
+        
+        for i, line in enumerate(recent_lines):
+            line = line.strip()
+            
+            # Capture errors
+            if " - ERROR - " in line:
+                # Get error and next few lines for context
+                error_context = [line]
+                for j in range(i+1, min(i+5, len(recent_lines))):
+                    if recent_lines[j].strip() and not recent_lines[j].startswith("20"):
+                        error_context.append(recent_lines[j].strip())
+                analysis["errors"].append("\n".join(error_context))
+            
+            # Capture warnings
+            elif " - WARNING - " in line:
+                analysis["warnings"].append(line)
+            
+            # Capture user queries
+            if "User question:" in line or "Query:" in line:
+                match = re.search(r'(?:User question:|Query:)\s*(.+)', line)
+                if match:
+                    analysis["user_queries"].append(match.group(1))
+            
+            # Capture SQL queries
+            if "Generated SQL:" in line or "SELECT " in line or "FROM " in line:
+                analysis["sql_queries"].append(line)
+            
+            # Capture database operations
+            if any(keyword in line for keyword in ["database", "connection", "query execution"]):
+                analysis["database_operations"].append(line)
+            
+            # Keep recent activity (last 20 lines)
+            if i >= len(recent_lines) - 20:
+                analysis["recent_activity"].append(line)
+        
+        # Generate summary
+        error_count = len(analysis["errors"])
+        warning_count = len(analysis["warnings"])
+        query_count = len(analysis["user_queries"])
+        
+        summary_parts = []
+        if error_count > 0:
+            summary_parts.append(f"🔴 {error_count} error(s)")
+        if warning_count > 0:
+            summary_parts.append(f"⚠️ {warning_count} warning(s)")
+        if query_count > 0:
+            summary_parts.append(f"💬 {query_count} user query(ies)")
+        
+        analysis["summary"] = " | ".join(summary_parts) if summary_parts else "✅ No issues detected"
+        
+    except Exception as e:
+        logger.error(f"Error analyzing logs: {e}")
+        analysis["summary"] = f"Error analyzing logs: {str(e)}"
+    
+    return analysis
+
+
+def get_recent_session_context(lines: int = 50) -> str:
+    """
+    Get recent session context in a human-readable format.
+    
+    Args:
+        lines: Number of recent log lines to include
+        
+    Returns:
+        Formatted string with recent session activity
+    """
+    project_root = Path(__file__).parent.parent
+    log_path = project_root / "logs" / "diagnostics.log"
+    
+    if not log_path.exists():
+        return "No diagnostics log found"
+    
+    try:
+        with open(log_path, 'r') as f:
+            all_lines = f.readlines()
+            recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+        
+        return "".join(recent_lines)
+    except Exception as e:
+        return f"Error reading logs: {str(e)}"
+
 
 def redact_sensitive_data(content: str) -> str:
     """Redact API keys and sensitive information from content."""
