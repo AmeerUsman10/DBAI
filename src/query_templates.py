@@ -37,21 +37,46 @@ def generate_ranking_sql(params: Dict) -> str:
     """
     Generate TOP N ranking query.
     
-    Template: SELECT TOP N entity, SUM(metric) as Total
-              FROM table
-              WHERE ENTRY_TYPE = 'type'
-              GROUP BY entity
-              ORDER BY SUM(metric) DESC
+    Business logic:
+    - Default: Both departments combined (Yarn + Greige)
+    - Rank by total Amount across both
+    - No movement type filter unless explicitly specified
     """
-    dept = params['department']
     entity = params['entity']
     limit = params['limit']
     movement_type = params['movement_type']
+    dept = params['department']
     
-    # Table selection
+    # BUSINESS RULE: Suppliers default to BOTH departments combined
+    if entity == 'supplier':
+        # Combine Yarn + Greige suppliers by total amount
+        yarn_where = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
+        greige_where = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
+        
+        sql = f"""SELECT TOP {limit} Supplier, SUM(TotalAmount) as 'Total PKR', SUM(TotalQty) as 'Total Quantity', SUM(RecordCount) as 'Record Count'
+FROM (
+    SELECT SUPPLIER as Supplier, SUM(AMOUNT) as TotalAmount, SUM(LBS) as TotalQty, COUNT(*) as RecordCount
+    FROM YarnData
+    {yarn_where}
+    GROUP BY SUPPLIER
+    
+    UNION ALL
+    
+    SELECT SUPP_NAME as Supplier, SUM(AMOUNT) as TotalAmount, SUM(METER) as TotalQty, COUNT(*) as RecordCount
+    FROM GreigeData
+    {greige_where}
+    GROUP BY SUPP_NAME
+) AS CombinedSuppliers
+GROUP BY Supplier
+ORDER BY SUM(TotalAmount) DESC"""
+        
+        logger.info(f"Generated multi-department supplier ranking SQL from template")
+        return sql
+    
+    # Single department for other entities (quality, type)
     if dept == 'yarn':
         table = 'YarnData'
-        entity_col = 'SUPPLIER' if entity == 'supplier' else 'QUALITY'
+        entity_col = 'QUALITY'
         metric_cols = [
             f"SUM(AMOUNT) as 'Total PKR'",
             f"SUM(LBS) as 'Total LBS'",
@@ -60,15 +85,21 @@ def generate_ranking_sql(params: Dict) -> str:
         ]
     elif dept == 'greige':
         table = 'GreigeData'
-        entity_col = 'SUPP_NAME' if entity == 'supplier' else 'AC_NAME'
+        entity_col = 'AC_NAME'
         metric_cols = [
             f"SUM(AMOUNT) as 'Total PKR'",
             f"SUM(METER) as 'Total Meters'",
             f"COUNT(*) as 'Record Count'"
         ]
     else:
-        # Both departments - use subqueries
-        return generate_ranking_both_departments(params)
+        # Default to yarn for non-supplier entities
+        table = 'YarnData'
+        entity_col = 'QUALITY'
+        metric_cols = [
+            f"SUM(AMOUNT) as 'Total PKR'",
+            f"SUM(LBS) as 'Total LBS'",
+            f"COUNT(*) as 'Record Count'"
+        ]
     
     # WHERE clause
     where_clause = ""

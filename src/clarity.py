@@ -148,15 +148,17 @@ def analyze_query_clarity(query: str) -> Tuple[int, str, List[str]]:
         score -= 10
         reasons.append("Total requested without specifying dimension")
     
-    # Check for supplier queries without movement type (CRITICAL business rule)
+    # Check for supplier queries without movement type (BUSINESS RULE CHANGED)
+    # NEW: Movement type NOT required - system handles all types by default
+    # Keeping detection for potential future use, but not penalizing
     supplier_keywords = ['top supplier', 'supplier rank', 'best supplier', 'supplier list', 'supplier']
     movement_keywords = ['arrival', 'issue', 'rejection', 'movement']
     
     if any(kw in query_lower for kw in supplier_keywords):
         if not any(mk in query_lower for mk in movement_keywords):
-            score -= 35  # CRITICAL: Must go below 70 threshold to trigger clarification
-            reasons.append("Supplier query without movement type (arrival/issue/rejection)")
-            vague_type = 'top_supplier'
+            # Don't penalize - business wants default behavior (all types, both departments)
+            vague_type = 'top_supplier'  # Still set type for potential logging
+            # score -= 0  # No penalty
     
     # Ensure score stays in range
     score = max(0, min(100, score))

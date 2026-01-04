@@ -90,7 +90,7 @@ def classify_query(query: str) -> Dict:
         'metric': 'AMOUNT',  # Default to amount
         'limit': 10,  # Default top 10
         'movement_type': None,
-        'department': 'yarn',  # Default to yarn
+        'department': 'both',  # BUSINESS RULE: Default to both departments for suppliers
         'specific_value': None
     }
     
@@ -187,11 +187,10 @@ def classify_query(query: str) -> Dict:
 
 def needs_movement_clarification(classification: Dict) -> bool:
     """Check if query needs movement type clarification."""
-    if classification['type'] == 'ranking':
-        params = classification['params']
-        if params['entity'] == 'supplier' and not params['movement_type']:
-            return True
-    return False
+    # Business rule: Only ask for movement type if user explicitly mentions it in context
+    # Example: "top suppliers for arrivals" vs "top suppliers" (no clarification needed)
+    # Default behavior: Show across all movement types, both departments
+    return False  # Disabled - let template handle multi-department by default
 
 
 def get_clarification_for_classification(classification: Dict) -> List[str]:
