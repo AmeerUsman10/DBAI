@@ -43,6 +43,11 @@ def setup_logging():
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("gradio").setLevel(logging.INFO)
+    logging.getLogger("PIL").setLevel(logging.INFO)  # Suppress PIL image plugin debug messages
+    logging.getLogger("matplotlib").setLevel(logging.INFO)  # Suppress matplotlib debug messages
+    logging.getLogger("asyncio").setLevel(logging.INFO)  # Suppress asyncio debug messages
+    logging.getLogger("urllib3").setLevel(logging.INFO)  # Suppress urllib3 debug messages
+    logging.getLogger("openai._base_client").setLevel(logging.INFO)  # Suppress OpenAI debug messages
     
     logging.info("DBAI application starting...")
 
