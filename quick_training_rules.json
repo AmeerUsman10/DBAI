@@ -6,13 +6,18 @@
       "usage_count": 0
     },
     {
-      "instruction": "CRITICAL: When asked for summaries of MULTIPLE departments (yarn AND greige), NEVER use JOIN operations. Instead use separate subqueries or UNION ALL. JOINs create duplicate row counts. Correct approach: SELECT (SELECT COUNT(*) FROM YarnData) as 'Yarn Count', (SELECT COUNT(*) FROM GreigeData) as 'Greige Count'. This ensures accurate counts for each department independently.",
+      "instruction": "CRITICAL SQL SYNTAX: When querying multiple departments, use separate subqueries with ONE column each. CORRECT: SELECT (SELECT COUNT(*) FROM YarnData) as 'Yarn Count', (SELECT COUNT(*) FROM GreigeData) as 'Greige Count'. WRONG: SELECT (SELECT COUNT(*), SUM(LBS) FROM YarnData) - subqueries can only return ONE column. Each metric needs its own subquery. NEVER use JOIN for department summaries.",
       "added_at": "2026-01-04T11:40:00",
+      "usage_count": 0
+    },
+    {
+      "instruction": "MOVEMENT TYPES REQUIRED: Database has 3 inventory movement types: ARRIVAL (incoming), ISSUE (outgoing), REJECTION (returned). When user asks 'top supplier' or 'supplier ranking' WITHOUT specifying movement type, STOP and ask: 'Which movement type? 1) Arrivals 2) Issues 3) Rejections 4) All combined'. This is MANDATORY for accurate business reporting.",
+      "added_at": "2026-01-04T11:55:00",
       "usage_count": 0
     }
   ],
   "metadata": {
-    "total_rules": 2,
-    "last_updated": "2026-01-04T11:40:00"
+    "total_rules": 3,
+    "last_updated": "2026-01-04T11:55:00"
   }
 }

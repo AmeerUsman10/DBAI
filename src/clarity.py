@@ -33,6 +33,7 @@ AMBIGUOUS_TERMS = {
     'list': ['simple list', 'detailed list', 'sorted list', 'filtered list'],
     'greige': ['greige quantity', 'greige amount', 'greige suppliers', 'greige departments'],
     'yarn': ['yarn quantity', 'yarn amount', 'yarn suppliers', 'yarn types'],
+    'top': ['top by amount', 'top by quantity', 'top by frequency', 'top overall'],
 }
 
 # Context-aware clarification templates
@@ -72,6 +73,12 @@ CLARIFICATION_TEMPLATES = {
         "Show purchase counts by supplier",
         "Show detailed transactions by supplier",
         "Rank suppliers by total amount"
+    ],
+    'top_supplier': [
+        "Top suppliers by ARRIVAL (incoming stock)",
+        "Top suppliers by ISSUE (outgoing/used stock)",
+        "Top suppliers by REJECTION (returned stock)",
+        "Top suppliers across ALL movement types"
     ],
     'quality_wise': [
         "Show fabric quantities by quality grade",
@@ -140,6 +147,16 @@ def analyze_query_clarity(query: str) -> Tuple[int, str, List[str]]:
     if 'total' in query_lower and 'by' not in query_lower and 'of' not in query_lower:
         score -= 10
         reasons.append("Total requested without specifying dimension")
+    
+    # Check for supplier queries without movement type (CRITICAL business rule)
+    supplier_keywords = ['top supplier', 'supplier rank', 'best supplier', 'supplier list']
+    movement_keywords = ['arrival', 'issue', 'rejection', 'movement']
+    
+    if any(kw in query_lower for kw in supplier_keywords):
+        if not any(mk in query_lower for mk in movement_keywords):
+            score -= 25
+            reasons.append("Supplier query without movement type (arrival/issue/rejection)")
+            vague_type = 'top_supplier'
     
     # Ensure score stays in range
     score = max(0, min(100, score))
