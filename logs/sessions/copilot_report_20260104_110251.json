@@ -1,0 +1,343 @@
+{
+  "session_summary": {
+    "session_id": "20260104_110251",
+    "duration_minutes": 4.04751695,
+    "total_queries": 4,
+    "successful_queries": 4,
+    "failed_queries": 0,
+    "success_rate": 100.0,
+    "avg_response_time": 45.75,
+    "training_events": 0,
+    "errors": 0
+  },
+  "configuration": {
+    "tier1_enabled": true,
+    "tier2_enabled": true,
+    "capture_llm_prompts": true,
+    "capture_sample_data": false,
+    "capture_reasoning_chain": true,
+    "max_queries_in_memory": 50,
+    "auto_save_interval": 10
+  },
+  "full_state": {
+    "session_id": "20260104_110251",
+    "started_at": "2026-01-04T11:02:51.090142",
+    "total_queries": 4,
+    "total_errors": 0,
+    "total_successes": 4,
+    "current_state": {},
+    "last_query": {
+      "timestamp": "2026-01-04T11:06:28.585875",
+      "user_question": "This is not what i asked for. You shouldn't be giving me all this data instead you should give me an answer that provides the corrected data for Yarn Count. You should be capabale of dialogue like a claude or chatgpt while also showing data and other stuff. ",
+      "success": true,
+      "execution_time_ms": 8,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 85,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT COUNT(*) as 'Yarn Count' FROM YarnData",
+        "tokens": {
+          "prompt_tokens": 2028,
+          "completion_tokens": 17,
+          "total_tokens": 2045
+        },
+        "raw_response": "{'result': \"```sql\\nSELECT COUNT(*) as 'Yarn Count' FROM YarnData\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT COUNT(*) as 'Yarn Count' FROM YarnData\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 17, 'prompt_tokens': 2028, 'total_tokens': 2045, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNimyVynFGiKBG07Wz5O3nhFyKRw', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a67-581d-7b11-8557-74675114108f-0', usage_metadata={'input_tokens': 2028, 'output_tokens': 17, 'total_tokens': 2045, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 8
+      },
+      "response": {
+        "type": "data",
+        "text": "**Query Results** (1 rows)\n\n| Yarn Count |\n| ---------- |\n| 2,784      |\n\n\n<sub>\ud83e\udde0 Knowledge: 9 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2045 \u00b7 Session: 9,137</sub>",
+        "length_chars": 180
+      },
+      "performance": {
+        "total_time_ms": 1367,
+        "query_time_ms": 8,
+        "tokens": {
+          "prompt_tokens": 2028,
+          "completion_tokens": 17,
+          "total_tokens": 2045
+        }
+      }
+    },
+    "session_timeline": [
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:03:29.515487",
+        "question": "yarn data summary",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:03:54.641028",
+        "question": "all data summary by type",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:04:45.181298",
+        "question": "Yarn Count are not equal in both of these queries, shouldn't these records be the same?",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:06:28.585875",
+        "question": "This is not what i asked for. You shouldn't be giving me all this data instead you should give me an",
+        "success": true
+      }
+    ]
+  },
+  "all_queries": [
+    {
+      "timestamp": "2026-01-04T11:03:29.515487",
+      "user_question": "yarn data summary",
+      "success": true,
+      "execution_time_ms": 5,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 70,
+        "needs_clarification": false,
+        "reason": "Query is somewhat clear: Short query - could be more specific; Ambiguous term: 'yarn'",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData",
+        "tokens": {
+          "prompt_tokens": 2200,
+          "completion_tokens": 48,
+          "total_tokens": 2248
+        },
+        "raw_response": "{'result': \"SELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData\", 'response': AIMessage(content=\"SELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 48, 'prompt_tokens': 2200, 'total_tokens': 2248, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNfsb6XXdVbvYlw4BJMdeboI3g1h', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a64-9a2e-7b33-a13f-abef2a4e4c6a-0', usage_metadata={'input_tokens': 2200, 'output_tokens': 48, 'total_tokens': 2248, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 5
+      },
+      "response": {
+        "type": "data",
+        "text": "**Query Results** (1 rows)\n\n| Yarn Total LBS | Yarn Total PKR | Yarn Total Bags | Yarn Count |\n| -------------- | -------------- | --------------- | ---------- |\n| 22371100       | 7312972939.85  | 250473          | 2784       |\n\n\n<sub>\ud83e\udde0 Knowledge: 9 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2248 \u00b7 Session: 2,248</sub>",
+        "length_chars": 336
+      },
+      "performance": {
+        "total_time_ms": 4694,
+        "query_time_ms": 5,
+        "tokens": {
+          "prompt_tokens": 2200,
+          "completion_tokens": 48,
+          "total_tokens": 2248
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:03:54.641028",
+      "user_question": "all data summary by type",
+      "success": true,
+      "execution_time_ms": 115,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 100,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT \n    SUM(G.METER) as 'Greige Total Meters',\n    SUM(G.AMOUNT) as 'Greige Total PKR',\n    COUNT(*) as 'Greige Count',\n    SUM(Y.LBS) as 'Yarn Total LBS',\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\n    SUM(Y.BAGS) as 'Yarn Total Bags',\n    COUNT(*) as 'Yarn Count'\nFROM \n    GreigeData G\nFULL OUTER JOIN \n    YarnData Y ON G.DOCDATE = Y.DOCDATE\nWHERE \n    G.DOCDATE IS NOT NULL OR Y.DOCDATE IS NOT NULL;",
+        "tokens": {
+          "prompt_tokens": 2320,
+          "completion_tokens": 142,
+          "total_tokens": 2462
+        },
+        "raw_response": "{'result': \"```sql\\nSELECT \\n    SUM(G.METER) as 'Greige Total Meters',\\n    SUM(G.AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count',\\n    SUM(Y.LBS) as 'Yarn Total LBS',\\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\\n    SUM(Y.BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count'\\nFROM \\n    GreigeData G\\nFULL OUTER JOIN \\n    YarnData Y ON G.DOCDATE = Y.DOCDATE\\nWHERE \\n    G.DOCDATE IS NOT NULL OR Y.DOCDATE IS NOT NULL;\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT \\n    SUM(G.METER) as 'Greige Total Meters',\\n    SUM(G.AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count',\\n    SUM(Y.LBS) as 'Yarn Total LBS',\\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\\n    SUM(Y.BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count'\\nFROM \\n    GreigeData G\\nFULL OUTER JOIN \\n    YarnData Y ON G.DOCDATE = Y.DOCDATE\\nWHERE \\n    G.DOCDATE IS NOT NULL OR Y.DOCDATE IS NOT NULL;\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 142, 'prompt_tokens': 2320, 'total_tokens': 2462, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNgFdneEVJPbjNOCmfBYqVioOupo', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a64-f11f-7a01-8826-49b25ef55cae-0', usage_metadata={'input_tokens': 2320, 'output_tokens': 142, 'total_tokens': 2462, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 115
+      },
+      "response": {
+        "type": "data",
+        "text": "**Query Results** (1 rows)\n\n| Greige Total Meters | Greige Total PKR | Greige Count | Yarn Total LBS | Yarn Total PKR  | Yarn Total Bags | Yarn Count |\n| ------------------- | ---------------- | ------------ | -------------- | --------------- | --------------- | ---------- |\n| 688732123           | 150276391513.65  | 274310       | 2114896065     | 692053383457.39 | 23800571        | 274310     |\n\n\n<sub>\ud83e\udde0 Knowledge: 9 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2462 \u00b7 Session: 4,710</sub>",
+        "length_chars": 507
+      },
+      "performance": {
+        "total_time_ms": 4859,
+        "query_time_ms": 115,
+        "tokens": {
+          "prompt_tokens": 2320,
+          "completion_tokens": 142,
+          "total_tokens": 2462
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:04:45.181298",
+      "user_question": "Yarn Count are not equal in both of these queries, shouldn't these records be the same?",
+      "success": true,
+      "execution_time_ms": 55,
+      "error": null,
+      "rows_returned": 150,
+      "clarity_analysis": {
+        "score": 85,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT \n    Y.SUPPLIER,\n    SUM(Y.LBS) as 'Yarn Total LBS',\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\n    SUM(Y.BAGS) as 'Yarn Total Bags',\n    COUNT(*) as 'Yarn Count',\n    G.SUPP_NAME,\n    SUM(G.METER) as 'Greige Total Meters',\n    SUM(G.AMOUNT) as 'Greige Total PKR',\n    COUNT(*) as 'Greige Count'\nFROM \n    YarnData Y\nFULL OUTER JOIN \n    GreigeData G ON Y.DOCDATE = G.DOCDATE AND Y.SUPPLIER = G.SUPP_NAME\nGROUP BY \n    Y.SUPPLIER, G.SUPP_NAME;",
+        "tokens": {
+          "prompt_tokens": 2217,
+          "completion_tokens": 165,
+          "total_tokens": 2382
+        },
+        "raw_response": "{'result': \"```sql\\nSELECT \\n    Y.SUPPLIER,\\n    SUM(Y.LBS) as 'Yarn Total LBS',\\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\\n    SUM(Y.BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count',\\n    G.SUPP_NAME,\\n    SUM(G.METER) as 'Greige Total Meters',\\n    SUM(G.AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count'\\nFROM \\n    YarnData Y\\nFULL OUTER JOIN \\n    GreigeData G ON Y.DOCDATE = G.DOCDATE AND Y.SUPPLIER = G.SUPP_NAME\\nGROUP BY \\n    Y.SUPPLIER, G.SUPP_NAME;\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT \\n    Y.SUPPLIER,\\n    SUM(Y.LBS) as 'Yarn Total LBS',\\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\\n    SUM(Y.BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count',\\n    G.SUPP_NAME,\\n    SUM(G.METER) as 'Greige Total Meters',\\n    SUM(G.AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count'\\nFROM \\n    YarnData Y\\nFULL OUTER JOIN \\n    GreigeData G ON Y.DOCDATE = G.DOCDATE AND Y.SUPPLIER = G.SUPP_NAME\\nGROUP BY \\n    Y.SUPPLIER, G.SUPP_NAME;\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 165, 'prompt_tokens': 2217, 'total_tokens': 2382, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNh3qPFvdw1nWBYX8H4chWhsUSPI', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a65-b70c-7910-932e-283156339a34-0', usage_metadata={'input_tokens': 2217, 'output_tokens': 165, 'total_tokens': 2382, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 150,
+        "execution_time_ms": 55
+      },
+      "response": {
+        "type": "data",
+        "text": "**Query Results** (150 rows)\n\n| SUPPLIER                               | Yarn Total LBS | Yarn Total PKR | Yarn Total Bags | Yarn Count | SUPP_NAME                              | Greige Total Meters | Greige Total PKR | Greige Count |\n| -------------------------------------- | -------------- | -------------- | --------------- | ---------- | -------------------------------------- | ------------------- | ---------------- | ------------ |\n| None                                   | None           | None           | None            | 252        | AL REHMAT INDUSTRIES                   | 957650              | 228618894.00     | 252          |\n| GUL AHMED TEXTILE                      | 5340500        | 1544883800.00  | 53405           | 686        | None                                   | None                | None             | 686          |\n| None                                   | None           | None           | None            | 71         | ADNAN FABRIC C/O SALMAN ADAM           | 230067              | 0.00             | 71           |\n| HUONG SEN COMFOR YARN SPINNING COMPANY | 472150         | 198015091.26   | 9443            | 48         | None                                   | None                | None             | 48           |\n| MEKO DENIM MILLS ( PRIVATE ) LIMITED   | 15590          | 5867500.00     | 155             | 7          | None                                   | None                | None             | 7            |\n| UMAR TEXTILE                           | 160000         | 40320000.00    | 1600            | 16         | None                                   | None                | None             | 16           |\n| QUALITY TEXTILE MILLS LIMITED          | 405200         | 131690000.00   | 4052            | 51         | None                                   | None                | None             | 51           |\n| None                                   | None           | None           | None            | 25         | M.M. TEXTILE                           | 57743               | 0.00             | 25           |\n| None                                   | None           | None           | None            | 45         | JAFFAR FABRICS                         | 123727              | 0.00             | 45           |\n| None                                   | None           | None           | None            | 23         | AHMED FINE TEXTILE MILLS LTD           | 82644               | 35940262.00      | 23           |\n| SHANGHAI POLYTEX CO., LIMITED          | 781768         | 155623135.45   | 9898            | 42         | None                                   | None                | None             | 42           |\n| None                                   | None           | None           | None            | 355        | YUNAS NAWAZ TEXTILE                    | 882161              | 312409263.93     | 355          |\n| AL-KARAM TEXTILE MILLS ( PRIVATE ) LTD | 48000          | 13584000.00    | 480             | 3          | AL-KARAM TEXTILE MILLS ( PRIVATE ) LTD | 7252                | 2091810.70       | 3            |\n| AL-KARAM TEXTILE MILLS ( PRIVATE ) LTD | 1353000        | 403699000.00   | 13530           | 148        | None                                   | None                | None             | 148          |\n| None                                   | None           | None           | None            | 21         | BISMILLAH TEX INDUSTRIES               | 62566               | 25339230.00      | 21           |\n| None                                   | None           | None           | None            | 147        | UBAID TEX                              | 382740              | 119847524.59     | 147          |\n| SHANDONG SHENGRUN TEXTILE CO. LTD      | 180765         | 62122277.04    | 3280            | 22         | None                                   | None                | None             | 22           |\n| None                                   | None           | None           | None            | 202        | WAQAS TEXTILE                          | 93986               | 32317760.50      | 202          |\n| None                                   | None           | None           | None            | 107        | T & T TEXTILE                          | 163242              | 54996352.08      | 107          |\n| UNITED SPINNING MILLS (PVT) LIMITED    | 207658         | 66129124.40    | 2076            | 21         | None                                   | None                | None             | 21           |\n\n*Showing 20 of 150 rows*\n\n<sub>\ud83e\udde0 Knowledge: 9 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2382 \u00b7 Session: 7,092</sub>",
+        "length_chars": 4672
+      },
+      "performance": {
+        "total_time_ms": 4732,
+        "query_time_ms": 55,
+        "tokens": {
+          "prompt_tokens": 2217,
+          "completion_tokens": 165,
+          "total_tokens": 2382
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:06:28.585875",
+      "user_question": "This is not what i asked for. You shouldn't be giving me all this data instead you should give me an answer that provides the corrected data for Yarn Count. You should be capabale of dialogue like a claude or chatgpt while also showing data and other stuff. ",
+      "success": true,
+      "execution_time_ms": 8,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 85,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT COUNT(*) as 'Yarn Count' FROM YarnData",
+        "tokens": {
+          "prompt_tokens": 2028,
+          "completion_tokens": 17,
+          "total_tokens": 2045
+        },
+        "raw_response": "{'result': \"```sql\\nSELECT COUNT(*) as 'Yarn Count' FROM YarnData\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT COUNT(*) as 'Yarn Count' FROM YarnData\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 17, 'prompt_tokens': 2028, 'total_tokens': 2045, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNimyVynFGiKBG07Wz5O3nhFyKRw', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a67-581d-7b11-8557-74675114108f-0', usage_metadata={'input_tokens': 2028, 'output_tokens': 17, 'total_tokens': 2045, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 8
+      },
+      "response": {
+        "type": "data",
+        "text": "**Query Results** (1 rows)\n\n| Yarn Count |\n| ---------- |\n| 2,784      |\n\n\n<sub>\ud83e\udde0 Knowledge: 9 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2045 \u00b7 Session: 9,137</sub>",
+        "length_chars": 180
+      },
+      "performance": {
+        "total_time_ms": 1367,
+        "query_time_ms": 8,
+        "tokens": {
+          "prompt_tokens": 2028,
+          "completion_tokens": 17,
+          "total_tokens": 2045
+        }
+      }
+    }
+  ],
+  "all_errors": [],
+  "training_events": [],
+  "recommendations": [
+    "\ud83d\udca1 No training events - consider adding training rules for better accuracy"
+  ]
+}
