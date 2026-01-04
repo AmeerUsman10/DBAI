@@ -579,7 +579,7 @@ def build_ui():
                 
                 # Training conversation interface
                 training_chatbot = gr.Chatbot(
-                    value=[[None, "👋 Hi! I'm here to train the AI on your database. I'll ask you questions to understand your data structure, relationships, and business rules. Ready to begin?"]],
+                    value=[{"role": "assistant", "content": "👋 Hi! I'm here to train the AI on your database. I'll ask you questions to understand your data structure, relationships, and business rules. Ready to begin?"}],
                     height=400,
                     label="Training Conversation"
                 )
@@ -619,7 +619,7 @@ def build_ui():
                         return history, "", state
                     
                     # Add user message to history
-                    history.append([user_input, None])
+                    history.append({"role": "user", "content": user_input})
                     
                     # Initialize LLM if needed
                     if current_llm is None:
@@ -671,8 +671,8 @@ Response:"""
                         response = current_llm.invoke(training_prompt)
                         ai_response = response.content if hasattr(response, 'content') else str(response)
                         
-                        # Update conversation history
-                        history[-1][1] = ai_response
+                        # Add AI response to history
+                        history.append({"role": "assistant", "content": ai_response})
                         
                         # Save to knowledge base
                         state["conversation"].append({"user": user_input, "ai": ai_response})
@@ -687,7 +687,8 @@ Response:"""
                         
                     except Exception as e:
                         logger.error(f"Training error: {e}", exc_info=True)
-                        history[-1][1] = f"Error processing response: {str(e)}"
+                        error_msg = f"Error processing response: {str(e)}"
+                        history.append({"role": "assistant", "content": error_msg})
                         return history, "", state
                 
                 def update_knowledge_base(state, user_input, ai_response):
@@ -758,7 +759,7 @@ Response:"""
                 def reset_training_session():
                     """Reset the training conversation."""
                     return [
-                        [None, "👋 Hi! I'm here to train the AI on your database. I'll ask you questions to understand your data structure, relationships, and business rules. Ready to begin?"]
+                        {"role": "assistant", "content": "👋 Hi! I'm here to train the AI on your database. I'll ask you questions to understand your data structure, relationships, and business rules. Ready to begin?"}
                     ], {"stage": 0, "knowledge": {}, "conversation": []}, "", gr.update(visible=False)
                 
                 def export_knowledge(state):
