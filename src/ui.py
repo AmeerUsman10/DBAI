@@ -171,10 +171,18 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
     Returns:
         Tuple of (response, updated_history)
     """
-    global current_llm, current_provider, session_tokens, pending_clarification
+    global current_llm, current_provider, session_tokens, pending_clarification, session_tracker
     
     if not question.strip():
         return "", history
+    
+    # Initialize tracking variables
+    import time
+    start_time = time.time()
+    clarity_data = None
+    llm_data = None
+    execution_data = None
+    error_data = None
     
     # Check if this is a response to a clarification request (user typed a number 1-4)
     if pending_clarification["question"] and question.strip().isdigit():
@@ -193,6 +201,14 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
     if not pending_clarification.get("original_query"):
         clarity_score, reason, clarifications = analyze_query_clarity(question)
         
+        # Track clarity analysis
+        clarity_data = {
+            "score": clarity_score,
+            "needs_clarification": needs_clarification(clarity_score, threshold=70),
+            "reason": reason,
+            "clarifications_offered": clarifications
+        }
+        
         # If query needs clarification (score < 70)
         if needs_clarification(clarity_score, threshold=70) and clarifications:
             # Store clarification state
@@ -208,6 +224,17 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
                 response += f"**{i}.** {option}\n"
             
             response += "\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
+            
+            # Track clarification request
+            session_tracker.track_query(
+                user_question=question,
+                clarity_analysis=clarity_data,
+                llm_interaction=None,
+                execution=None,
+                response={"type": "clarification_request", "text": response},
+                performance={"total_time_ms": int((time.time() - start_time) * 1000)},
+                error=None
+            )
             
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": response})
@@ -256,8 +283,10 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         # Extract SQL from response
         if isinstance(sql_response_obj, dict):
             sql_query = sql_response_obj.get('result', '')
+            llm_raw_response = str(sql_response_obj)
         else:
             sql_query = str(sql_response_obj)
+            llm_raw_response = sql_query
         
         # LOG: Raw LLM response before extraction
         logger.debug(f"LLM RAW RESPONSE: {sql_query[:500]}")
@@ -267,19 +296,50 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         # LOG: Extracted SQL query
         logger.info(f"GENERATED SQL: {sql_query}")
         
-        # Execute query
-        success, result = run_query(sql_query)
+        # Track LLM interaction
+        llm_data = {
+            "provider": provider_name,
+            "model": model,
+            "temperature": temperature,
+            "sql_generated": sql_query,
+            "tokens": response_tokens
+        }
+        # Add raw response only if tier 2 enabled
+        from src.session_tracker import get_observability_config
+        config = get_observability_config()
+        if config.get("capture_llm_prompts", False):
+            llm_data["raw_response"] = llm_raw_response
         
-        # LOG: Query execution result
+        # Execute query
+        query_start = time.time()
+        success, result = run_query(sql_query)
+        query_time_ms = int((time.time() - query_start) * 1000)
+        
+        # Track execution
+        execution_data = {
+            "sql_query": sql_query,
+            "success": success,
+            "execution_time_ms": query_time_ms
+        }
+        
         if success:
             if isinstance(result, dict) and 'rows' in result:
+                execution_data["rows_returned"] = len(result.get('rows', []))
+                execution_data["columns"] = result.get('columns', [])
+                
+                # Add sample data only if tier 2 enabled
+                if config.get("capture_sample_data", False) and result.get('rows'):
+                    execution_data["sample_rows"] = result['rows'][:3]
+                
                 logger.info(f"QUERY SUCCESS: {len(result.get('rows', []))} rows returned")
                 # Log first few rows for debugging
                 if result.get('rows'):
                     logger.debug(f"SAMPLE RESULTS: {result['rows'][:3]}")
             else:
+                execution_data["result"] = str(result)
                 logger.info(f"QUERY SUCCESS: {result}")
         else:
+            execution_data["error_message"] = str(result)
             logger.error(f"QUERY FAILED: {result}")
         
         if success:
@@ -390,6 +450,26 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         logger.info(f"RESPONSE SENT: {len(response)} chars | Success: {success} | Tokens: {response_tokens.get('total_tokens', 0)}")
         logger.debug(f"RESPONSE PREVIEW: {response[:200]}")
         
+        # Track complete query lifecycle
+        total_time_ms = int((time.time() - start_time) * 1000)
+        session_tracker.track_query(
+            user_question=question,
+            clarity_analysis=clarity_data,
+            llm_interaction=llm_data,
+            execution=execution_data,
+            response={
+                "type": "data" if success else "error",
+                "text": response,
+                "length_chars": len(response)
+            },
+            performance={
+                "total_time_ms": total_time_ms,
+                "query_time_ms": execution_data.get("execution_time_ms", 0),
+                "tokens": response_tokens
+            },
+            error=None
+        )
+        
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
         return "", history
@@ -397,6 +477,25 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
     except Exception as e:
         logger.error(f"Chat query error: {e}", exc_info=True)
         response = f"❌ Error: {str(e)}"
+        
+        # Track error
+        total_time_ms = int((time.time() - start_time) * 1000)
+        error_data = {
+            "type": type(e).__name__,
+            "message": str(e),
+            "traceback": str(e)
+        }
+        
+        session_tracker.track_query(
+            user_question=question,
+            clarity_analysis=clarity_data,
+            llm_interaction=llm_data,
+            execution=execution_data,
+            response={"type": "error", "text": response},
+            performance={"total_time_ms": total_time_ms},
+            error=error_data
+        )
+        
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
         return "", history
@@ -462,11 +561,15 @@ def save_settings(
     db_password: str
 ) -> str:
     """Save all settings and reload database connection."""
-    global current_provider, current_llm
+    global current_provider, current_llm, session_tracker
     
     try:
         # Update config
         config = load_config()
+        
+        # Track old settings for comparison
+        old_llm_config = config.get('llm', {})
+        old_db_config = config.get('database', {})
         
         config['llm'] = {
             'provider': provider,
@@ -484,6 +587,23 @@ def save_settings(
         }
         
         if save_config(config):
+            # Track configuration changes
+            changes = {}
+            if old_llm_config.get('provider') != provider:
+                changes['provider'] = {'old': old_llm_config.get('provider'), 'new': provider}
+            if old_llm_config.get('model') != model:
+                changes['model'] = {'old': old_llm_config.get('model'), 'new': model}
+            if old_db_config.get('database') != db_name:
+                changes['database'] = {'old': old_db_config.get('database'), 'new': db_name}
+            
+            if changes:
+                session_tracker.update_app_state(
+                    provider=provider,
+                    model=model,
+                    database=db_name,
+                    changes=changes
+                )
+            
             # Reset LLM instances to force reload
             current_provider = None
             current_llm = None
@@ -872,12 +992,34 @@ Tell the AI exactly how to interpret your queries. These rules apply immediately
                             
                             if success:
                                 logger.info(f"TRAINING SUCCESS: Rule added - {msg}")
+                                
+                                # Track training event
+                                session_tracker.track_training_event(
+                                    event_type="quick_training_rule_added",
+                                    details={
+                                        "instruction": instruction,
+                                        "success": True,
+                                        "message": msg
+                                    }
+                                )
+                                
                                 # Get stats to show in message
                                 stats = get_training_stats()
                                 display_msg = f"{msg}\n\n🎉 **New training event!** This rule is now active."
                                 return display_msg, format_rules_display(), ""
                             else:
                                 logger.warning(f"TRAINING FAILED: {msg}")
+                                
+                                # Track failed training attempt
+                                session_tracker.track_training_event(
+                                    event_type="quick_training_rule_failed",
+                                    details={
+                                        "instruction": instruction,
+                                        "success": False,
+                                        "error": msg
+                                    }
+                                )
+                                
                                 return f"❌ {msg}", format_rules_display(), instruction
                         
                         add_training_btn.click(
@@ -1143,21 +1285,45 @@ These descriptions help the AI understand your data better.""")
                                     metadata["tables"][table] = {}
                                 
                                 # Save column training
-                                metadata["tables"][table][column] = {
+                                column_data = {
                                     "description": description.strip(),
                                     "type": get_column_type(table, column),
                                     "unit": unit.strip() if unit.strip() else None,
                                     "unit_full": None,
                                     "examples": [ex.strip() for ex in examples.split(',') if ex.strip()] if examples else []
                                 }
+                                metadata["tables"][table][column] = column_data
                                 
                                 # Save metadata
                                 save_metadata(metadata)
+                                
+                                # Track training event
+                                session_tracker.track_training_event(
+                                    event_type="column_metadata_updated",
+                                    details={
+                                        "table": table,
+                                        "column": column,
+                                        "description": description.strip(),
+                                        "unit": unit.strip() if unit.strip() else None,
+                                        "examples_count": len([ex.strip() for ex in examples.split(',') if ex.strip()] if examples else [])
+                                    }
+                                )
                                 
                                 return f"✅ Training saved for {table}.{column}"
                                 
                             except Exception as e:
                                 logger.error(f"Save training error: {e}", exc_info=True)
+                                
+                                # Track failed training attempt
+                                session_tracker.track_error(
+                                    error_type="column_training_save_failed",
+                                    message=str(e),
+                                    context={
+                                        "table": table,
+                                        "column": column
+                                    }
+                                )
+                                
                                 return f"❌ Error: {str(e)}"
                         
                         def display_current_training():
@@ -1372,8 +1538,134 @@ Generate the examples now:"""
                             outputs=[examples_output]
                         )
             
+            # Developer Tools Tab (NEW)
+            with gr.Tab("🔬 Developer Tools"):
+                gr.Markdown("## Session Intelligence & Observability")
+                gr.Markdown("Control what gets tracked and export session data for Copilot analysis.")
+                
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.Markdown("### 📊 Current Session")
+                        
+                        session_summary = gr.Markdown("Loading session data...")
+                        refresh_summary_btn = gr.Button("🔄 Refresh Summary", size="sm")
+                        
+                        def get_current_session_summary():
+                            """Get current session summary."""
+                            try:
+                                summary = session_tracker.get_session_summary()
+                                
+                                avg_time = summary.get('avg_response_time', 0)
+                                avg_time_str = f"{avg_time:.0f}ms" if avg_time else 'N/A'
+                                
+                                output = f"""
+**Session ID:** `{summary['session_id']}`  
+**Duration:** {summary['duration_minutes']:.1f} minutes  
+**Total Queries:** {summary['total_queries']}  
+**Successful:** {summary['successful_queries']} ✅  
+**Failed:** {summary['failed_queries']} ❌  
+**Success Rate:** {summary['success_rate']:.1f}%  
+**Avg Response Time:** {avg_time_str}  
+**Training Events:** {summary['training_events']}  
+**Errors:** {summary['errors']}  
+"""
+                                
+                                recommendations = session_tracker._generate_recommendations()
+                                if recommendations:
+                                    output += "\n### 💡 Recommendations\n"
+                                    for rec in recommendations:
+                                        output += f"- {rec}\n"
+                                
+                                return output
+                            except Exception as e:
+                                return f"❌ Error: {str(e)}"
+                        
+                        refresh_summary_btn.click(get_current_session_summary, outputs=[session_summary])
+                        
+                        # Export button
+                        gr.Markdown("---")
+                        export_btn = gr.Button("📤 Export Session for Copilot", variant="primary", size="lg")
+                        export_status = gr.Markdown("")
+                        export_file_download = gr.File(label="Download Report", visible=False)
+                        
+                        def export_session_report():
+                            """Export complete session for Copilot analysis."""
+                            try:
+                                report_path = session_tracker.export_for_copilot()
+                                
+                                if report_path:
+                                    return (
+                                        f"✅ **Report Exported!**\n\nFile: `{report_path}`\n\n**Next Steps:**\n1. `git add {report_path}`\n2. Ask Copilot to check it",
+                                        report_path,
+                                        gr.update(visible=True)
+                                    )
+                                else:
+                                    return "❌ Export failed", None, gr.update(visible=False)
+                            except Exception as e:
+                                return f"❌ Error: {str(e)}", None, gr.update(visible=False)
+                        
+                        export_btn.click(export_session_report, outputs=[export_status, export_file_download, export_file_download])
+                    
+                    with gr.Column(scale=1):
+                        gr.Markdown("### ⚙️ Observability Settings")
+                        gr.Markdown("**Tier 1** (Always On): Essential metrics  \n**Tier 2** (Developer Mode): Detailed debugging")
+                        
+                        # Configuration controls
+                        tier1_checkbox = gr.Checkbox(label="✅ Tier 1: Essential Metrics", value=True, interactive=False)
+                        
+                        gr.Markdown("---")
+                        tier2_checkbox = gr.Checkbox(label="🔧 Tier 2: Developer Mode", value=False, info="Detailed debugging")
+                        capture_llm_prompts = gr.Checkbox(label="📝 Capture Full LLM Prompts", value=False, info="⚠️ Very detailed")
+                        capture_reasoning = gr.Checkbox(label="🧠 Capture Reasoning Chain", value=True, info="✅ Recommended")
+                        capture_sample_data = gr.Checkbox(label="📊 Capture Sample Data", value=False, info="⚠️ Privacy concern")
+                        
+                        gr.Markdown("---")
+                        save_config_btn = gr.Button("💾 Save Configuration", variant="secondary")
+                        config_status = gr.Markdown("")
+                        
+                        def save_configuration(tier2, llm_prompts, reasoning, sample_data):
+                            """Save observability configuration."""
+                            try:
+                                new_config = session_tracker.config.copy()
+                                new_config.update({
+                                    "tier2_enabled": tier2,
+                                    "capture_llm_prompts": llm_prompts,
+                                    "capture_reasoning_chain": reasoning,
+                                    "capture_sample_data": sample_data
+                                })
+                                session_tracker.save_config(new_config)
+                                
+                                status = "✅ **Configuration Saved!**\n\n"
+                                status += "🔧 Developer Mode ENABLED" if tier2 else "📊 Essential mode only"
+                                return status
+                            except Exception as e:
+                                return f"❌ Error: {str(e)}"
+                        
+                        save_config_btn.click(
+                            save_configuration,
+                            inputs=[tier2_checkbox, capture_llm_prompts, capture_reasoning, capture_sample_data],
+                            outputs=[config_status]
+                        )
+                        
+                        # Guidance
+                        gr.Markdown("---")
+                        gr.Markdown("""
+**Enable Developer Mode when:**
+- ❌ Wrong results  
+- 🐌 Slow performance  
+- 🤔 Need to see AI reasoning  
 
-            
+**Export for Copilot when:**
+- 💬 Asking for help  
+- 🐛 Complex bugs  
+""")
+                
+                # Load session summary on page load
+                demo.load(
+                    get_current_session_summary,
+                    outputs=[session_summary]
+                )
+
             # Diagnostics Tab
             with gr.Tab("🔍 Diagnostics"):
                 gr.Markdown("## System Diagnostics")
