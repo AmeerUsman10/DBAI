@@ -365,12 +365,24 @@ The database returned {len(result['rows'])} rows with these columns: {', '.join(
 Sample data:
 {result['rows'][:3]}
 
-Provide a brief, conversational explanation (2-3 sentences) that:
-1. Directly answers the user's question
-2. Highlights key insights from the data
-3. Mentions any interesting patterns or notable values
+Provide a BRIEF, PROFESSIONAL business summary (1-2 sentences maximum) that:
+1. Directly answers the user's question with specific numbers
+2. Uses professional textile/manufacturing terminology
+3. States facts without commentary or enthusiasm
 
-Keep it concise and natural, like you're having a conversation. Don't repeat the full data - just explain what it means."""
+REQUIREMENTS:
+- Maximum 2 sentences
+- Professional tone (business reporting, not casual chat)
+- No phrases like "quite substantial", "fascinating", "interesting"
+- No exclamation marks
+- Focus on facts: totals, counts, trends
+- Use industry terms: inventory, production, procurement, supply chain
+
+Example good response: "The yarn department has a total inventory of 22.37 million LBS valued at 7.31 billion PKR across 2,784 records."
+
+Example bad response: "The total is quite substantial! It's fascinating to think about..."
+
+Keep it concise and factual."""
                     
                     explanation = current_llm.invoke(explain_prompt)
                     conversational_text = explanation.content if hasattr(explanation, 'content') else str(explanation)
