@@ -336,3 +336,9 @@ def reset_session_tracker():
     if _session_tracker:
         _session_tracker.save_session()
     _session_tracker = SessionTracker()
+
+
+def get_observability_config() -> Dict:
+    """Get current observability configuration."""
+    tracker = get_session_tracker()
+    return tracker.config
