@@ -91,8 +91,23 @@ def classify_query(query: str) -> Dict:
         'limit': 10,  # Default top 10
         'movement_type': None,
         'department': 'both',  # BUSINESS RULE: Default to both departments for suppliers
-        'specific_value': None
+        'specific_value': None,
+        'breakdown': None  # For multi-dimensional segmentation
     }
+    
+    # Detect breakdown/segmentation request
+    breakdown_keywords = [
+        'department wise', 'by department', 'departmentwise',
+        'by movement type', 'movement type wise', 
+        'broken down', 'breakdown', 'break down',
+        'segmented', 'segment',
+        'across all', 'all movement types',
+        'for each', 'each department'
+    ]
+    
+    if any(keyword in query_lower for keyword in breakdown_keywords):
+        params['breakdown'] = ['department', 'movement_type']
+        logger.info(f"Detected breakdown request in query: {query}")
     
     # Detect department
     if 'greige' in query_lower:

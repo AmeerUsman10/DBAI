@@ -41,15 +41,63 @@ def generate_ranking_sql(params: Dict) -> str:
     - Default: Both departments combined (Yarn + Greige)
     - Rank by total Amount across both
     - No movement type filter unless explicitly specified
+    - If breakdown requested: Show Department × Movement Type segmentation
     """
     entity = params['entity']
     limit = params['limit']
     movement_type = params['movement_type']
     dept = params['department']
+    breakdown = params.get('breakdown')
     
     # BUSINESS RULE: Suppliers default to BOTH departments combined
     if entity == 'supplier':
-        # Combine Yarn + Greige suppliers by total amount
+        
+        # MULTI-DIMENSIONAL BREAKDOWN: Department × Movement Type
+        if breakdown and 'department' in breakdown and 'movement_type' in breakdown:
+            # Get top N suppliers, then show breakdown for each
+            sql = f"""WITH TopSuppliers AS (
+    SELECT TOP {limit} Supplier, SUM(TotalAmount) as GrandTotal
+    FROM (
+        SELECT SUPPLIER as Supplier, SUM(AMOUNT) as TotalAmount
+        FROM YarnData
+        GROUP BY SUPPLIER
+        
+        UNION ALL
+        
+        SELECT SUPP_NAME as Supplier, SUM(AMOUNT) as TotalAmount
+        FROM GreigeData
+        GROUP BY SUPP_NAME
+    ) AS AllSuppliers
+    GROUP BY Supplier
+    ORDER BY SUM(TotalAmount) DESC
+)
+SELECT c.Supplier, c.Department, c.MovementType,
+       SUM(c.Amount) as 'Total PKR',
+       SUM(c.Quantity) as 'Total Quantity',
+       COUNT(*) as 'Record Count'
+FROM (
+    SELECT SUPPLIER as Supplier, 'Yarn' as Department,
+           ENTRY_TYPE as MovementType,
+           AMOUNT as Amount, LBS as Quantity
+    FROM YarnData
+    
+    UNION ALL
+    
+    SELECT SUPP_NAME as Supplier, 'Greige' as Department,
+           ENTRY_TYPE as MovementType,
+           AMOUNT as Amount, METER as Quantity
+    FROM GreigeData
+) AS c
+WHERE c.Supplier IN (SELECT Supplier FROM TopSuppliers)
+GROUP BY c.Supplier, c.Department, c.MovementType
+ORDER BY (
+    SELECT GrandTotal FROM TopSuppliers ts WHERE ts.Supplier = c.Supplier
+) DESC, c.Supplier, c.Department, c.MovementType"""
+            
+            logger.info(f"Generated multi-dimensional breakdown SQL (Supplier × Department × Movement Type)")
+            return sql
+        
+        # AGGREGATED VIEW: Single ranking by total amount
         yarn_where = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
         greige_where = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
         
@@ -70,7 +118,7 @@ FROM (
 GROUP BY Supplier
 ORDER BY SUM(TotalAmount) DESC"""
         
-        logger.info(f"Generated multi-department supplier ranking SQL from template")
+        logger.info(f"Generated aggregated multi-department supplier ranking SQL from template")
         return sql
     
     # Single department for other entities (quality, type)
