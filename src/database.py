@@ -3,6 +3,7 @@ Database Management
 Centralized SQLAlchemy engine creation and query execution.
 """
 import logging
+import json
 from typing import Optional, Tuple, Any
 from urllib.parse import quote_plus
 import yaml
@@ -216,3 +217,32 @@ def test_connection() -> Tuple[bool, str]:
         error_msg = f"Connection test failed: {str(e)}"
         logger.error(error_msg)
         return False, error_msg
+
+
+def load_metadata() -> dict:
+    """Load column metadata from metadata.json file."""
+    metadata_file = Path(__file__).parent.parent / "metadata.json"
+    try:
+        if metadata_file.exists():
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                logger.info(f"Loaded metadata with {len(data.get('tables', {}))} tables")
+                return data
+        logger.warning("metadata.json not found, returning empty metadata")
+        return {"tables": {}, "version": "1.0"}
+    except Exception as e:
+        logger.error(f"Error loading metadata: {e}")
+        return {"tables": {}, "version": "1.0"}
+
+
+def save_metadata(metadata: dict) -> bool:
+    """Save column metadata to metadata.json file."""
+    metadata_file = Path(__file__).parent.parent / "metadata.json"
+    try:
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+        logger.info("Metadata saved successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Error saving metadata: {e}")
+        return False
