@@ -263,9 +263,10 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
             # Format response with smart unit detection
             response = ""
             
-            # Try to detect column units from metadata
+            # Try to detect column units from metadata or column name
             def get_column_unit(col_name):
-                """Get unit for a column from metadata."""
+                """Get unit for a column from metadata or intelligent detection."""
+                # First try metadata
                 try:
                     metadata = load_metadata()
                     for table_name, table_data in metadata.get('tables', {}).items():
@@ -273,9 +274,25 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
                         if col_name in columns:
                             col_info = columns[col_name]
                             if isinstance(col_info, dict):
-                                return col_info.get('unit')
+                                unit = col_info.get('unit')
+                                if unit:
+                                    return unit
                 except:
                     pass
+                
+                # Smart detection from column name (order matters - most specific first!)
+                col_lower = col_name.lower()
+                if 'lbs' in col_lower or 'weight' in col_lower:
+                    return 'LBS'
+                elif 'yarn' in col_lower and 'amount' not in col_lower:
+                    return 'LBS'  # Yarn columns usually refer to weight unless amount
+                elif 'meter' in col_lower or 'greige' in col_lower or 'fabric' in col_lower:
+                    return 'Meters'
+                elif 'bag' in col_lower:
+                    return 'Bags'
+                elif 'amount' in col_lower or 'pkr' in col_lower or 'price' in col_lower:
+                    return 'PKR'
+                
                 return None
             
             if isinstance(result, dict):
