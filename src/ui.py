@@ -749,6 +749,8 @@ Key business rules:
                         
                         clear_instructions_btn.click(
                             lambda: ("", "Instructions cleared"),
+                            outputs=[instructions_input, instructions_status]
+                        )
                     
                     # Interactive Column Training Tab
                     with gr.Tab("📊 Column Training"):
@@ -1043,8 +1045,6 @@ These descriptions help the AI understand your data better.""")
                             outputs=[training_display]
                         )
 
-                            outputs=[instructions_input, instructions_status]
-                        )
                     
                     # Schema Analysis Tab
                     with gr.Tab("🔍 Auto-Analyze Schema"):
