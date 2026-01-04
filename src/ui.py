@@ -343,8 +343,52 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
             logger.error(f"QUERY FAILED: {result}")
         
         if success:
+            # Generate conversational explanation first (if data returned)
+            conversational_response = ""
+            
+            if isinstance(result, dict) and 'columns' in result and 'rows' in result and result['rows']:
+                try:
+                    # Create a summary of the data for the LLM
+                    data_summary = {
+                        "user_question": question,
+                        "sql_query": sql_query,
+                        "columns": result['columns'],
+                        "row_count": len(result['rows']),
+                        "sample_rows": result['rows'][:3]  # First 3 rows for context
+                    }
+                    
+                    # Ask LLM to explain the results conversationally
+                    explain_prompt = f"""The user asked: "{question}"
+
+The database returned {len(result['rows'])} rows with these columns: {', '.join(result['columns'])}
+
+Sample data:
+{result['rows'][:3]}
+
+Provide a brief, conversational explanation (2-3 sentences) that:
+1. Directly answers the user's question
+2. Highlights key insights from the data
+3. Mentions any interesting patterns or notable values
+
+Keep it concise and natural, like you're having a conversation. Don't repeat the full data - just explain what it means."""
+                    
+                    explanation = current_llm.invoke(explain_prompt)
+                    conversational_text = explanation.content if hasattr(explanation, 'content') else str(explanation)
+                    
+                    # Extract token usage from explanation
+                    explain_tokens = extract_token_usage(explanation)
+                    response_tokens['prompt_tokens'] += explain_tokens['prompt_tokens']
+                    response_tokens['completion_tokens'] += explain_tokens['completion_tokens']
+                    response_tokens['total_tokens'] += explain_tokens['total_tokens']
+                    
+                    conversational_response = f"{conversational_text}\n\n---\n\n"
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to generate conversational response: {e}")
+                    # Continue with just the data table
+            
             # Format response with smart unit detection
-            response = ""
+            response = conversational_response
             
             # Try to detect column units from metadata or column name
             def get_column_unit(col_name):
@@ -1594,8 +1638,28 @@ Generate the examples now:"""
                                 report_path = session_tracker.export_for_copilot()
                                 
                                 if report_path:
+                                    # Extract just the relative path for git
+                                    relative_path = str(Path(report_path).relative_to(Path.cwd()))
+                                    git_path = relative_path.replace("\\", "/")  # Windows to Unix path
+                                    
+                                    instructions = f"""✅ **Report Exported Successfully!**
+
+File: `{report_path}`
+
+### 📤 To Share with Copilot:
+
+**Copy and run these commands:**
+
+```bash
+git add {git_path}
+git commit -m "Add session report for analysis"
+git push
+```
+
+Then tell me it's pushed and I'll analyze it!
+"""
                                     return (
-                                        f"✅ **Report Exported!**\n\nFile: `{report_path}`\n\n**Next Steps:**\n1. `git add {report_path}`\n2. Ask Copilot to check it",
+                                        instructions,
                                         report_path,
                                         gr.update(visible=True)
                                     )
