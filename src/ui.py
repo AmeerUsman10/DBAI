@@ -749,6 +749,300 @@ Key business rules:
                         
                         clear_instructions_btn.click(
                             lambda: ("", "Instructions cleared"),
+                    
+                    # Interactive Column Training Tab
+                    with gr.Tab("📊 Column Training"):
+                        gr.Markdown("""### Interactive Column Training
+View your database schema and add training descriptions for tables and columns.
+These descriptions help the AI understand your data better.""")
+                        
+                        # Load schema button
+                        load_schema_btn = gr.Button("📥 Load Database Schema", variant="primary", size="lg")
+                        
+                        with gr.Row():
+                            with gr.Column(scale=1):
+                                gr.Markdown("#### Select Table & Column")
+                                table_dropdown = gr.Dropdown(
+                                    label="Table",
+                                    choices=[],
+                                    interactive=True
+                                )
+                                column_dropdown = gr.Dropdown(
+                                    label="Column",
+                                    choices=[],
+                                    interactive=True
+                                )
+                                column_type_display = gr.Textbox(
+                                    label="Column Type",
+                                    interactive=False,
+                                    value=""
+                                )
+                            
+                            with gr.Column(scale=2):
+                                gr.Markdown("#### Training Description")
+                                description_input = gr.Textbox(
+                                    label="What does this column represent?",
+                                    placeholder="Example: This column stores the supplier name (e.g., 'Ahmed Textile', 'XYZ Fabrics'). Used for filtering and grouping orders by supplier.",
+                                    lines=4
+                                )
+                                unit_input = gr.Textbox(
+                                    label="Unit (if applicable)",
+                                    placeholder="e.g., PKR, LBS, meters, inches"
+                                )
+                                examples_input = gr.Textbox(
+                                    label="Example Values",
+                                    placeholder="e.g., Ahmed Textile, XYZ Mills, ABC Fabrics"
+                                )
+                                
+                                with gr.Row():
+                                    save_training_btn = gr.Button("💾 Save Training", variant="primary")
+                                    clear_training_btn = gr.Button("🔄 Clear", variant="secondary")
+                                
+                                training_status = gr.Markdown("")
+                        
+                        gr.Markdown("---")
+                        gr.Markdown("#### Current Training Data")
+                        training_display = gr.Markdown("")
+                        
+                        # Functions for column training
+                        def load_schema_for_training():
+                            """Load database schema and return table names."""
+                            try:
+                                db = get_sql_database()
+                                if not db:
+                                    return (
+                                        gr.Dropdown(choices=[], value=None),
+                                        gr.Dropdown(choices=[], value=None),
+                                        "",
+                                        "❌ Database not available"
+                                    )
+                                
+                                # Get table info
+                                schema_info = db.get_table_info()
+                                
+                                # Parse table names from schema
+                                tables = []
+                                for line in schema_info.split('\n'):
+                                    if 'CREATE TABLE' in line:
+                                        # Extract table name
+                                        parts = line.split('CREATE TABLE')[1].strip().split('(')[0].strip()
+                                        # Remove schema prefix if exists
+                                        table_name = parts.split('.')[-1].strip('[]')
+                                        if table_name and table_name not in tables:
+                                            tables.append(table_name)
+                                
+                                if not tables:
+                                    return (
+                                        gr.Dropdown(choices=[], value=None),
+                                        gr.Dropdown(choices=[], value=None),
+                                        "",
+                                        "❌ No tables found in database"
+                                    )
+                                
+                                return (
+                                    gr.Dropdown(choices=tables, value=tables[0] if tables else None),
+                                    gr.Dropdown(choices=[], value=None),
+                                    "",
+                                    f"✅ Loaded {len(tables)} tables"
+                                )
+                                
+                            except Exception as e:
+                                logger.error(f"Schema load error: {e}", exc_info=True)
+                                return (
+                                    gr.Dropdown(choices=[], value=None),
+                                    gr.Dropdown(choices=[], value=None),
+                                    "",
+                                    f"❌ Error: {str(e)}"
+                                )
+                        
+                        def get_columns_for_table(table_name):
+                            """Get columns for selected table."""
+                            if not table_name:
+                                return gr.Dropdown(choices=[], value=None), "", ""
+                            
+                            try:
+                                db = get_sql_database()
+                                if not db:
+                                    return gr.Dropdown(choices=[], value=None), "", "❌ Database not available"
+                                
+                                # Get table info
+                                schema_info = db.get_table_info()
+                                
+                                # Parse columns for this table
+                                columns = []
+                                in_table = False
+                                for line in schema_info.split('\n'):
+                                    if f'CREATE TABLE' in line and table_name in line:
+                                        in_table = True
+                                        continue
+                                    
+                                    if in_table:
+                                        if line.strip().startswith(')'):
+                                            break
+                                        
+                                        # Extract column name and type
+                                        cleaned = line.strip().strip(',').strip()
+                                        if cleaned and not cleaned.startswith('PRIMARY') and not cleaned.startswith('FOREIGN'):
+                                            # Remove brackets and split
+                                            parts = cleaned.replace('[', '').replace(']', '').split()
+                                            if len(parts) >= 2:
+                                                col_name = parts[0]
+                                                columns.append(col_name)
+                                
+                                if columns:
+                                    return gr.Dropdown(choices=columns, value=columns[0]), "", f"✅ Found {len(columns)} columns"
+                                else:
+                                    return gr.Dropdown(choices=[], value=None), "", "❌ No columns found"
+                                
+                            except Exception as e:
+                                logger.error(f"Column fetch error: {e}", exc_info=True)
+                                return gr.Dropdown(choices=[], value=None), "", f"❌ Error: {str(e)}"
+                        
+                        def get_column_type(table_name, column_name):
+                            """Get column type from schema."""
+                            if not table_name or not column_name:
+                                return ""
+                            
+                            try:
+                                db = get_sql_database()
+                                if not db:
+                                    return "Unknown"
+                                
+                                schema_info = db.get_table_info()
+                                
+                                # Parse column type
+                                in_table = False
+                                for line in schema_info.split('\n'):
+                                    if f'CREATE TABLE' in line and table_name in line:
+                                        in_table = True
+                                        continue
+                                    
+                                    if in_table:
+                                        if line.strip().startswith(')'):
+                                            break
+                                        
+                                        if column_name in line:
+                                            # Extract type
+                                            cleaned = line.strip().strip(',').strip()
+                                            parts = cleaned.replace('[', '').replace(']', '').split()
+                                            if len(parts) >= 2:
+                                                return parts[1]
+                                
+                                return "Unknown"
+                                
+                            except Exception as e:
+                                logger.error(f"Column type error: {e}", exc_info=True)
+                                return "Error"
+                        
+                        def save_column_training(table, column, description, unit, examples):
+                            """Save training data for a column."""
+                            if not table or not column:
+                                return "❌ Please select a table and column"
+                            
+                            if not description.strip():
+                                return "❌ Please provide a description"
+                            
+                            try:
+                                # Load current metadata
+                                metadata = load_metadata()
+                                
+                                # Ensure table exists in metadata
+                                if "tables" not in metadata:
+                                    metadata["tables"] = {}
+                                
+                                if table not in metadata["tables"]:
+                                    metadata["tables"][table] = {}
+                                
+                                # Save column training
+                                metadata["tables"][table][column] = {
+                                    "description": description.strip(),
+                                    "type": get_column_type(table, column),
+                                    "unit": unit.strip() if unit.strip() else None,
+                                    "unit_full": None,
+                                    "examples": [ex.strip() for ex in examples.split(',') if ex.strip()] if examples else []
+                                }
+                                
+                                # Save metadata
+                                save_metadata(metadata)
+                                
+                                return f"✅ Training saved for {table}.{column}"
+                                
+                            except Exception as e:
+                                logger.error(f"Save training error: {e}", exc_info=True)
+                                return f"❌ Error: {str(e)}"
+                        
+                        def display_current_training():
+                            """Display current training data from metadata."""
+                            try:
+                                metadata = load_metadata()
+                                
+                                if "tables" not in metadata or not metadata["tables"]:
+                                    return "No training data yet. Start by loading the schema and adding descriptions!"
+                                
+                                output = "### Trained Columns\n\n"
+                                
+                                for table_name, columns in metadata["tables"].items():
+                                    output += f"#### 📋 {table_name}\n\n"
+                                    
+                                    for col_name, col_data in columns.items():
+                                        output += f"**{col_name}** ({col_data.get('type', 'Unknown')})\n"
+                                        output += f"- *Description:* {col_data.get('description', 'N/A')}\n"
+                                        
+                                        if col_data.get('unit'):
+                                            output += f"- *Unit:* {col_data.get('unit')}\n"
+                                        
+                                        if col_data.get('examples'):
+                                            examples_str = ', '.join(col_data['examples'][:3])
+                                            output += f"- *Examples:* {examples_str}\n"
+                                        
+                                        output += "\n"
+                                    
+                                    output += "---\n\n"
+                                
+                                return output
+                                
+                            except Exception as e:
+                                logger.error(f"Display training error: {e}", exc_info=True)
+                                return f"❌ Error loading training data: {str(e)}"
+                        
+                        # Event handlers for column training
+                        load_schema_btn.click(
+                            load_schema_for_training,
+                            outputs=[table_dropdown, column_dropdown, column_type_display, training_status]
+                        )
+                        
+                        table_dropdown.change(
+                            get_columns_for_table,
+                            inputs=[table_dropdown],
+                            outputs=[column_dropdown, column_type_display, training_status]
+                        )
+                        
+                        column_dropdown.change(
+                            get_column_type,
+                            inputs=[table_dropdown, column_dropdown],
+                            outputs=[column_type_display]
+                        )
+                        
+                        save_training_btn.click(
+                            save_column_training,
+                            inputs=[table_dropdown, column_dropdown, description_input, unit_input, examples_input],
+                            outputs=[training_status]
+                        ).then(
+                            display_current_training,
+                            outputs=[training_display]
+                        )
+                        
+                        clear_training_btn.click(
+                            lambda: ("", "", ""),
+                            outputs=[description_input, unit_input, examples_input]
+                        )
+                        
+                        # Load training data on tab open
+                        demo.load(
+                            display_current_training,
+                            outputs=[training_display]
+                        )
+
                             outputs=[instructions_input, instructions_status]
                         )
                     
