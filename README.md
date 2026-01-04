@@ -1,14 +1,17 @@
 # DBAI - Database AI Assistant
 
-An interactive AI-powered database assistant with natural language query capabilities.
+An interactive AI-powered database assistant with natural language query capabilities and intelligent training system.
 
 ## Features
 
 - 💬 **Natural Language Queries**: Ask questions about your database in plain English
+- 🧠 **Intelligent Training System**: AI learns from your interactions and gets smarter over time
+- 🎯 **Smart Clarifications**: Detects vague queries and offers context-aware suggestions
+- 🏭 **Business Context Aware**: Pre-configured for Pakistani textile industry (PKR, LBS, greige, etc.)
 - ⚙️ **Flexible Provider Support**: Works with Groq and OpenAI models
 - 📥 **Excel Import**: Upload and import Excel files directly to your database
 - 🔍 **AI-Powered Analysis**: Automatic data description and schema inference
-- 🎯 **Interactive Settings**: Configure database and LLM settings without restarting
+- 💾 **Learning Management**: Automatically saves successful query patterns for future use
 - 📊 **Diagnostics**: Built-in diagnostics collector for troubleshooting
 
 ## Quick Start
@@ -96,6 +99,41 @@ If you encounter issues:
 3. Ensure your API keys are correctly configured
 4. Check the `logs/diagnostics.log` file for detailed error messages
 
+## 🎓 Intelligent Training System
+
+This version includes an **amazing data training system** that makes your AI assistant smarter over time:
+
+### Quick Start
+- **[TRAINING_GUIDE.md](TRAINING_GUIDE.md)** - Complete system documentation
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - User-friendly quick reference
+
+### What It Does
+1. **Understands Business Context**: Pre-loaded with Pakistani textile terminology (PKR, LBS, greige, CT, PC)
+2. **Detects Vague Queries**: Automatically identifies when users need clarification
+3. **Learns from Interactions**: Saves successful query patterns for future use
+4. **Gets Smarter Over Time**: Each team member's clarifications help everyone else
+
+### Example Flow
+```
+You: "supplier total"
+AI: Could you clarify which of these you're looking for?
+    1. Total amount in PKR per supplier
+    2. Total LBS ordered per supplier
+    3. Total bags per supplier
+    4. List all supplier names
+You: 1
+AI: [Shows results]
+    🧠 AI has learned 1 pattern from your team
+```
+
+Next time someone asks "supplier wise total", AI knows what they mean!
+
+### System Files
+- `metadata.json` - Business context and column definitions
+- `conversation_learnings.json` - Learned query patterns (auto-generated)
+- `src/clarity.py` - Query clarity analyzer
+- `src/learnings.py` - Learning management system
+
 ## Security Notes
 
 - API keys are stored in `.env` and never exposed in the UI
@@ -108,10 +146,14 @@ If you encounter issues:
 The application structure:
 - `app.py` - Application entry point
 - `src/main.py` - Main launcher with logging setup
-- `src/ui.py` - Gradio UI interface
+- `src/ui.py` - Gradio UI interface with clarity integration
 - `src/providers.py` - LLM provider wrapper
-- `src/database.py` - Database connection management
-- `src/llm.py` - Prompt templates and chains
+- `src/database.py` - Database connection management + metadata functions
+- `src/llm.py` - Enhanced prompt templates with learning injection
 - `src/uploader.py` - Excel import functionality
+- `src/clarity.py` - Query clarity analysis and clarification generation
+- `src/learnings.py` - Learning management with fuzzy matching
+- `metadata.json` - Business context and column definitions
+- `conversation_learnings.json` - Learned patterns storage
 - `src/diagnostics.py` - Diagnostics collection
 - `src/trainer.py` - Training module (demo)
