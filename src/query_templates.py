@@ -1,0 +1,251 @@
+"""
+SQL Template Engine
+Generates SQL from classified queries without LLM.
+"""
+import logging
+from typing import Dict
+
+logger = logging.getLogger(__name__)
+
+
+def generate_sql_from_template(classification: Dict) -> str:
+    """
+    Generate SQL directly from classification without LLM.
+    
+    Args:
+        classification: Output from query_classifier.classify_query()
+        
+    Returns:
+        SQL query string
+    """
+    query_type = classification['type']
+    params = classification['params']
+    
+    if query_type == 'ranking':
+        return generate_ranking_sql(params)
+    elif query_type == 'aggregation':
+        return generate_aggregation_sql(params)
+    elif query_type == 'segmentation':
+        return generate_segmentation_sql(params)
+    elif query_type == 'detail':
+        return generate_detail_sql(params)
+    else:
+        return None
+
+
+def generate_ranking_sql(params: Dict) -> str:
+    """
+    Generate TOP N ranking query.
+    
+    Template: SELECT TOP N entity, SUM(metric) as Total
+              FROM table
+              WHERE ENTRY_TYPE = 'type'
+              GROUP BY entity
+              ORDER BY SUM(metric) DESC
+    """
+    dept = params['department']
+    entity = params['entity']
+    limit = params['limit']
+    movement_type = params['movement_type']
+    
+    # Table selection
+    if dept == 'yarn':
+        table = 'YarnData'
+        entity_col = 'SUPPLIER' if entity == 'supplier' else 'QUALITY'
+        metric_cols = [
+            f"SUM(AMOUNT) as 'Total PKR'",
+            f"SUM(LBS) as 'Total LBS'",
+            f"SUM(BAGS) as 'Total Bags'",
+            f"COUNT(*) as 'Record Count'"
+        ]
+    elif dept == 'greige':
+        table = 'GreigeData'
+        entity_col = 'SUPP_NAME' if entity == 'supplier' else 'AC_NAME'
+        metric_cols = [
+            f"SUM(AMOUNT) as 'Total PKR'",
+            f"SUM(METER) as 'Total Meters'",
+            f"COUNT(*) as 'Record Count'"
+        ]
+    else:
+        # Both departments - use subqueries
+        return generate_ranking_both_departments(params)
+    
+    # WHERE clause
+    where_clause = ""
+    if movement_type:
+        where_clause = f"WHERE ENTRY_TYPE = '{movement_type}'"
+    
+    sql = f"""SELECT TOP {limit} 
+    {entity_col} as '{entity.capitalize()}',
+    {', '.join(metric_cols)}
+FROM {table}
+{where_clause}
+GROUP BY {entity_col}
+ORDER BY SUM(AMOUNT) DESC"""
+    
+    logger.info(f"Generated ranking SQL from template: {sql[:100]}...")
+    return sql
+
+
+def generate_aggregation_sql(params: Dict) -> str:
+    """
+    Generate aggregation/total query.
+    
+    Template: SELECT (SELECT SUM(X) FROM Yarn) as 'Yarn Total',
+                     (SELECT SUM(Y) FROM Greige) as 'Greige Total'
+    """
+    dept = params['department']
+    movement_type = params['movement_type']
+    
+    if dept == 'both':
+        # Multi-department - use subqueries (Training Rule #2)
+        where_yarn = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
+        
+        sql = f"""SELECT 
+    (SELECT SUM(LBS) FROM YarnData {where_yarn}) as 'Yarn Total LBS',
+    (SELECT SUM(AMOUNT) FROM YarnData {where_yarn}) as 'Yarn Total PKR',
+    (SELECT SUM(BAGS) FROM YarnData {where_yarn}) as 'Yarn Total Bags',
+    (SELECT COUNT(*) FROM YarnData {where_yarn}) as 'Yarn Count',
+    (SELECT SUM(METER) FROM GreigeData) as 'Greige Total Meters',
+    (SELECT SUM(AMOUNT) FROM GreigeData) as 'Greige Total PKR',
+    (SELECT COUNT(*) FROM GreigeData) as 'Greige Count'"""
+    
+    elif dept == 'yarn':
+        table = 'YarnData'
+        where_clause = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
+        
+        sql = f"""SELECT 
+    SUM(LBS) as 'Yarn Total LBS',
+    SUM(AMOUNT) as 'Yarn Total PKR',
+    SUM(BAGS) as 'Yarn Total Bags',
+    COUNT(*) as 'Yarn Count'
+FROM {table}
+{where_clause}"""
+    
+    else:  # greige
+        sql = f"""SELECT 
+    SUM(METER) as 'Greige Total Meters',
+    SUM(AMOUNT) as 'Greige Total PKR',
+    COUNT(*) as 'Greige Count'
+FROM GreigeData"""
+    
+    logger.info(f"Generated aggregation SQL from template")
+    return sql
+
+
+def generate_segmentation_sql(params: Dict) -> str:
+    """
+    Generate segmentation query (GROUP BY).
+    
+    Template: SELECT dimension, SUM(metric), COUNT(*)
+              FROM table
+              GROUP BY dimension
+              ORDER BY SUM(metric) DESC
+    """
+    dept = params['department']
+    entity = params['entity']
+    
+    if dept == 'yarn':
+        table = 'YarnData'
+        
+        if entity == 'entry_type':
+            group_col = 'ENTRY_TYPE'
+            sql = f"""SELECT 
+    ENTRY_TYPE as 'Movement Type',
+    SUM(LBS) as 'Total LBS',
+    SUM(AMOUNT) as 'Total PKR',
+    SUM(BAGS) as 'Total Bags',
+    COUNT(*) as 'Record Count'
+FROM YarnData
+GROUP BY ENTRY_TYPE
+ORDER BY SUM(AMOUNT) DESC"""
+        
+        elif entity == 'supplier':
+            sql = f"""SELECT 
+    SUPPLIER as 'Supplier',
+    SUM(LBS) as 'Total LBS',
+    SUM(AMOUNT) as 'Total PKR',
+    SUM(BAGS) as 'Total Bags',
+    COUNT(*) as 'Record Count'
+FROM YarnData
+GROUP BY SUPPLIER
+ORDER BY SUM(AMOUNT) DESC"""
+        
+        else:
+            sql = f"""SELECT 
+    QUALITY as 'Quality',
+    SUM(LBS) as 'Total LBS',
+    SUM(AMOUNT) as 'Total PKR',
+    COUNT(*) as 'Record Count'
+FROM YarnData
+GROUP BY QUALITY
+ORDER BY SUM(AMOUNT) DESC"""
+    
+    else:  # greige
+        if entity == 'supplier':
+            sql = f"""SELECT 
+    SUPP_NAME as 'Supplier',
+    SUM(METER) as 'Total Meters',
+    SUM(AMOUNT) as 'Total PKR',
+    COUNT(*) as 'Record Count'
+FROM GreigeData
+GROUP BY SUPP_NAME
+ORDER BY SUM(AMOUNT) DESC"""
+        else:
+            sql = f"""SELECT 
+    AC_NAME as 'Article',
+    SUM(METER) as 'Total Meters',
+    SUM(AMOUNT) as 'Total PKR',
+    COUNT(*) as 'Record Count'
+FROM GreigeData
+GROUP BY AC_NAME
+ORDER BY SUM(AMOUNT) DESC"""
+    
+    logger.info(f"Generated segmentation SQL from template")
+    return sql
+
+
+def generate_detail_sql(params: Dict) -> str:
+    """
+    Generate detail/list query.
+    
+    Template: SELECT * FROM table WHERE condition
+    """
+    dept = params['department']
+    specific = params['specific_value']
+    
+    if dept == 'yarn':
+        table = 'YarnData'
+        # Try to match supplier name
+        sql = f"""SELECT 
+    DOCDATE as 'Date',
+    SUPPLIER as 'Supplier',
+    YARN as 'Yarn Type',
+    QUALITY as 'Quality',
+    LBS as 'LBS',
+    AMOUNT as 'Amount PKR',
+    BAGS as 'Bags',
+    ENTRY_TYPE as 'Movement Type'
+FROM YarnData
+WHERE SUPPLIER LIKE '%{specific}%'
+ORDER BY DOCDATE DESC"""
+    else:
+        sql = f"""SELECT 
+    DOCDATE as 'Date',
+    SUPP_NAME as 'Supplier',
+    AC_NAME as 'Article',
+    METER as 'Meters',
+    AMOUNT as 'Amount PKR',
+    ENTRY_TYPE as 'Type'
+FROM GreigeData
+WHERE SUPP_NAME LIKE '%{specific}%'
+ORDER BY DOCDATE DESC"""
+    
+    logger.info(f"Generated detail SQL from template")
+    return sql
+
+
+def generate_ranking_both_departments(params: Dict) -> str:
+    """Handle ranking across both departments (special case)."""
+    # This is complex - better to fall back to LLM
+    return None

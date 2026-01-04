@@ -21,6 +21,8 @@ from src.clarity import analyze_query_clarity, needs_clarification
 from src.learnings import save_learning, get_learning_stats
 from src.quick_training import add_training_rule, get_training_stats, format_rules_display
 from src.session_tracker import get_session_tracker, reset_session_tracker
+from src.query_classifier import classify_query, needs_movement_clarification, get_clarification_for_classification
+from src.query_templates import generate_sql_from_template
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -345,45 +347,100 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         # LOG: User question
         logger.info(f"USER QUERY: {question}")
         
-        # Generate SQL
-        sql_chain = make_sql_chain(current_llm, db)
-        sql_response_obj = sql_chain({"question": question})
+        # HYBRID APPROACH: Try template-based generation first
+        classification = classify_query(question)
+        logger.info(f"Query classified as: {classification['type']} (confidence: {classification['confidence']}%)")
         
-        # Extract token usage from SQL generation
-        if isinstance(sql_response_obj, dict) and 'response' in sql_response_obj:
-            tokens = extract_token_usage(sql_response_obj['response'])
-            response_tokens['prompt_tokens'] += tokens['prompt_tokens']
-            response_tokens['completion_tokens'] += tokens['completion_tokens']
-            response_tokens['total_tokens'] += tokens['total_tokens']
+        sql_query = None
+        llm_raw_response = None
+        generation_method = "llm"  # Default
         
-        # Extract SQL from response
-        if isinstance(sql_response_obj, dict):
-            sql_query = sql_response_obj.get('result', '')
-            llm_raw_response = str(sql_response_obj)
-        else:
-            sql_query = str(sql_response_obj)
-            llm_raw_response = sql_query
+        # Check if needs movement type clarification (via classification, not clarity system)
+        if needs_movement_clarification(classification):
+            # Use classification-based clarification
+            clarifications = get_clarification_for_classification(classification)
+            
+            # Store clarification state
+            pending_clarification["question"] = question
+            pending_clarification["options"] = clarifications
+            pending_clarification["original_query"] = question
+            
+            # Generate clarification message
+            response = f"I'd like to better understand your query: **\"{question}\"**\n\n"
+            response += f"Could you clarify which of these you're looking for?\n\n"
+            
+            for i, option in enumerate(clarifications, 1):
+                response += f"**{i}.** {option}\n"
+            
+            response += "\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
+            
+            # Track clarification request
+            session_tracker.track_query(
+                user_question=question,
+                clarity_analysis={"score": classification['confidence'], "needs_clarification": True, "reason": "Movement type required for supplier ranking"},
+                llm_interaction=None,
+                execution=None,
+                response={"type": "clarification_request", "text": response},
+                performance={"total_time_ms": int((time.time() - start_time) * 1000)},
+                error=None
+            )
+            
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": response})
+            
+            return "", history
         
-        # LOG: Raw LLM response before extraction
-        logger.debug(f"LLM RAW RESPONSE: {sql_query[:500]}")
+        # Try template generation for high-confidence classifications
+        if classification['confidence'] >= 80:
+            template_sql = generate_sql_from_template(classification)
+            if template_sql:
+                sql_query = template_sql
+                generation_method = "template"
+                logger.info(f"✅ Using TEMPLATE generation (no LLM needed)")
         
-        sql_query = extract_sql_from_response(sql_query)
+        # Fall back to LLM if template didn't work
+        if not sql_query:
+            logger.info(f"⚠️ Template not available, using LLM generation")
+            # Generate SQL using LLM
+            sql_chain = make_sql_chain(current_llm, db)
+            sql_response_obj = sql_chain({"question": question})
+            
+            # Extract token usage from SQL generation
+            if isinstance(sql_response_obj, dict) and 'response' in sql_response_obj:
+                tokens = extract_token_usage(sql_response_obj['response'])
+                response_tokens['prompt_tokens'] += tokens['prompt_tokens']
+                response_tokens['completion_tokens'] += tokens['completion_tokens']
+                response_tokens['total_tokens'] += tokens['total_tokens']
+            
+            # Extract SQL from response
+            if isinstance(sql_response_obj, dict):
+                sql_query = sql_response_obj.get('result', '')
+                llm_raw_response = str(sql_response_obj)
+            else:
+                sql_query = str(sql_response_obj)
+                llm_raw_response = sql_query
+            
+            # LOG: Raw LLM response before extraction
+            logger.debug(f"LLM RAW RESPONSE: {sql_query[:500]}")
+            
+            sql_query = extract_sql_from_response(sql_query)
         
-        # LOG: Extracted SQL query
-        logger.info(f"GENERATED SQL: {sql_query}")
+        # LOG: Generated SQL query
+        logger.info(f"GENERATED SQL ({generation_method}): {sql_query}")
         
         # Track LLM interaction
         llm_data = {
-            "provider": provider_name,
-            "model": model,
+            "provider": provider_name if generation_method == "llm" else "template",
+            "model": model if generation_method == "llm" else "rule-based",
             "temperature": temperature,
             "sql_generated": sql_query,
-            "tokens": response_tokens
+            "tokens": response_tokens,
+            "generation_method": generation_method  # NEW: track if template or LLM
         }
         # Add raw response only if tier 2 enabled
         from src.session_tracker import get_observability_config
         config = get_observability_config()
-        if config.get("capture_llm_prompts", False):
+        if config.get("capture_llm_prompts", False) and llm_raw_response:
             llm_data["raw_response"] = llm_raw_response
         
         # Execute query
@@ -567,16 +624,24 @@ Keep it concise and factual."""
         stats = get_learning_stats()
         training_stats = get_training_stats()
         
-        if stats["total"] > 0 or training_stats["total"] > 0:
-            response += f"\n\n<sub>🧠 Knowledge: {stats['total']} learned patterns · {training_stats['total']} training rules</sub>"
+        # Add generation method indicator
+        method_icon = "⚡" if generation_method == "template" else "🤖"
+        method_text = "Template" if generation_method == "template" else "LLM"
         
-        # Add token usage info if available (only for OpenAI)
-        if provider_name == 'openai' and response_tokens['total_tokens'] > 0:
+        if stats["total"] > 0 or training_stats["total"] > 0:
+            response += f"\n\n<sub>🧠 Knowledge: {stats['total']} learned patterns · {training_stats['total']} training rules · {method_icon} {method_text}</sub>"
+        else:
+            response += f"\n\n<sub>{method_icon} Generated via {method_text}</sub>"
+        
+        # Add token usage info if available (only for OpenAI and LLM generation)
+        if generation_method == "llm" and provider_name == 'openai' and response_tokens['total_tokens'] > 0:
             session_tokens['prompt'] += response_tokens['prompt_tokens']
             session_tokens['completion'] += response_tokens['completion_tokens']
             session_tokens['total'] += response_tokens['total_tokens']
             
             response += f"\n\n<sub>🔹 Tokens: {response_tokens['total_tokens']} · Session: {session_tokens['total']:,}</sub>"
+        elif generation_method == "template":
+            response += f"\n\n<sub>⚡ Zero tokens used (template-based)</sub>"
         
         # LOG: Final response sent to user
         logger.info(f"RESPONSE SENT: {len(response)} chars | Success: {success} | Tokens: {response_tokens.get('total_tokens', 0)}")
