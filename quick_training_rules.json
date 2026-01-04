@@ -4,10 +4,15 @@
       "instruction": "ALWAYS show units with numeric results. For yarn queries show LBS, for greige show Meters, for amounts show PKR. Format: '1,234,556 LBS' or '500,000 PKR'",
       "added_at": "2026-01-04T00:00:00",
       "usage_count": 0
+    },
+    {
+      "instruction": "CRITICAL: When asked for summaries of MULTIPLE departments (yarn AND greige), NEVER use JOIN operations. Instead use separate subqueries or UNION ALL. JOINs create duplicate row counts. Correct approach: SELECT (SELECT COUNT(*) FROM YarnData) as 'Yarn Count', (SELECT COUNT(*) FROM GreigeData) as 'Greige Count'. This ensures accurate counts for each department independently.",
+      "added_at": "2026-01-04T11:40:00",
+      "usage_count": 0
     }
   ],
   "metadata": {
-    "total_rules": 1,
-    "last_updated": "2026-01-04T00:00:00"
+    "total_rules": 2,
+    "last_updated": "2026-01-04T11:40:00"
   }
 }
