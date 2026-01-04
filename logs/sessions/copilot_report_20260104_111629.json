@@ -1,0 +1,755 @@
+{
+  "session_summary": {
+    "session_id": "20260104_111629",
+    "duration_minutes": 8.514638433333333,
+    "total_queries": 12,
+    "successful_queries": 12,
+    "failed_queries": 0,
+    "success_rate": 100.0,
+    "avg_response_time": 20.8,
+    "training_events": 0,
+    "errors": 0
+  },
+  "configuration": {
+    "tier1_enabled": true,
+    "tier2_enabled": true,
+    "capture_llm_prompts": true,
+    "capture_sample_data": false,
+    "capture_reasoning_chain": true,
+    "max_queries_in_memory": 50,
+    "auto_save_interval": 10
+  },
+  "full_state": {
+    "session_id": "20260104_111629",
+    "started_at": "2026-01-04T11:16:29.995378",
+    "total_queries": 12,
+    "total_errors": 0,
+    "total_successes": 12,
+    "current_state": {},
+    "last_query": {
+      "timestamp": "2026-01-04T11:24:50.042441",
+      "user_question": "data is not consistant, you're showing different answers for the same query for yarn. Mistakes like this should be avoided in all domains and you should be able to handle all these edge cases much better. Data formatting is not consistant.",
+      "success": true,
+      "execution_time_ms": 3,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 100,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData",
+        "tokens": {
+          "prompt_tokens": 2198,
+          "completion_tokens": 146,
+          "total_tokens": 2344
+        },
+        "raw_response": "{'result': \"```sql\\nSELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 53, 'prompt_tokens': 2019, 'total_tokens': 2072, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuO0UDWaZg2l2WWy5rjmrce373Av2', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a78-1b7b-7132-b3b4-5062315c12e3-0', usage_metadata={'input_tokens': 2019, 'output_tokens': 53, 'total_tokens': 2072, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 3
+      },
+      "response": {
+        "type": "data",
+        "text": "I understand your concern about data consistency, and I appreciate your feedback. In this case, we have a total of about 22.4 million pounds of yarn, which is valued at approximately 7.3 billion PKR, spread across around 250,000 bags. It's interesting to note the significant value per bag, indicating a potentially high-quality or specialty yarn being tracked here. If you have any specific queries or need further clarification, feel free to ask!\n\n---\n\n**Query Results** (1 rows)\n\n| Yarn Total LBS | Yarn Total PKR | Yarn Total Bags | Yarn Count |\n| -------------- | -------------- | --------------- | ---------- |\n| 22371100       | 7312972939.85  | 250473          | 2784       |\n\n\n<sub>\ud83e\udde0 Knowledge: 10 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2344 \u00b7 Session: 24,704</sub>",
+        "length_chars": 793
+      },
+      "performance": {
+        "total_time_ms": 4231,
+        "query_time_ms": 3,
+        "tokens": {
+          "prompt_tokens": 2198,
+          "completion_tokens": 146,
+          "total_tokens": 2344
+        }
+      }
+    },
+    "session_timeline": [
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:18:58.300579",
+        "question": "Yarn arrival total",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:19:10.804972",
+        "question": "Total yarn weight in LBS",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:20:18.591453",
+        "question": "The total yarn weight is approximately 22,371,100 pounds, which is quite substantial! This figure hi",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:21:01.601618",
+        "question": "This answer answer would have sufficed.\nThe total yarn weight of approximately 22.37 million pounds.",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:21:34.560557",
+        "question": "Summary of yarn department.",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:21:55.872749",
+        "question": "summary of both yarn and griege department",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:22:31.895650",
+        "question": "once again the results are wrong, the formatting is not consistent. ",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:22:55.427546",
+        "question": "Total yarn summary",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:23:02.793992",
+        "question": "Total yarn weight in LBS",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:23:27.236638",
+        "question": "Summerize yarn department data",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:23:41.285329",
+        "question": "summerize all department data",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-04T11:24:50.042441",
+        "question": "data is not consistant, you're showing different answers for the same query for yarn. Mistakes like ",
+        "success": true
+      }
+    ]
+  },
+  "all_queries": [
+    {
+      "timestamp": "2026-01-04T11:18:58.300579",
+      "user_question": "Yarn arrival total",
+      "success": true,
+      "execution_time_ms": 1,
+      "error": null,
+      "clarity_analysis": {
+        "score": 60,
+        "needs_clarification": true,
+        "reason": "Query is somewhat clear: Short query - could be more specific; Ambiguous term: 'total'",
+        "clarifications_offered": [
+          "Total yarn weight in LBS",
+          "Total yarn purchase amount in PKR",
+          "Yarn totals grouped by supplier",
+          "Yarn totals grouped by type"
+        ]
+      },
+      "response": {
+        "type": "clarification_request",
+        "text": "I'd like to better understand your query: **\"Yarn arrival total\"**\n\nCould you clarify which of these you're looking for?\n\n**1.** Total yarn weight in LBS\n**2.** Total yarn purchase amount in PKR\n**3.** Yarn totals grouped by supplier\n**4.** Yarn totals grouped by type\n\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
+      },
+      "performance": {
+        "total_time_ms": 1
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:19:10.804972",
+      "user_question": "Total yarn weight in LBS",
+      "success": true,
+      "execution_time_ms": 2,
+      "error": null,
+      "rows_returned": 1,
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData",
+        "tokens": {
+          "prompt_tokens": 2269,
+          "completion_tokens": 73,
+          "total_tokens": 2342
+        },
+        "raw_response": "{'result': \"SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData\", 'response': AIMessage(content=\"SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 16, 'prompt_tokens': 2160, 'total_tokens': 2176, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNv2PDZNEfwFO3crdViNUp3LGirz', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a72-f086-7c20-8a04-aed80b70bcaf-0', usage_metadata={'input_tokens': 2160, 'output_tokens': 16, 'total_tokens': 2176, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 2
+      },
+      "response": {
+        "type": "data",
+        "text": "The total yarn weight is approximately 22,371,100 pounds, which is quite substantial! This figure highlights the massive scale of yarn production or inventory, suggesting a robust industry presence. It's interesting to think about how much crafting or textile work could be done with that amount of yarn!\n\n---\n\n**Query Results** (1 rows)\n\n| Yarn Total LBS |\n| -------------- |\n| 22,371,100     |\n\n\n<sub>\ud83e\udde0 Knowledge: 9 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2342 \u00b7 Session: 2,342</sub>",
+        "length_chars": 503
+      },
+      "performance": {
+        "total_time_ms": 5662,
+        "query_time_ms": 2,
+        "tokens": {
+          "prompt_tokens": 2269,
+          "completion_tokens": 73,
+          "total_tokens": 2342
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:20:18.591453",
+      "user_question": "The total yarn weight is approximately 22,371,100 pounds, which is quite substantial! This figure highlights the massive scale of yarn production or inventory, suggesting a robust industry presence. It's interesting to think about how much crafting or textile work could be done with that amount of yarn!\n\nThis is not a professional answer. Your answers should cater to the audience, to the user who is querying this data, they work in textile. and it's a professional environment. \n",
+      "success": true,
+      "execution_time_ms": 0,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 85,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Total yarn weight in LBS",
+          "Total yarn purchase amount in PKR",
+          "Yarn totals grouped by supplier",
+          "Yarn totals grouped by type"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData",
+        "tokens": {
+          "prompt_tokens": 2260,
+          "completion_tokens": 92,
+          "total_tokens": 2352
+        },
+        "raw_response": "{'result': \"```sql\\nSELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 21, 'prompt_tokens': 2064, 'total_tokens': 2085, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 0}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNw8zJ8HmgChBZQ70J3F4vVAL4A3', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a73-f19e-70d2-86c0-646dd7b9f673-0', usage_metadata={'input_tokens': 2064, 'output_tokens': 21, 'total_tokens': 2085, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 0
+      },
+      "response": {
+        "type": "data",
+        "text": "The total yarn weight of approximately 22.37 million pounds underscores the significant scale of yarn production in the industry. This volume not only indicates a robust inventory but also suggests a strong capacity for meeting demand in various textile applications. It's fascinating to consider the diverse crafting and manufacturing possibilities that such a substantial amount of yarn could support, from fashion to home textiles.\n\n---\n\n**Query Results** (1 rows)\n\n| Yarn Total LBS |\n| -------------- |\n| 22,371,100     |\n\n\n<sub>\ud83e\udde0 Knowledge: 9 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2352 \u00b7 Session: 4,694</sub>",
+        "length_chars": 633
+      },
+      "performance": {
+        "total_time_ms": 5645,
+        "query_time_ms": 0,
+        "tokens": {
+          "prompt_tokens": 2260,
+          "completion_tokens": 92,
+          "total_tokens": 2352
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:21:01.601618",
+      "user_question": "This answer answer would have sufficed.\nThe total yarn weight of approximately 22.37 million pounds.",
+      "success": true,
+      "execution_time_ms": 4,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 85,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Total yarn weight in LBS",
+          "Total yarn purchase amount in PKR",
+          "Yarn totals grouped by supplier",
+          "Yarn totals grouped by type"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData",
+        "tokens": {
+          "prompt_tokens": 2233,
+          "completion_tokens": 77,
+          "total_tokens": 2310
+        },
+        "raw_response": "{'result': \"SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData\", 'response': AIMessage(content=\"SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 16, 'prompt_tokens': 2110, 'total_tokens': 2126, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNwo7MXqL4Wj0PiBsYanlz5A2SDJ', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a74-9e6d-7a82-8f9d-8dc8c6d20f38-0', usage_metadata={'input_tokens': 2110, 'output_tokens': 16, 'total_tokens': 2126, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 4
+      },
+      "response": {
+        "type": "data",
+        "text": "Sure! The total yarn weight is approximately 22.37 million pounds, which is quite substantial. This figure highlights the scale of yarn production and usage, indicating a significant demand in the textile industry. It's interesting to see how such a large quantity reflects trends in manufacturing and consumer preferences for yarn-based products.\n\n---\n\n**Query Results** (1 rows)\n\n| Yarn Total LBS |\n| -------------- |\n| 22,371,100     |\n\n\n<sub>\ud83e\udde0 Knowledge: 9 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2310 \u00b7 Session: 7,004</sub>",
+        "length_chars": 546
+      },
+      "performance": {
+        "total_time_ms": 4414,
+        "query_time_ms": 4,
+        "tokens": {
+          "prompt_tokens": 2233,
+          "completion_tokens": 77,
+          "total_tokens": 2310
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:21:34.560557",
+      "user_question": "Summary of yarn department.",
+      "success": true,
+      "execution_time_ms": 4,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 70,
+        "needs_clarification": false,
+        "reason": "Query is somewhat clear: Short query - could be more specific; Ambiguous term: 'yarn'",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT \n    SUM(LBS) as 'Yarn Total LBS',\n    SUM(AMOUNT) as 'Yarn Total PKR',\n    SUM(BAGS) as 'Yarn Total Bags',\n    COUNT(*) as 'Yarn Count'\nFROM \n    YarnData;",
+        "tokens": {
+          "prompt_tokens": 2454,
+          "completion_tokens": 142,
+          "total_tokens": 2596
+        },
+        "raw_response": "{'result': \"SELECT \\n    SUM(LBS) as 'Yarn Total LBS',\\n    SUM(AMOUNT) as 'Yarn Total PKR',\\n    SUM(BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count'\\nFROM \\n    YarnData;\", 'response': AIMessage(content=\"SELECT \\n    SUM(LBS) as 'Yarn Total LBS',\\n    SUM(AMOUNT) as 'Yarn Total PKR',\\n    SUM(BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count'\\nFROM \\n    YarnData;\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 56, 'prompt_tokens': 2318, 'total_tokens': 2374, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNxLB83g0mwrbnKxuAWzg55N9t4M', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a75-1e5f-70a3-ac81-49ed3550b96b-0', usage_metadata={'input_tokens': 2318, 'output_tokens': 56, 'total_tokens': 2374, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 4
+      },
+      "response": {
+        "type": "data",
+        "text": "The yarn department has a total of about 22.4 million pounds of yarn, valued at approximately 7.3 billion PKR, spread across around 250,000 bags. With a count of 2,784, this indicates a significant volume of inventory, suggesting strong production or stock levels. It's interesting to see such a high value associated with the quantity, which might reflect premium quality or high demand in the market.\n\n---\n\n**Query Results** (1 rows)\n\n| Yarn Total LBS | Yarn Total PKR | Yarn Total Bags | Yarn Count |\n| -------------- | -------------- | --------------- | ---------- |\n| 22371100       | 7312972939.85  | 250473          | 2784       |\n\n\n<sub>\ud83e\udde0 Knowledge: 9 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2596 \u00b7 Session: 9,600</sub>",
+        "length_chars": 745
+      },
+      "performance": {
+        "total_time_ms": 4619,
+        "query_time_ms": 4,
+        "tokens": {
+          "prompt_tokens": 2454,
+          "completion_tokens": 142,
+          "total_tokens": 2596
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:21:55.872749",
+      "user_question": "summary of both yarn and griege department",
+      "success": true,
+      "execution_time_ms": 93,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 85,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT \n    SUM(G.METER) as 'Greige Total Meters',\n    SUM(G.AMOUNT) as 'Greige Total PKR',\n    COUNT(*) as 'Greige Count',\n    SUM(Y.LBS) as 'Yarn Total LBS',\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\n    SUM(Y.BAGS) as 'Yarn Total Bags',\n    COUNT(*) as 'Yarn Count'\nFROM \n    GreigeData G\nFULL OUTER JOIN \n    YarnData Y ON G.DOCDATE = Y.DOCDATE\nWHERE \n    G.DOCDATE IS NOT NULL OR Y.DOCDATE IS NOT NULL;",
+        "tokens": {
+          "prompt_tokens": 2498,
+          "completion_tokens": 251,
+          "total_tokens": 2749
+        },
+        "raw_response": "{'result': \"```sql\\nSELECT \\n    SUM(G.METER) as 'Greige Total Meters',\\n    SUM(G.AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count',\\n    SUM(Y.LBS) as 'Yarn Total LBS',\\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\\n    SUM(Y.BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count'\\nFROM \\n    GreigeData G\\nFULL OUTER JOIN \\n    YarnData Y ON G.DOCDATE = Y.DOCDATE\\nWHERE \\n    G.DOCDATE IS NOT NULL OR Y.DOCDATE IS NOT NULL;\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT \\n    SUM(G.METER) as 'Greige Total Meters',\\n    SUM(G.AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count',\\n    SUM(Y.LBS) as 'Yarn Total LBS',\\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\\n    SUM(Y.BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count'\\nFROM \\n    GreigeData G\\nFULL OUTER JOIN \\n    YarnData Y ON G.DOCDATE = Y.DOCDATE\\nWHERE \\n    G.DOCDATE IS NOT NULL OR Y.DOCDATE IS NOT NULL;\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 142, 'prompt_tokens': 2322, 'total_tokens': 2464, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNxdERh9RVXCOZtECyy0FoeTUA91', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a75-65da-7cc2-a0c6-a927312f6671-0', usage_metadata={'input_tokens': 2322, 'output_tokens': 142, 'total_tokens': 2464, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 93
+      },
+      "response": {
+        "type": "data",
+        "text": "The summary for both the yarn and greige departments shows that the greige department produced a total of approximately 688.7 million meters, generating around 150.3 billion PKR, while the yarn department yielded about 2.1 billion pounds, with a revenue of roughly 692.1 billion PKR. Notably, both departments have the same count of 274,310, indicating a consistent output across the board. This suggests a strong production capacity, especially in yarn, which significantly outpaces greige in terms of revenue.\n\n---\n\n**Query Results** (1 rows)\n\n| Greige Total Meters | Greige Total PKR | Greige Count | Yarn Total LBS | Yarn Total PKR  | Yarn Total Bags | Yarn Count |\n| ------------------- | ---------------- | ------------ | -------------- | --------------- | --------------- | ---------- |\n| 688732123           | 150276391513.65  | 274310       | 2114896065     | 692053383457.39 | 23800571        | 274310     |\n\n\n<sub>\ud83e\udde0 Knowledge: 9 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2749 \u00b7 Session: 12,349</sub>",
+        "length_chars": 1026
+      },
+      "performance": {
+        "total_time_ms": 7629,
+        "query_time_ms": 93,
+        "tokens": {
+          "prompt_tokens": 2498,
+          "completion_tokens": 251,
+          "total_tokens": 2749
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:22:31.895650",
+      "user_question": "once again the results are wrong, the formatting is not consistent. ",
+      "success": true,
+      "execution_time_ms": 2,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 100,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData",
+        "tokens": {
+          "prompt_tokens": 2130,
+          "completion_tokens": 142,
+          "total_tokens": 2272
+        },
+        "raw_response": "{'result': \"```sql\\nSELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 53, 'prompt_tokens': 1985, 'total_tokens': 2038, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 0}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNyG0Q2o89RAkxCtDuDuKPv5064i', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a75-ff18-7bf0-b057-f30d606b1faf-0', usage_metadata={'input_tokens': 1985, 'output_tokens': 53, 'total_tokens': 2038, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 2
+      },
+      "response": {
+        "type": "data",
+        "text": "I understand your frustration with the formatting issues. The data shows a total of about 22.4 million pounds of yarn, valued at approximately 7.3 billion PKR, which translates to around 250,473 bags and a count of 2,784. It's interesting to see such a high value associated with the quantity, indicating a potentially premium quality or high demand for this yarn. Let me know if you need any further adjustments!\n\n---\n\n**Query Results** (1 rows)\n\n| Yarn Total LBS | Yarn Total PKR | Yarn Total Bags | Yarn Count |\n| -------------- | -------------- | --------------- | ---------- |\n| 22371100       | 7312972939.85  | 250473          | 2784       |\n\n\n<sub>\ud83e\udde0 Knowledge: 9 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2272 \u00b7 Session: 14,621</sub>",
+        "length_chars": 757
+      },
+      "performance": {
+        "total_time_ms": 4423,
+        "query_time_ms": 2,
+        "tokens": {
+          "prompt_tokens": 2130,
+          "completion_tokens": 142,
+          "total_tokens": 2272
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:22:55.427546",
+      "user_question": "Total yarn summary",
+      "success": true,
+      "execution_time_ms": 0,
+      "error": null,
+      "clarity_analysis": {
+        "score": 60,
+        "needs_clarification": true,
+        "reason": "Query is somewhat clear: Short query - could be more specific; Ambiguous term: 'total'",
+        "clarifications_offered": [
+          "Total yarn weight in LBS",
+          "Total yarn purchase amount in PKR",
+          "Yarn totals grouped by supplier",
+          "Yarn totals grouped by type"
+        ]
+      },
+      "response": {
+        "type": "clarification_request",
+        "text": "I'd like to better understand your query: **\"Total yarn summary\"**\n\nCould you clarify which of these you're looking for?\n\n**1.** Total yarn weight in LBS\n**2.** Total yarn purchase amount in PKR\n**3.** Yarn totals grouped by supplier\n**4.** Yarn totals grouped by type\n\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
+      },
+      "performance": {
+        "total_time_ms": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:23:02.793992",
+      "user_question": "Total yarn weight in LBS",
+      "success": true,
+      "execution_time_ms": 2,
+      "error": null,
+      "rows_returned": 1,
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData",
+        "tokens": {
+          "prompt_tokens": 2269,
+          "completion_tokens": 78,
+          "total_tokens": 2347
+        },
+        "raw_response": "{'result': \"SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData\", 'response': AIMessage(content=\"SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 16, 'prompt_tokens': 2160, 'total_tokens': 2176, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNymB3RxnEdZsXi9ctkbGWPj2dhy', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a76-7c3a-7d62-b440-33361cfcb556-0', usage_metadata={'input_tokens': 2160, 'output_tokens': 16, 'total_tokens': 2176, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 2
+      },
+      "response": {
+        "type": "data",
+        "text": "The total yarn weight is approximately 22,371,100 pounds! That's quite a substantial amount, indicating a significant volume of yarn, which could suggest a thriving industry or a large-scale project. It's interesting to think about how this weight translates into countless projects and creative possibilities for knitters and crocheters alike!\n\n---\n\n**Query Results** (1 rows)\n\n| Yarn Total LBS |\n| -------------- |\n| 22,371,100     |\n\n\n<sub>\ud83e\udde0 Knowledge: 10 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2347 \u00b7 Session: 16,968</sub>",
+        "length_chars": 545
+      },
+      "performance": {
+        "total_time_ms": 3286,
+        "query_time_ms": 2,
+        "tokens": {
+          "prompt_tokens": 2269,
+          "completion_tokens": 78,
+          "total_tokens": 2347
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:23:27.236638",
+      "user_question": "Summerize yarn department data",
+      "success": true,
+      "execution_time_ms": 2,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 70,
+        "needs_clarification": false,
+        "reason": "Query is somewhat clear: Short query - could be more specific; Ambiguous term: 'yarn'",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT \n    SUM(LBS) as 'Yarn Total LBS',\n    SUM(AMOUNT) as 'Yarn Total PKR',\n    SUM(BAGS) as 'Yarn Total Bags',\n    COUNT(*) as 'Yarn Count'\nFROM \n    YarnData;",
+        "tokens": {
+          "prompt_tokens": 2401,
+          "completion_tokens": 141,
+          "total_tokens": 2542
+        },
+        "raw_response": "{'result': \"```sql\\nSELECT \\n    SUM(LBS) as 'Yarn Total LBS',\\n    SUM(AMOUNT) as 'Yarn Total PKR',\\n    SUM(BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count'\\nFROM \\n    YarnData;\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT \\n    SUM(LBS) as 'Yarn Total LBS',\\n    SUM(AMOUNT) as 'Yarn Total PKR',\\n    SUM(BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count'\\nFROM \\n    YarnData;\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 60, 'prompt_tokens': 2264, 'total_tokens': 2324, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNz81FNgl3n1WcMv7IHdZ07B4CIE', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a76-d42a-70d0-ad57-334e0735b3a3-0', usage_metadata={'input_tokens': 2264, 'output_tokens': 60, 'total_tokens': 2324, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 2
+      },
+      "response": {
+        "type": "data",
+        "text": "The yarn department has a total of about 22.4 million pounds of yarn, valued at approximately 7.3 billion PKR, spread across around 250,000 bags. With a count of 2,784, this indicates a significant inventory level, suggesting strong supply capabilities. It's interesting to see such a high value associated with the quantity, which might reflect premium yarn types or market demand.\n\n---\n\n**Query Results** (1 rows)\n\n| Yarn Total LBS | Yarn Total PKR | Yarn Total Bags | Yarn Count |\n| -------------- | -------------- | --------------- | ---------- |\n| 22371100       | 7312972939.85  | 250473          | 2784       |\n\n\n<sub>\ud83e\udde0 Knowledge: 10 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2542 \u00b7 Session: 19,510</sub>",
+        "length_chars": 727
+      },
+      "performance": {
+        "total_time_ms": 5217,
+        "query_time_ms": 2,
+        "tokens": {
+          "prompt_tokens": 2401,
+          "completion_tokens": 141,
+          "total_tokens": 2542
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:23:41.285329",
+      "user_question": "summerize all department data",
+      "success": true,
+      "execution_time_ms": 95,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 85,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT \n    SUM(G.METER) as 'Greige Total Meters',\n    SUM(G.AMOUNT) as 'Greige Total PKR',\n    COUNT(*) as 'Greige Count',\n    SUM(Y.LBS) as 'Yarn Total LBS',\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\n    SUM(Y.BAGS) as 'Yarn Total Bags',\n    COUNT(*) as 'Yarn Count'\nFROM \n    GreigeData G\nFULL OUTER JOIN \n    YarnData Y ON G.DOCDATE = Y.DOCDATE\nWHERE \n    G.DOCDATE IS NOT NULL OR Y.DOCDATE IS NOT NULL;",
+        "tokens": {
+          "prompt_tokens": 2611,
+          "completion_tokens": 239,
+          "total_tokens": 2850
+        },
+        "raw_response": "{'result': \"```sql\\nSELECT \\n    SUM(G.METER) as 'Greige Total Meters',\\n    SUM(G.AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count',\\n    SUM(Y.LBS) as 'Yarn Total LBS',\\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\\n    SUM(Y.BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count'\\nFROM \\n    GreigeData G\\nFULL OUTER JOIN \\n    YarnData Y ON G.DOCDATE = Y.DOCDATE\\nWHERE \\n    G.DOCDATE IS NOT NULL OR Y.DOCDATE IS NOT NULL;\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT \\n    SUM(G.METER) as 'Greige Total Meters',\\n    SUM(G.AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count',\\n    SUM(Y.LBS) as 'Yarn Total LBS',\\n    SUM(Y.AMOUNT) as 'Yarn Total PKR',\\n    SUM(Y.BAGS) as 'Yarn Total Bags',\\n    COUNT(*) as 'Yarn Count'\\nFROM \\n    GreigeData G\\nFULL OUTER JOIN \\n    YarnData Y ON G.DOCDATE = Y.DOCDATE\\nWHERE \\n    G.DOCDATE IS NOT NULL OR Y.DOCDATE IS NOT NULL;\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 142, 'prompt_tokens': 2438, 'total_tokens': 2580, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuNzMEhPIGcyMHfadIWYZPNmn301K', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a77-0847-7410-b7e0-1b306de85ffd-0', usage_metadata={'input_tokens': 2438, 'output_tokens': 142, 'total_tokens': 2580, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 95
+      },
+      "response": {
+        "type": "data",
+        "text": "The summary of the department data shows impressive figures, with a total of approximately 688.7 million meters of greige fabric produced, generating around 150.3 billion PKR in revenue. In terms of yarn, there are over 2.1 billion pounds produced, contributing to a substantial 692.1 billion PKR in total revenue. Notably, the production counts for both greige and yarn are quite high, indicating a robust output and strong demand in the market.\n\n---\n\n**Query Results** (1 rows)\n\n| Greige Total Meters | Greige Total PKR | Greige Count | Yarn Total LBS | Yarn Total PKR  | Yarn Total Bags | Yarn Count |\n| ------------------- | ---------------- | ------------ | -------------- | --------------- | --------------- | ---------- |\n| 688732123           | 150276391513.65  | 274310       | 2114896065     | 692053383457.39 | 23800571        | 274310     |\n\n\n<sub>\ud83e\udde0 Knowledge: 10 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2850 \u00b7 Session: 22,360</sub>",
+        "length_chars": 962
+      },
+      "performance": {
+        "total_time_ms": 5924,
+        "query_time_ms": 95,
+        "tokens": {
+          "prompt_tokens": 2611,
+          "completion_tokens": 239,
+          "total_tokens": 2850
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-04T11:24:50.042441",
+      "user_question": "data is not consistant, you're showing different answers for the same query for yarn. Mistakes like this should be avoided in all domains and you should be able to handle all these edge cases much better. Data formatting is not consistant.",
+      "success": true,
+      "execution_time_ms": 3,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 100,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData",
+        "tokens": {
+          "prompt_tokens": 2198,
+          "completion_tokens": 146,
+          "total_tokens": 2344
+        },
+        "raw_response": "{'result': \"```sql\\nSELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', SUM(BAGS) as 'Yarn Total Bags', COUNT(*) as 'Yarn Count' FROM YarnData\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 53, 'prompt_tokens': 2019, 'total_tokens': 2072, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CuO0UDWaZg2l2WWy5rjmrce373Av2', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b8a78-1b7b-7132-b3b4-5062315c12e3-0', usage_metadata={'input_tokens': 2019, 'output_tokens': 53, 'total_tokens': 2072, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 3
+      },
+      "response": {
+        "type": "data",
+        "text": "I understand your concern about data consistency, and I appreciate your feedback. In this case, we have a total of about 22.4 million pounds of yarn, which is valued at approximately 7.3 billion PKR, spread across around 250,000 bags. It's interesting to note the significant value per bag, indicating a potentially high-quality or specialty yarn being tracked here. If you have any specific queries or need further clarification, feel free to ask!\n\n---\n\n**Query Results** (1 rows)\n\n| Yarn Total LBS | Yarn Total PKR | Yarn Total Bags | Yarn Count |\n| -------------- | -------------- | --------------- | ---------- |\n| 22371100       | 7312972939.85  | 250473          | 2784       |\n\n\n<sub>\ud83e\udde0 Knowledge: 10 learned patterns \u00b7 1 training rules</sub>\n\n<sub>\ud83d\udd39 Tokens: 2344 \u00b7 Session: 24,704</sub>",
+        "length_chars": 793
+      },
+      "performance": {
+        "total_time_ms": 4231,
+        "query_time_ms": 3,
+        "tokens": {
+          "prompt_tokens": 2198,
+          "completion_tokens": 146,
+          "total_tokens": 2344
+        }
+      }
+    }
+  ],
+  "all_errors": [],
+  "training_events": [],
+  "recommendations": [
+    "\ud83d\udca1 No training events - consider adding training rules for better accuracy"
+  ]
+}
