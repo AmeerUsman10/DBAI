@@ -237,6 +237,9 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         # Track tokens for this response
         response_tokens = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         
+        # LOG: User question
+        logger.info(f"USER QUERY: {question}")
+        
         # Generate SQL
         sql_chain = make_sql_chain(current_llm, db)
         sql_response_obj = sql_chain({"question": question})
@@ -254,10 +257,28 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         else:
             sql_query = str(sql_response_obj)
         
+        # LOG: Raw LLM response before extraction
+        logger.debug(f"LLM RAW RESPONSE: {sql_query[:500]}")
+        
         sql_query = extract_sql_from_response(sql_query)
+        
+        # LOG: Extracted SQL query
+        logger.info(f"GENERATED SQL: {sql_query}")
         
         # Execute query
         success, result = run_query(sql_query)
+        
+        # LOG: Query execution result
+        if success:
+            if isinstance(result, dict) and 'rows' in result:
+                logger.info(f"QUERY SUCCESS: {len(result.get('rows', []))} rows returned")
+                # Log first few rows for debugging
+                if result.get('rows'):
+                    logger.debug(f"SAMPLE RESULTS: {result['rows'][:3]}")
+            else:
+                logger.info(f"QUERY SUCCESS: {result}")
+        else:
+            logger.error(f"QUERY FAILED: {result}")
         
         if success:
             # Format response with smart unit detection
@@ -365,6 +386,10 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
             session_tokens['total'] += response_tokens['total_tokens']
             
             response += f"\n\n<sub>🔹 Tokens: {response_tokens['total_tokens']} · Session: {session_tokens['total']:,}</sub>"
+        
+        # LOG: Final response sent to user
+        logger.info(f"RESPONSE SENT: {len(response)} chars | Success: {success} | Tokens: {response_tokens.get('total_tokens', 0)}")
+        logger.debug(f"RESPONSE PREVIEW: {response[:200]}")
         
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
@@ -841,14 +866,19 @@ Tell the AI exactly how to interpret your queries. These rules apply immediately
                         
                         def add_training(instruction):
                             """Add a quick training rule."""
+                            # LOG: User adding training rule
+                            logger.info(f"USER TRAINING: Adding rule - '{instruction[:100]}'")
+                            
                             success, msg = add_training_rule(instruction)
                             
                             if success:
+                                logger.info(f"TRAINING SUCCESS: Rule added - {msg}")
                                 # Get stats to show in message
                                 stats = get_training_stats()
                                 display_msg = f"{msg}\n\n🎉 **New training event!** This rule is now active."
                                 return display_msg, format_rules_display(), ""
                             else:
+                                logger.warning(f"TRAINING FAILED: {msg}")
                                 return f"❌ {msg}", format_rules_display(), instruction
                         
                         add_training_btn.click(

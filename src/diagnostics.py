@@ -102,6 +102,78 @@ def analyze_recent_logs(limit: int = 100) -> Dict:
     return analysis
 
 
+def get_session_transcript(lines: int = 100) -> str:
+    """
+    Get a clean session transcript showing user queries and system responses.
+    
+    Args:
+        lines: Number of recent log lines to analyze
+        
+    Returns:
+        Formatted transcript of the session
+    """
+    project_root = Path(__file__).parent.parent
+    log_path = project_root / "logs" / "diagnostics.log"
+    
+    if not log_path.exists():
+        return "No diagnostics log found"
+    
+    try:
+        with open(log_path, 'r') as f:
+            all_lines = f.readlines()
+            recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+        
+        transcript = []
+        transcript.append("=" * 80)
+        transcript.append("SESSION TRANSCRIPT")
+        transcript.append("=" * 80)
+        transcript.append("")
+        
+        for line in recent_lines:
+            line = line.strip()
+            
+            # Extract user queries
+            if "USER QUERY:" in line:
+                query = line.split("USER QUERY:", 1)[1].strip()
+                transcript.append(f"\n👤 USER: {query}")
+            
+            # Extract generated SQL
+            elif "GENERATED SQL:" in line:
+                sql = line.split("GENERATED SQL:", 1)[1].strip()
+                transcript.append(f"   🔧 SQL: {sql[:150]}{'...' if len(sql) > 150 else ''}")
+            
+            # Extract query results
+            elif "QUERY SUCCESS:" in line:
+                result = line.split("QUERY SUCCESS:", 1)[1].strip()
+                transcript.append(f"   ✅ {result}")
+            
+            elif "QUERY FAILED:" in line:
+                error = line.split("QUERY FAILED:", 1)[1].strip()
+                transcript.append(f"   ❌ ERROR: {error[:200]}")
+            
+            # Extract response info
+            elif "RESPONSE SENT:" in line:
+                info = line.split("RESPONSE SENT:", 1)[1].strip()
+                transcript.append(f"   📤 {info}")
+            
+            # Extract training events
+            elif "USER TRAINING:" in line:
+                training = line.split("USER TRAINING:", 1)[1].strip()
+                transcript.append(f"\n🎓 TRAINING: {training}")
+            
+            elif "TRAINING SUCCESS:" in line:
+                success = line.split("TRAINING SUCCESS:", 1)[1].strip()
+                transcript.append(f"   ✅ {success}")
+        
+        transcript.append("")
+        transcript.append("=" * 80)
+        
+        return "\n".join(transcript)
+    
+    except Exception as e:
+        return f"Error reading session transcript: {str(e)}"
+
+
 def get_recent_session_context(lines: int = 50) -> str:
     """
     Get recent session context in a human-readable format.
