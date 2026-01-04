@@ -155,7 +155,12 @@ def make_sql_chain(llm, db):
                     if table_data.get("common_queries"):
                         metadata_context += "  Common Patterns:\n"
                         for pattern in table_data["common_queries"]:
-                            metadata_context += f"    - \"{pattern['vague']}\" usually means: {pattern['interpretation']}\n"
+                            # Handle both old format (vague/interpretation) and new format (pattern/intent)
+                            if isinstance(pattern, dict):
+                                if 'vague' in pattern and 'interpretation' in pattern:
+                                    metadata_context += f"    - \"{pattern['vague']}\" usually means: {pattern['interpretation']}\n"
+                                elif 'pattern' in pattern and 'intent' in pattern:
+                                    metadata_context += f"    - \"{pattern['pattern']}\" usually means: {pattern['intent']}\n"
             
             # Build full prompt
             enhanced_template = f"""Given the database schema below, write a SQL Server query to answer the user's question.
