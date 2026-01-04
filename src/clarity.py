@@ -188,6 +188,10 @@ def generate_clarifications(query: str, vague_type: str = None) -> List[str]:
     Returns:
         List of 4 specific clarification options
     """
+    # Check vague_type first (highest priority)
+    if vague_type and vague_type in CLARIFICATION_TEMPLATES:
+        return CLARIFICATION_TEMPLATES[vague_type]
+    
     # Detect query context
     if re.search(r'supplier.*name', query):
         return CLARIFICATION_TEMPLATES['supplier_name']
