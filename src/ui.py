@@ -34,7 +34,7 @@ def load_config() -> dict:
             'database': {
                 'server': 'localhost',
                 'database': 'master',
-                'driver': 'ODBC Driver 17 for SQL Server',
+                'driver': 'ODBC Driver 18 for SQL Server',
                 'username': '',
                 'password': ''
             },
@@ -105,12 +105,13 @@ def chat_query(question: str, history: List) -> Tuple[str, List]:
         db = get_sql_database()
         if not db:
             response = "❌ Database not available. Please check your database settings."
-            history.append((question, response))
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": response})
             return "", history
         
         # Generate SQL
         sql_chain = make_sql_chain(current_llm, db)
-        sql_response = sql_chain.invoke({"question": question})
+        sql_response = sql_chain({"question": question})
         
         # Extract SQL from response
         if isinstance(sql_response, dict):
@@ -150,13 +151,15 @@ def chat_query(question: str, history: List) -> Tuple[str, List]:
         else:
             response = f"**Generated SQL:**\n```sql\n{sql_query}\n```\n\n❌ **Error:** {result}"
         
-        history.append((question, response))
+        history.append({"role": "user", "content": question})
+        history.append({"role": "assistant", "content": response})
         return "", history
         
     except Exception as e:
         logger.error(f"Chat query error: {e}", exc_info=True)
         response = f"❌ Error: {str(e)}"
-        history.append((question, response))
+        history.append({"role": "user", "content": question})
+        history.append({"role": "assistant", "content": response})
         return "", history
 
 # Settings Tab Functions
