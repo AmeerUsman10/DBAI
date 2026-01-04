@@ -320,14 +320,25 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
                 if 'columns' in result and 'rows' in result:
                     response += f"**Query Results** ({len(result['rows'])} rows)\n\n"
                     
+                    # Special handling for single aggregate results - format numbers directly in table
+                    is_single_aggregate = len(result['rows']) == 1 and len(result['columns']) == 1
+                    
                     # Create properly formatted table
                     if result['rows']:
+                        # For single aggregates, format the value with commas
+                        display_rows = result['rows']
+                        if is_single_aggregate:
+                            value = result['rows'][0][0]
+                            if isinstance(value, (int, float)):
+                                formatted_value = f"{value:,}"
+                                display_rows = [[formatted_value]]
+                        
                         # Calculate column widths for better alignment
                         col_widths = {}
                         for i, col in enumerate(result['columns']):
                             col_widths[i] = max(
                                 len(str(col)),
-                                max((len(str(row[i])) for row in result['rows'][:20]), default=0)
+                                max((len(str(row[i])) for row in display_rows[:20]), default=0)
                             )
                         
                         # Header
@@ -339,26 +350,12 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
                         response += "| " + " | ".join(separator_cells) + " |\n"
                         
                         # Rows (limit to 20)
-                        for row in result['rows'][:20]:
+                        for row in display_rows[:20]:
                             row_cells = [str(v).ljust(col_widths[i]) for i, v in enumerate(row)]
                             response += "| " + " | ".join(row_cells) + " |\n"
                         
                         if len(result['rows']) > 20:
                             response += f"\n*Showing 20 of {len(result['rows'])} rows*"
-                    
-                    # Special formatting for single aggregate results
-                    if len(result['rows']) == 1 and len(result['columns']) == 1:
-                        col_name = result['columns'][0]
-                        value = result['rows'][0][0]
-                        unit = get_column_unit(col_name)
-                        
-                        # Format with commas and unit
-                        if isinstance(value, (int, float)):
-                            formatted_value = f"{value:,}"
-                            if unit:
-                                response += f"\n\n### 📊 **{formatted_value} {unit}**\n"
-                            else:
-                                response += f"\n\n### 📊 **{formatted_value}**\n"
                 else:
                     response += f"**Result:** {result.get('message', 'Success')}"
             else:
