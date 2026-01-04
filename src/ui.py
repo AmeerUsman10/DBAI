@@ -4,6 +4,7 @@ Provides a multi-tab interface for chat, settings, training, data import, and di
 """
 import logging
 import os
+import json
 from typing import List, Optional, Tuple
 import gradio as gr
 import yaml
@@ -129,7 +130,7 @@ def save_config(config: dict) -> bool:
         return False
 
 # Chat Tab Functions
-def chat_query(question: str, history: List) -> Tuple[str, List]:
+def chat_query(question: str, history: List, persona: str = "default") -> Tuple[str, List]:
     """
     Process a natural language query and return SQL + results.
     
@@ -771,9 +772,13 @@ Add example queries to help the AI learn patterns.""")
                             examples_file = Path(__file__).parent.parent / "example_queries.json"
                             examples = []
                             if examples_file.exists():
-                                import json
-                                with open(examples_file, 'r') as f:
-                                    examples = json.load(f)
+                                try:
+                                    with open(examples_file, 'r') as f:
+                                        content = f.read().strip()
+                                        if content:
+                                            examples = json.loads(content)
+                                except json.JSONDecodeError:
+                                    examples = []
                             
                             examples.append({"question": question, "sql": sql})
                             
