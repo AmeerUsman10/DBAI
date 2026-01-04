@@ -4,7 +4,7 @@
 database:
   server: localhost
   database: your_database_name
-  driver: ODBC Driver 17 for SQL Server
+  driver: ODBC Driver 18 for SQL Server
   username: your_username
   password: your_password
 

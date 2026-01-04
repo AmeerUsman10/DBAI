@@ -125,8 +125,8 @@ def chat_query(question: str, history: List) -> Tuple[str, List]:
         success, result = run_query(sql_query)
         
         if success:
-            # Format response
-            response = f"**Generated SQL:**\n```sql\n{sql_query}\n```\n\n"
+            # Format response (SQL hidden, only show results)
+            response = ""
             
             if isinstance(result, dict):
                 if 'columns' in result and 'rows' in result:
@@ -149,7 +149,7 @@ def chat_query(question: str, history: List) -> Tuple[str, List]:
             else:
                 response += f"**Result:** {result}"
         else:
-            response = f"**Generated SQL:**\n```sql\n{sql_query}\n```\n\n❌ **Error:** {result}"
+            response = f"❌ **Error:** {result}"
         
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
@@ -437,19 +437,25 @@ def build_ui():
                     )
                     submit_btn = gr.Button("Submit", variant="primary", scale=1)
                 
-                clear_btn = gr.Button("Clear Chat")
+                with gr.Row():
+                    clear_btn = gr.Button("Clear Chat")
+                    stop_btn = gr.Button("⏹️ Stop", variant="stop")
                 
-                submit_btn.click(
+                # Store the current query event for cancellation
+                query_event = submit_btn.click(
                     chat_query,
                     inputs=[question_input, chatbot],
                     outputs=[question_input, chatbot]
                 )
                 
-                question_input.submit(
+                question_event = question_input.submit(
                     chat_query,
                     inputs=[question_input, chatbot],
                     outputs=[question_input, chatbot]
                 )
+                
+                # Stop button cancels the ongoing query
+                stop_btn.click(None, cancels=[query_event, question_event])
                 
                 clear_btn.click(lambda: [], outputs=chatbot)
             
@@ -487,12 +493,14 @@ def build_ui():
                     )
                 
                 gr.Markdown("### API Key Management")
+                gr.Markdown("*API key loaded from environment variable by default. Override here if needed.*")
                 
                 with gr.Row():
                     api_key_input = gr.Textbox(
-                        label="API Key",
+                        label="API Key (optional - uses env var if empty)",
                         type="password",
-                        placeholder="Enter your API key..."
+                        placeholder="Leave empty to use environment variable",
+                        value=""
                     )
                     save_key_btn = gr.Button("Save API Key")
                     test_btn = gr.Button("Test Connection")
@@ -565,64 +573,110 @@ def build_ui():
                     outputs=[model_dropdown]
                 )
             
-            # Train Tab (Demo)
+            # Train Tab - Interactive Q&A
             with gr.Tab("🎓 Train"):
-                gr.Markdown("## Training Module (Demo)")
-                gr.Markdown("This is a placeholder for future training functionality.")
-                
-                gr.Markdown("""
-                In a full implementation, this tab would allow you to:
-                - Save question-SQL-result triplets as training examples
-                - Fine-tune models on your specific database schema
-                - Review and edit training examples
-                - Export training data
-                """)
-                
-                demo_output = gr.Textbox(
-                    label="Demo Status",
-                    value="Training features coming soon!",
-                    interactive=False
-                )
-            
-            # Import Data Tab
-            with gr.Tab("📥 Import Data"):
-                gr.Markdown("## Import Excel Files to Database")
-                
-                file_upload = gr.File(
-                    label="Upload Excel Files (.xlsx, .xls)",
-                    file_count="multiple",
-                    file_types=[".xlsx", ".xls"]
-                )
+                gr.Markdown("## Interactive Database Training")
+                gr.Markdown("Teach the AI about your database by answering its questions.")
                 
                 with gr.Row():
-                    analyze_btn = gr.Button("Analyze Files", variant="primary")
-                    describe_btn = gr.Button("Describe with AI")
-                    import_btn = gr.Button("Import to Database")
+                    with gr.Column(scale=1):
+                        start_training_btn = gr.Button("Start Training Session", variant="primary", size="lg")
+                        stop_training_btn = gr.Button("Stop Training", variant="stop")
+                        
+                    with gr.Column(scale=2):
+                        training_progress = gr.Textbox(
+                            label="Progress",
+                            value="Click 'Start Training Session' to begin",
+                            interactive=False,
+                            lines=2
+                        )
                 
-                overwrite_checkbox = gr.Checkbox(
-                    label="Overwrite existing tables",
-                    value=False
+                ai_question = gr.Textbox(
+                    label="AI Question",
+                    placeholder="AI will ask questions about your database here...",
+                    interactive=False,
+                    lines=3
                 )
                 
-                output_display = gr.Markdown(label="Results")
-                
-                analyze_btn.click(
-                    analyze_files,
-                    inputs=[file_upload],
-                    outputs=[output_display]
+                user_answer = gr.Textbox(
+                    label="Your Answer",
+                    placeholder="Type your answer here...",
+                    lines=4
                 )
                 
-                describe_btn.click(
-                    describe_files_ai,
-                    inputs=[file_upload],
-                    outputs=[output_display]
+                submit_answer_btn = gr.Button("Submit Answer", variant="primary")
+                
+                training_history = gr.Textbox(
+                    label="Training History",
+                    lines=10,
+                    interactive=False
                 )
                 
-                import_btn.click(
-                    import_files_to_db,
-                    inputs=[file_upload, overwrite_checkbox],
-                    outputs=[output_display]
+                # Training functions
+                def start_training():
+                    questions = [
+                        "What is the main purpose of your database? What kind of data does it store?",
+                        "What are the most important tables in your database? List their names.",
+                        "Describe the relationships between your main tables. Which tables are connected and how?",
+                        "What are the common queries or questions users ask about this data?",
+                        "Are there any special business rules or constraints I should know about?"
+                    ]
+                    return questions[0], "Training started! Answer the questions below.", ""
+                
+                training_state = gr.State({"question_index": 0, "history": []})
+                
+                def submit_training_answer(answer, state):
+                    if not answer.strip():
+                        return gr.update(), gr.update(), gr.update()
+                    
+                    questions = [
+                        "What is the main purpose of your database? What kind of data does it store?",
+                        "What are the most important tables in your database? List their names.",
+                        "Describe the relationships between your main tables. Which tables are connected and how?",
+                        "What are the common queries or questions users ask about this data?",
+                        "Are there any special business rules or constraints I should know about?"
+                    ]
+                    
+                    current_idx = state.get("question_index", 0)
+                    history = state.get("history", [])
+                    
+                    # Save current Q&A
+                    history.append(f"Q{current_idx + 1}: {questions[current_idx]}\nA: {answer}\n")
+                    
+                    # Move to next question
+                    next_idx = current_idx + 1
+                    
+                    if next_idx < len(questions):
+                        next_question = questions[next_idx]
+                        progress = f"Question {next_idx + 1} of {len(questions)}"
+                        state["question_index"] = next_idx
+                        state["history"] = history
+                        return next_question, progress, "\n".join(history), state, ""
+                    else:
+                        # Training complete
+                        final_history = "\n".join(history)
+                        # Save to file
+                        try:
+                            from pathlib import Path
+                            training_file = Path("training_data.txt")
+                            with open(training_file, "w") as f:
+                                f.write(final_history)
+                        except:
+                            pass
+                        return "Training session complete! ✅", "Completed all questions. Training data saved.", final_history, {"question_index": 0, "history": []}, ""
+                
+                start_training_btn.click(
+                    start_training,
+                    outputs=[ai_question, training_progress, training_history]
                 )
+                
+                submit_answer_btn.click(
+                    submit_training_answer,
+                    inputs=[user_answer, training_state],
+                    outputs=[ai_question, training_progress, training_history, training_state, user_answer]
+                )
+            
+
             
             # Diagnostics Tab
             with gr.Tab("🔍 Diagnostics"):
