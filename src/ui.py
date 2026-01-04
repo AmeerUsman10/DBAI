@@ -260,8 +260,23 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         success, result = run_query(sql_query)
         
         if success:
-            # Format response (SQL hidden, only show results)
+            # Format response with smart unit detection
             response = ""
+            
+            # Try to detect column units from metadata
+            def get_column_unit(col_name):
+                """Get unit for a column from metadata."""
+                try:
+                    metadata = load_metadata()
+                    for table_name, table_data in metadata.get('tables', {}).items():
+                        columns = table_data.get('columns', table_data)
+                        if col_name in columns:
+                            col_info = columns[col_name]
+                            if isinstance(col_info, dict):
+                                return col_info.get('unit')
+                except:
+                    pass
+                return None
             
             if isinstance(result, dict):
                 if 'columns' in result and 'rows' in result:
@@ -292,6 +307,20 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
                         
                         if len(result['rows']) > 20:
                             response += f"\n*Showing 20 of {len(result['rows'])} rows*"
+                    
+                    # Special formatting for single aggregate results
+                    if len(result['rows']) == 1 and len(result['columns']) == 1:
+                        col_name = result['columns'][0]
+                        value = result['rows'][0][0]
+                        unit = get_column_unit(col_name)
+                        
+                        # Format with commas and unit
+                        if isinstance(value, (int, float)):
+                            formatted_value = f"{value:,}"
+                            if unit:
+                                response += f"\n\n### 📊 **{formatted_value} {unit}**\n"
+                            else:
+                                response += f"\n\n### 📊 **{formatted_value}**\n"
                 else:
                     response += f"**Result:** {result.get('message', 'Success')}"
             else:
@@ -1095,21 +1124,34 @@ These descriptions help the AI understand your data better.""")
                                 
                                 output = "### Trained Columns\n\n"
                                 
-                                for table_name, columns in metadata["tables"].items():
+                                for table_name, table_data in metadata["tables"].items():
                                     output += f"#### 📋 {table_name}\n\n"
                                     
+                                    # Handle both old format (columns as dict) and new format (description + columns)
+                                    columns = table_data if not isinstance(table_data.get('columns'), dict) else table_data.get('columns', {})
+                                    
                                     for col_name, col_data in columns.items():
-                                        output += f"**{col_name}** ({col_data.get('type', 'Unknown')})\n"
-                                        output += f"- *Description:* {col_data.get('description', 'N/A')}\n"
+                                        # Skip non-column metadata like 'description'
+                                        if col_name in ['description', 'business_terms', 'common_queries']:
+                                            continue
                                         
-                                        if col_data.get('unit'):
-                                            output += f"- *Unit:* {col_data.get('unit')}\n"
-                                        
-                                        if col_data.get('examples'):
-                                            examples_str = ', '.join(col_data['examples'][:3])
-                                            output += f"- *Examples:* {examples_str}\n"
-                                        
-                                        output += "\n"
+                                        # Handle both string and dict formats
+                                        if isinstance(col_data, str):
+                                            output += f"**{col_name}**\n"
+                                            output += f"- *Description:* {col_data}\n\n"
+                                        elif isinstance(col_data, dict):
+                                            col_type = col_data.get('type', 'Unknown')
+                                            output += f"**{col_name}** ({col_type})\n"
+                                            output += f"- *Description:* {col_data.get('description', 'N/A')}\n"
+                                            
+                                            if col_data.get('unit'):
+                                                output += f"- *Unit:* {col_data.get('unit')}\n"
+                                            
+                                            if col_data.get('examples'):
+                                                examples_str = ', '.join(str(ex) for ex in col_data['examples'][:3])
+                                                output += f"- *Examples:* {examples_str}\n"
+                                            
+                                            output += "\n"
                                     
                                     output += "---\n\n"
                                 
