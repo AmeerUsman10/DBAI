@@ -429,32 +429,62 @@ def build_ui():
             with gr.Tab("💬 Chat"):
                 chatbot = gr.Chatbot(height=400, label="Conversation")
                 
-                question_input = gr.Textbox(
-                    placeholder="Ask a question about your database...",
-                    label="Your Question"
-                )
+                with gr.Row():
+                    question_input = gr.Textbox(
+                        placeholder="Ask a question about your database...",
+                        label="Your Question"
+                    )
                 
                 with gr.Row():
-                    submit_btn = gr.Button("Send", variant="primary", scale=2)
-                    stop_btn = gr.Button("Stop", variant="stop", scale=1)
+                    send_stop_btn = gr.Button("▶ Send", variant="primary", scale=2)
+                    clear_btn = gr.Button("Clear Chat", size="sm", variant="secondary", scale=1)
                 
-                clear_btn = gr.Button("Clear Chat", size="sm", variant="secondary")
+                # Query event tracking
+                query_event = None
                 
-                # Store the current query event for cancellation
-                query_event = submit_btn.click(
+                def toggle_button_and_query(question, history, is_running):
+                    """Handle send/stop toggle and query execution"""
+                    if is_running:
+                        # Stop was clicked
+                        return history, question, False, gr.update(value="▶ Send", variant="primary")
+                    else:
+                        # Send was clicked
+                        return chat_query(question, history)
+                
+                def update_button_during_query():
+                    """Update button to Stop mode"""
+                    return gr.update(value="⏹ Stop", variant="stop"), True
+                
+                def update_button_after_query(result):
+                    """Update button back to Send mode"""
+                    return result[0], result[1], False, gr.update(value="▶ Send", variant="primary")
+                
+                is_running = gr.State(False)
+                
+                # Handle button click
+                send_stop_btn.click(
+                    update_button_during_query,
+                    outputs=[send_stop_btn, is_running]
+                ).then(
                     chat_query,
                     inputs=[question_input, chatbot],
                     outputs=[question_input, chatbot]
+                ).then(
+                    lambda: (False, gr.update(value="▶ Send", variant="primary")),
+                    outputs=[is_running, send_stop_btn]
                 )
                 
-                question_event = question_input.submit(
+                question_input.submit(
+                    update_button_during_query,
+                    outputs=[send_stop_btn, is_running]
+                ).then(
                     chat_query,
                     inputs=[question_input, chatbot],
                     outputs=[question_input, chatbot]
+                ).then(
+                    lambda: (False, gr.update(value="▶ Send", variant="primary")),
+                    outputs=[is_running, send_stop_btn]
                 )
-                
-                # Stop button cancels the ongoing query
-                stop_btn.click(None, cancels=[query_event, question_event])
                 
                 clear_btn.click(lambda: [], outputs=chatbot)
             
@@ -590,11 +620,13 @@ def build_ui():
                         label="Your Response",
                         scale=5
                     )
-                    send_training_btn = gr.Button("Send", variant="primary", scale=1)
+                
+                with gr.Row():
+                    train_send_stop_btn = gr.Button("▶ Send", variant="primary", scale=2)
+                    reset_training_btn = gr.Button("🔄 Reset Training", size="sm", variant="secondary", scale=1)
                 
                 with gr.Row():
                     view_knowledge_btn = gr.Button("📊 View Training Data", size="sm")
-                    reset_training_btn = gr.Button("🔄 Reset Training", size="sm", variant="secondary")
                     export_training_btn = gr.Button("💾 Export Knowledge", size="sm")
                 
                 knowledge_display = gr.Markdown(
@@ -640,7 +672,7 @@ def build_ui():
                             schema_info = "(Database schema unavailable)"
                     
                     # Build training prompt
-                    conversation_context = "\n".join([f"User: {h[0]}\nAI: {h[1]}" for h in history[:-1] if h[1] is not None])
+                    conversation_context = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history[:-1]])
                     
                     training_prompt = f"""You are an AI assistant helping to learn about a user's database. Your goal is to gather comprehensive information about:
 1. Database purpose and domain
@@ -789,17 +821,31 @@ Response:"""
                         logger.error(f"Export failed: {e}")
                         return gr.update(visible=False)
                 
-                # Event handlers
-                send_training_btn.click(
+                train_is_running = gr.State(False)
+                
+                # Event handlers with toggle button
+                train_send_stop_btn.click(
+                    lambda: (gr.update(value="⏹ Stop", variant="stop"), True),
+                    outputs=[train_send_stop_btn, train_is_running]
+                ).then(
                     process_training_response,
                     inputs=[training_input, training_chatbot, training_state],
                     outputs=[training_chatbot, training_input, training_state]
+                ).then(
+                    lambda: (False, gr.update(value="▶ Send", variant="primary")),
+                    outputs=[train_is_running, train_send_stop_btn]
                 )
                 
                 training_input.submit(
+                    lambda: (gr.update(value="⏹ Stop", variant="stop"), True),
+                    outputs=[train_send_stop_btn, train_is_running]
+                ).then(
                     process_training_response,
                     inputs=[training_input, training_chatbot, training_state],
                     outputs=[training_chatbot, training_input, training_state]
+                ).then(
+                    lambda: (False, gr.update(value="▶ Send", variant="primary")),
+                    outputs=[train_is_running, train_send_stop_btn]
                 )
                 
                 view_knowledge_btn.click(
