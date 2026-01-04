@@ -20,6 +20,7 @@ from src.diagnostics import collect_diagnostics
 from src.clarity import analyze_query_clarity, needs_clarification
 from src.learnings import save_learning, get_learning_stats
 from src.quick_training import add_training_rule, get_training_stats, format_rules_display
+from src.session_tracker import get_session_tracker, reset_session_tracker
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -28,6 +29,7 @@ load_dotenv()
 current_provider = None
 current_llm = None
 session_tokens = {"total": 0, "prompt": 0, "completion": 0}  # Token tracking
+session_tracker = get_session_tracker()  # Initialize session tracking
 pending_clarification = {"question": None, "options": [], "original_query": None}  # Clarification state
 last_query_info = {"question": None, "sql": None, "result": None}  # For corrections
 
