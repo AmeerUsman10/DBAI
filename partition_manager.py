@@ -26,7 +26,7 @@ class PartitionManager:
         """Initialize the Partition Manager."""
         self.partitions = []
         
-    def list_partitions(self) -> List[Dict[str, str]]:
+    def list_partitions(self) -> List[Dict[str, Any]]:
         """
         List all available partitions on the system.
         
@@ -91,7 +91,7 @@ class PartitionManager:
         self.partitions = partitions
         return partitions
     
-    def _get_mock_partitions(self) -> List[Dict[str, str]]:
+    def _get_mock_partitions(self) -> List[Dict[str, Any]]:
         """
         Generate mock partition data for demonstration purposes.
         
@@ -268,7 +268,7 @@ class PartitionManager:
             
         return result
     
-    def _find_partition(self, device: str) -> Optional[Dict[str, str]]:
+    def _find_partition(self, device: str) -> Optional[Dict[str, Any]]:
         """
         Find a partition by device path.
         
@@ -342,7 +342,7 @@ class PartitionManager:
         
         return int(number * multiplier)
     
-    def get_partition_info(self, device: str) -> Optional[Dict[str, str]]:
+    def get_partition_info(self, device: str) -> Optional[Dict[str, Any]]:
         """
         Get detailed information about a specific partition.
         
@@ -391,7 +391,7 @@ class PartitionManager:
         }
 
 
-def print_partition_table(partitions: List[Dict[str, str]]) -> None:
+def print_partition_table(partitions: List[Dict[str, Any]]) -> None:
     """
     Print partitions in a formatted table.
     
