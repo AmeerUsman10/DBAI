@@ -16,7 +16,7 @@ import os
 import sys
 import subprocess
 import re
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 
 
 class PartitionManager:
@@ -122,7 +122,7 @@ class PartitionManager:
             }
         ]
     
-    def extend_partition(self, device: str, size: str, dry_run: bool = True) -> Dict[str, any]:
+    def extend_partition(self, device: str, size: str, dry_run: bool = True) -> Dict[str, Any]:
         """
         Extend a partition by the specified size.
         
@@ -166,7 +166,7 @@ class PartitionManager:
             
         return result
     
-    def shrink_partition(self, device: str, size: str, dry_run: bool = True) -> Dict[str, any]:
+    def shrink_partition(self, device: str, size: str, dry_run: bool = True) -> Dict[str, Any]:
         """
         Shrink a partition by the specified size.
         
@@ -217,7 +217,7 @@ class PartitionManager:
             
         return result
     
-    def resize_partition(self, device: str, new_size: str, dry_run: bool = True) -> Dict[str, any]:
+    def resize_partition(self, device: str, new_size: str, dry_run: bool = True) -> Dict[str, Any]:
         """
         Resize a partition to a specific size.
         
@@ -357,7 +357,7 @@ class PartitionManager:
             return partition.copy()
         return None
     
-    def calculate_free_space(self, device: str) -> Dict[str, any]:
+    def calculate_free_space(self, device: str) -> Dict[str, Any]:
         """
         Calculate free space on a partition.
         
