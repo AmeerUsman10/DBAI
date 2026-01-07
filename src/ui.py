@@ -20,7 +20,7 @@ from src.llm import make_sql_chain, make_presentation_chain, make_describe_chain
 from src.telemetry import TelemetryLogger
 from src.uploader import process_excel_files, check_table_exists, import_dataframe_to_db
 from src.trainer import save_training_example
-from src.diagnostics import collect_diagnostics
+from src.diagnostics import collect_diagnostics, collect_full_session_bundle
 from src.clarity import analyze_query_clarity, needs_clarification
 from src.learnings import save_learning, get_learning_stats
 from src.quick_training import add_training_rule, get_training_stats, format_rules_display, update_rule, delete_rule, load_training_rules
@@ -1439,13 +1439,18 @@ def import_files_to_db(files: List, overwrite: bool) -> str:
 
 # Diagnostics Tab Functions
 def collect_and_download_diagnostics() -> Optional[str]:
-    """Collect diagnostics and return file path for download."""
+    """Collect next-level diagnostics bundle and return zip path for download."""
     try:
-        diag_file = collect_diagnostics()
-        return diag_file
+        # Create full bundle with sensitive fields included per user request
+        bundle_path = collect_full_session_bundle(include_sensitive=True)
+        return bundle_path
     except Exception as e:
         logger.error(f"Diagnostics collection error: {e}", exc_info=True)
-        return None
+        # Fallback to basic text report
+        try:
+            return collect_diagnostics()
+        except Exception:
+            return None
 
 # Build UI
 def build_ui():
