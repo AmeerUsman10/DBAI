@@ -25,6 +25,19 @@ from src.quick_training import add_training_rule, get_training_stats, format_rul
 from src.session_tracker import get_session_tracker, reset_session_tracker
 from src.query_classifier import classify_query, needs_movement_clarification, get_clarification_for_classification
 from src.query_templates import generate_sql_from_template
+from src.query_optimizer import (
+    cache_query_result, get_cached_result, cache_sql_generation, get_cached_sql,
+    get_cache_stats, clear_expired_cache, clear_all_cache
+)
+from src.custom_personas import (
+    load_custom_personas, save_custom_persona, delete_custom_persona,
+    get_custom_persona, list_custom_personas, update_persona_stats,
+    get_persona_effectiveness_ranking, generate_persona_prompt
+)
+from src.bookmarks import (
+    load_bookmarks, save_bookmark, get_bookmark, update_bookmark_usage,
+    delete_bookmark, get_bookmarks_by_folder, get_most_used_bookmarks, search_bookmarks
+)
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -96,6 +109,24 @@ def save_system_instructions(instructions: str) -> Tuple[bool, str]:
     except Exception as e:
         logger.error(f"Error saving system instructions: {e}")
         return False, f"❌ Error: {str(e)}"
+
+
+def get_all_personas() -> list:
+    """Get all available personas (built-in + custom)."""
+    try:
+        # Start with built-in personas
+        personas = [(p["name"], k) for k, p in PERSONAS.items()]
+        
+        # Add custom personas
+        custom = list_custom_personas()
+        for cp in custom:
+            personas.append((f"🎭 {cp['name']}", cp['id']))
+        
+        return personas
+    except Exception as e:
+        logger.error(f"Error loading personas: {e}")
+        return [(p["name"], k) for k, p in PERSONAS.items()]
+
 
 def load_config() -> dict:
     """Load configuration from config.yaml."""
@@ -307,6 +338,25 @@ def is_conversational_query(question: str, last_question: str = None) -> bool:
     
     return False
 
+
+def format_result_as_table(rows, columns):
+    """Format query result as markdown table."""
+    if not rows or not columns:
+        return "No results found."
+    
+    # Create markdown table
+    table = "| " + " | ".join(columns) + " |\n"
+    table += "| " + " | ".join(["---"] * len(columns)) + " |\n"
+    
+    for row in rows[:100]:  # Limit to 100 rows for display
+        table += "| " + " | ".join(str(val) if val is not None else "" for val in row) + " |\n"
+    
+    if len(rows) > 100:
+        table += f"\n*Showing first 100 of {len(rows)} results*"
+    
+    return table
+
+
 def chat_query(question: str, history: List, persona: str = "default") -> Tuple[str, List]:
     """
     Process a natural language query with clarity checking and learning.
@@ -475,6 +525,36 @@ Your response:"""
         
         # LOG: User question
         logger.info(f"USER QUERY: {question}")
+        
+        # CHECK CACHE FIRST - Skip for faster responses and token savings
+        cached_result = get_cached_result(question, fuzzy_match=True)
+        if cached_result:
+            sql_query, result, cache_metadata = cached_result
+            logger.info(f"⚡ CACHE HIT! Skipping SQL generation and execution")
+            
+            # Format cached result
+            if result and 'rows' in result and 'columns' in result:
+                response = f"### Query Result (from cache)\n\n"
+                response += format_result_as_table(result['rows'], result['columns'])
+                response += f"\n\n<sub>⚡ Loaded from cache · 0 tokens used · Saved {cache_metadata.get('tokens_saved', 50)} tokens</sub>"
+            else:
+                response = str(result)
+                response += "\n\n<sub>⚡ Loaded from cache · 0 tokens used</sub>"
+            
+            # Track cache hit
+            session_tracker.track_query(
+                user_question=question,
+                clarity_analysis=None,
+                llm_interaction={"provider": "cache", "type": "cache_hit", "tokens": {"total_tokens": 0}},
+                execution={"method": "cache", "success": True},
+                response={"type": "cached", "text": response},
+                performance={"total_time_ms": int((time.time() - start_time) * 1000), "tokens": {"total_tokens": 0}},
+                error=None
+            )
+            
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": response})
+            return "", history
         
         # HYBRID APPROACH: Try template-based generation first
         # (classification already done before clarity check)
@@ -773,6 +853,24 @@ Keep it concise and factual."""
         # LOG: Final response sent to user
         logger.info(f"RESPONSE SENT: {len(response)} chars | Success: {success} | Tokens: {response_tokens.get('total_tokens', 0)}")
         logger.debug(f"RESPONSE PREVIEW: {response[:200]}")
+        
+        # CACHE SUCCESSFUL QUERIES for future reuse
+        if success and result:
+            try:
+                cache_query_result(
+                    question=question,
+                    sql=sql_query,
+                    result=result,
+                    metadata={
+                        "generation_method": generation_method,
+                        "tokens_used": response_tokens.get('total_tokens', 0),
+                        "tokens_saved": response_tokens.get('total_tokens', 50),  # Estimated savings on reuse
+                        "execution_time_ms": execution_data.get("execution_time_ms", 0) if execution_data else 0
+                    }
+                )
+                logger.info(f"💾 Cached query result for future reuse")
+            except Exception as e:
+                logger.warning(f"Failed to cache result: {e}")
         
         # Save last query info for live training mode corrections
         last_query_info = {
@@ -1127,7 +1225,7 @@ def build_ui():
             with gr.Tab("💬 Chat"):
                 with gr.Row():
                     persona_selector = gr.Dropdown(
-                        choices=[(p["name"], k) for k, p in PERSONAS.items()],
+                        choices=get_all_personas(),
                         value="default",
                         label="🎭 Persona",
                         scale=1
@@ -1950,6 +2048,224 @@ Generate the examples now:"""
                             generate_example_queries,
                             outputs=[examples_output]
                         )
+                    
+                    # Training Analytics Sub-tab
+                    with gr.Tab("📈 Training Analytics"):
+                        gr.Markdown("## 🎓 Learning Performance Dashboard")
+                        gr.Markdown("Analyze the effectiveness of your training rules and query learnings.")
+                        
+                        analytics_display = gr.Markdown("Loading analytics...")
+                        refresh_analytics_btn = gr.Button("🔄 Refresh Analytics", variant="primary")
+                        
+                        gr.Markdown("---")
+                        gr.Markdown("### 💰 Token Cost Savings")
+                        cost_savings = gr.Markdown()
+                        
+                        gr.Markdown("### 🏆 Top Performing Rules")
+                        rule_ranking = gr.Markdown()
+                        
+                        def show_training_analytics():
+                            """Display comprehensive training analytics."""
+                            try:
+                                from src.learnings import get_learning_stats, load_learnings
+                                from src.quick_training import get_training_stats
+                                
+                                learning_stats = get_learning_stats()
+                                training_stats = get_training_stats()
+                                
+                                # Build analytics dashboard
+                                output = "## 📊 Learning System Performance\n\n"
+                                output += f"**Total Query Patterns Learned:** {learning_stats['total']}\n\n"
+                                output += f"**Successful Patterns:** {learning_stats['successful']}\n\n"
+                                output += f"**Total Queries Processed:** {learning_stats['total_queries']}\n\n"
+                                
+                                if learning_stats['most_used']:
+                                    mu = learning_stats['most_used']
+                                    output += f"\n### 🔥 Most Popular Pattern\n"
+                                    output += f"**Query:** {mu['original_query']}\n\n"
+                                    output += f"**Clarified As:** {mu['clarified_query']}\n\n"
+                                    output += f"**Usage Count:** {mu.get('usage_count', 0)} times\n\n"
+                                
+                                output += "\n---\n\n"
+                                output += "## 🎯 Quick Training Rules\n\n"
+                                output += f"**Total Rules:** {training_stats['total']}\n\n"
+                                output += f"**Last Updated:** {training_stats['last_updated'] or 'Never'}\n\n"
+                                
+                                # Cost savings calculation
+                                # Estimate: each learned pattern saves ~50 tokens on average
+                                tokens_saved = learning_stats['successful'] * 50
+                                cost_per_1k_tokens = 0.002  # $0.002 per 1K tokens (gpt-4o-mini)
+                                estimated_savings = (tokens_saved / 1000) * cost_per_1k_tokens
+                                
+                                savings_output = f"### 💵 Estimated Token Savings\n\n"
+                                savings_output += f"**Tokens Saved by Learnings:** ~{tokens_saved:,} tokens\n\n"
+                                savings_output += f"**Estimated Cost Savings:** ${estimated_savings:.4f}\n\n"
+                                savings_output += f"*Based on {learning_stats['successful']} successful patterns averaging 50 tokens each*\n"
+                                
+                                # Rule ranking (simplified - just show count)
+                                ranking_output = f"### 📋 Training Rules Impact\n\n"
+                                ranking_output += f"Your {training_stats['total']} training rules are actively guiding the AI.\n\n"
+                                ranking_output += f"*Detailed per-rule analytics coming in next update*\n"
+                                
+                                return output, savings_output, ranking_output
+                                
+                            except Exception as e:
+                                logger.error(f"Analytics error: {e}", exc_info=True)
+                                return f"❌ Error: {str(e)}", "", ""
+                        
+                        refresh_analytics_btn.click(
+                            show_training_analytics,
+                            outputs=[analytics_display, cost_savings, rule_ranking]
+                        )
+                        
+                        # Load on tab open
+                        demo.load(show_training_analytics, outputs=[analytics_display, cost_savings, rule_ranking])
+                    
+                    # Custom Personas Sub-tab
+                    with gr.Tab("🎭 Custom Personas"):
+                        gr.Markdown("## Create Custom AI Personas")
+                        gr.Markdown("Design specialized AI assistants with unique characteristics and domain expertise.")
+                        
+                        with gr.Row():
+                            with gr.Column(scale=1):
+                                gr.Markdown("### ➕ Create New Persona")
+                                
+                                persona_id_input = gr.Textbox(label="Persona ID", placeholder="e.g., logistics_expert", info="Unique identifier (no spaces)")
+                                persona_name_input = gr.Textbox(label="Display Name", placeholder="e.g., Logistics Expert")
+                                persona_desc_input = gr.Textbox(label="Description", placeholder="What makes this persona unique?", lines=2)
+                                
+                                persona_tone = gr.Dropdown(
+                                    choices=["friendly", "professional", "technical"],
+                                    value="professional",
+                                    label="Communication Tone"
+                                )
+                                
+                                persona_complexity = gr.Dropdown(
+                                    choices=["simple", "balanced", "detailed"],
+                                    value="balanced",
+                                    label="Response Complexity"
+                                )
+                                
+                                persona_domain = gr.Dropdown(
+                                    choices=["general", "finance", "logistics", "retail", "manufacturing"],
+                                    value="general",
+                                    label="Domain Expertise"
+                                )
+                                
+                                persona_instructions = gr.Textbox(
+                                    label="Custom Instructions",
+                                    placeholder="Additional guidance for this persona...",
+                                    lines=4
+                                )
+                                
+                                save_persona_btn = gr.Button("💾 Save Persona", variant="primary")
+                                persona_status = gr.Markdown("")
+                            
+                            with gr.Column(scale=1):
+                                gr.Markdown("### 📊 Persona Performance")
+                                
+                                persona_list_display = gr.Markdown("Loading personas...")
+                                refresh_personas_btn = gr.Button("🔄 Refresh List", size="sm")
+                                
+                                gr.Markdown("---")
+                                gr.Markdown("### 🏆 Effectiveness Ranking")
+                                persona_ranking = gr.Markdown()
+                        
+                        def save_new_persona(pid, name, desc, tone, complexity, domain, instructions):
+                            """Save a custom persona."""
+                            try:
+                                if not pid or not name:
+                                    return "❌ Persona ID and Name are required"
+                                
+                                # Validate ID (no spaces)
+                                if ' ' in pid:
+                                    return "❌ Persona ID cannot contain spaces"
+                                
+                                success = save_custom_persona(
+                                    persona_id=pid,
+                                    name=name,
+                                    description=desc,
+                                    tone=tone,
+                                    complexity=complexity,
+                                    domain_expertise=domain,
+                                    custom_instructions=instructions
+                                )
+                                
+                                if success:
+                                    return f"✅ Persona '{name}' saved successfully!\n\nYou can now select it from the persona dropdown in the Chat tab."
+                                else:
+                                    return "❌ Failed to save persona"
+                                    
+                            except Exception as e:
+                                logger.error(f"Persona save error: {e}")
+                                return f"❌ Error: {str(e)}"
+                        
+                        def list_personas_display():
+                            """Display all custom personas."""
+                            try:
+                                personas = list_custom_personas()
+                                
+                                if not personas:
+                                    return "No custom personas created yet.\n\nCreate your first persona using the form on the left!"
+                                
+                                output = f"### 📋 Custom Personas ({len(personas)})\n\n"
+                                
+                                for p in personas:
+                                    stats = p.get('stats', {})
+                                    total_queries = stats.get('total_queries', 0)
+                                    success_rate = 0
+                                    if total_queries > 0:
+                                        success_rate = (stats.get('successful_queries', 0) / total_queries) * 100
+                                    
+                                    output += f"#### {p['name']}\n"
+                                    output += f"**ID:** `{p['id']}`\n\n"
+                                    output += f"**Tone:** {p['tone']} | **Complexity:** {p['complexity']} | **Domain:** {p['domain_expertise']}\n\n"
+                                    output += f"**Usage:** {total_queries} queries | **Success Rate:** {success_rate:.1f}%\n\n"
+                                    output += f"---\n\n"
+                                
+                                return output
+                                
+                            except Exception as e:
+                                logger.error(f"Persona list error: {e}")
+                                return f"❌ Error: {str(e)}"
+                        
+                        def show_persona_ranking():
+                            """Show personas ranked by effectiveness."""
+                            try:
+                                ranking = get_persona_effectiveness_ranking()
+                                
+                                if not ranking:
+                                    return "No usage data yet for custom personas."
+                                
+                                output = "### 🏆 Top Performing Personas\n\n"
+                                
+                                for i, p in enumerate(ranking[:5], 1):
+                                    output += f"**{i}. {p['name']}**\n"
+                                    output += f"   Success Rate: {p['success_rate']:.1f}% | "
+                                    output += f"Queries: {p['total_queries']} | "
+                                    output += f"Avg Tokens: {p['avg_tokens']:.0f}\n\n"
+                                
+                                return output
+                                
+                            except Exception as e:
+                                logger.error(f"Ranking error: {e}")
+                                return f"❌ Error: {str(e)}"
+                        
+                        save_persona_btn.click(
+                            save_new_persona,
+                            inputs=[persona_id_input, persona_name_input, persona_desc_input,
+                                   persona_tone, persona_complexity, persona_domain, persona_instructions],
+                            outputs=[persona_status]
+                        )
+                        
+                        refresh_personas_btn.click(
+                            list_personas_display,
+                            outputs=[persona_list_display]
+                        )
+                        
+                        # Load on page open
+                        demo.load(list_personas_display, outputs=[persona_list_display])
+                        demo.load(show_persona_ranking, outputs=[persona_ranking])
             
             # Developer Tools Tab (NEW)
             with gr.Tab("🔬 Developer Tools"):
@@ -1994,6 +2310,66 @@ Generate the examples now:"""
                                 return f"❌ Error: {str(e)}"
                         
                         refresh_summary_btn.click(get_current_session_summary, outputs=[session_summary])
+                        
+                        # Cache Statistics Section
+                        gr.Markdown("---")
+                        gr.Markdown("### ⚡ Query Cache Performance")
+                        cache_stats_display = gr.Markdown("Loading cache stats...")
+                        refresh_cache_btn = gr.Button("🔄 Refresh Cache Stats", size="sm")
+                        clear_cache_btn = gr.Button("🗑️ Clear All Cache", size="sm", variant="stop")
+                        cache_action_status = gr.Markdown("")
+                        
+                        def show_cache_stats():
+                            """Display cache performance statistics."""
+                            try:
+                                stats = get_cache_stats()
+                                
+                                result_cache = stats.get('result_cache', {})
+                                sql_cache = stats.get('sql_cache', {})
+                                cache_size = stats.get('cache_size_mb', 0)
+                                
+                                output = "#### 💾 Result Cache\n"
+                                output += f"**Cached Queries:** {result_cache.get('total_entries', 0)}\n\n"
+                                output += f"**Cache Hits:** {result_cache.get('total_hits', 0)}\n\n"
+                                
+                                if result_cache.get('most_popular'):
+                                    output += f"**Most Popular:** {result_cache['most_popular'][:50]}... ({result_cache.get('most_popular_hits', 0)} hits)\n\n"
+                                
+                                output += "\n#### 🔤 SQL Cache\n"
+                                output += f"**Cached SQL Queries:** {sql_cache.get('total_entries', 0)}\n\n"
+                                output += f"**Reuse Count:** {sql_cache.get('total_reuses', 0)}\n\n"
+                                
+                                if sql_cache.get('most_reused'):
+                                    output += f"**Most Reused:** {sql_cache['most_reused'][:50]}... ({sql_cache.get('most_reused_count', 0)} reuses)\n\n"
+                                
+                                output += f"\n**Total Cache Size:** {cache_size:.2f} MB\n"
+                                
+                                # Calculate token savings estimate
+                                total_hits = result_cache.get('total_hits', 0) + sql_cache.get('total_reuses', 0)
+                                tokens_saved = total_hits * 50  # Estimate 50 tokens saved per hit
+                                cost_saved = (tokens_saved / 1000) * 0.002  # $0.002 per 1K tokens
+                                
+                                output += f"\n#### 💰 Savings\n"
+                                output += f"**Est. Tokens Saved:** ~{tokens_saved:,}\n\n"
+                                output += f"**Est. Cost Saved:** ${cost_saved:.4f}\n"
+                                
+                                return output
+                            except Exception as e:
+                                logger.error(f"Cache stats error: {e}")
+                                return f"❌ Error: {str(e)}"
+                        
+                        def clear_cache_action():
+                            """Clear all cached data."""
+                            try:
+                                success = clear_all_cache()
+                                if success:
+                                    return "✅ Cache cleared successfully!"
+                                return "❌ Failed to clear cache"
+                            except Exception as e:
+                                return f"❌ Error: {str(e)}"
+                        
+                        refresh_cache_btn.click(show_cache_stats, outputs=[cache_stats_display])
+                        clear_cache_btn.click(clear_cache_action, outputs=[cache_action_status])
                         
                         # Export button
                         gr.Markdown("---")
