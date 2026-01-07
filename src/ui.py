@@ -30,7 +30,7 @@ from src.query_templates import generate_sql_from_template
 from src.feedback import save_feedback, get_feedback_statistics, format_feedback_for_display, get_recent_feedback, format_recent_feedback, get_rule_suggestions
 
 # Version tracking - increment by 5 for each significant update
-UI_BUILD_VERSION = 10
+UI_BUILD_VERSION = 15
 from src.dev_notes import load_notes, save_notes, add_quick_note, get_notes_preview
 from src.query_optimizer import (
     cache_query_result, get_cached_result, cache_sql_generation, get_cached_sql,
@@ -1949,12 +1949,12 @@ def build_ui():
             
             # Train Tab - Premium UX
             with gr.Tab("🎓 Train"):
-                gr.Markdown("## 🚀 Test & Learn Training")
-                gr.Markdown("**Training with velocity.** Test a rule on real queries, see SQL improvements, then save with one click. Build adoption momentum.")
+                gr.Markdown("## 🚀 Training & Rules Management")
+                gr.Markdown("Test rules, manage governance, and configure domain context—all in one place.")
                 
                 with gr.Tabs():
-                    # Main: Test This Rule (NEW ADOPTION-FOCUSED)
-                    with gr.Tab("✅ Test This Rule"):
+                    # Workflow 1: Quick Train (Test + Quick Setup combined)
+                    with gr.Tab("⚡ Quick Train"):
                         gr.Markdown("""### Step 1: Enter Your Training Rule
 **Plain English:** Tell the AI how to interpret specific queries or terms.
 
@@ -2113,9 +2113,88 @@ Generate SQL Server query for this request, taking the training rule into accoun
                             lambda: ("", "", {}, "", "Discarded. Enter a new rule."),
                             outputs=[test_rule_input, test_sample_query, test_result_state, test_result_md, save_msg]
                         )
+                        
+                        # Quick Setup Section (integrated into Quick Train)
+                        gr.Markdown("---")
+                        gr.Markdown("### 🎯 Quick Industry Setup")
+                        gr.Markdown("Select your industry and common units for instant domain context generation.")
+                        
+                        with gr.Row():
+                            with gr.Column():
+                                gr.Markdown("**Industries**")
+                                setup_textile = gr.Checkbox(label="🧵 Textile/Fabric")
+                                setup_retail = gr.Checkbox(label="🛒 Retail/E-commerce")
+                                setup_manufacturing = gr.Checkbox(label="🏭 Manufacturing")
+                                setup_finance = gr.Checkbox(label="💰 Finance/Banking")
+                                setup_logistics = gr.Checkbox(label="🚚 Logistics/Supply Chain")
+                                setup_healthcare = gr.Checkbox(label="🏥 Healthcare")
+                                setup_foodbev = gr.Checkbox(label="🍔 Food & Beverage")
+                            
+                            with gr.Column():
+                                gr.Markdown("**Common Units**")
+                                unit_lbs = gr.Checkbox(label="LBS (Pounds)")
+                                unit_kg = gr.Checkbox(label="KG (Kilograms)")
+                                unit_meters = gr.Checkbox(label="Meters/Yards")
+                                unit_pkr = gr.Checkbox(label="PKR (Pakistani Rupee)")
+                                unit_usd = gr.Checkbox(label="USD (US Dollar)")
+                                unit_pieces = gr.Checkbox(label="Pieces/Units")
+                        
+                        quick_setup_btn = gr.Button("🚀 Generate Domain Instructions", variant="secondary", size="lg")
+                        quick_setup_status = gr.Markdown("")
+                        
+                        def generate_quick_setup(textile, retail, manuf, finance, logistics, healthcare, foodbev,
+                                                lbs, kg, meters, pkr, usd, pieces):
+                            """Generate system instructions from checkboxes."""
+                            industries = []
+                            if textile: industries.append("textile/fabric manufacturing")
+                            if retail: industries.append("retail/e-commerce")
+                            if manuf: industries.append("general manufacturing")
+                            if finance: industries.append("finance/banking")
+                            if logistics: industries.append("logistics/supply chain")
+                            if healthcare: industries.append("healthcare")
+                            if foodbev: industries.append("food & beverage")
+                            
+                            units = []
+                            if lbs: units.append("LBS (pounds)")
+                            if kg: units.append("KG (kilograms)")
+                            if meters: units.append("meters/yards for length")
+                            if pkr: units.append("PKR (Pakistani Rupee)")
+                            if usd: units.append("USD (US Dollar)")
+                            if pieces: units.append("pieces/units for counts")
+                            
+                            if not industries:
+                                return "⚠️ Select at least one industry."
+                            
+                            instructions = f"# Domain Context\n\n"
+                            instructions += f"This database supports {', '.join(industries)}.\n\n"
+                            
+                            if units:
+                                instructions += f"## Common Units\n"
+                                for u in units:
+                                    instructions += f"- {u}\n"
+                                instructions += "\n"
+                            
+                            instructions += "## Guidelines\n"
+                            instructions += "- Use domain-specific terminology\n"
+                            instructions += "- Prefer relevant metrics and KPIs\n"
+                            instructions += "- Consider industry-standard calculations\n"
+                            
+                            try:
+                                save_system_instructions(instructions)
+                                return f"✅ **Domain Instructions Generated**\n\n```\n{instructions}\n```\n\nSaved to system instructions."
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+                        
+                        quick_setup_btn.click(
+                            generate_quick_setup,
+                            inputs=[setup_textile, setup_retail, setup_manufacturing, setup_finance, 
+                                   setup_logistics, setup_healthcare, setup_foodbev,
+                                   unit_lbs, unit_kg, unit_meters, unit_pkr, unit_usd, unit_pieces],
+                            outputs=[quick_setup_status]
+                        )
                     
-                    # Rule Impact Dashboard (shows which rules help)
-                    with gr.Tab("📊 Rule Impact"):
+                    # Workflow 2: Manage Rules (Impact + Governance + Suggestions + Analytics combined)
+                    with gr.Tab("📋 Manage Rules"):
                         gr.Markdown("""### Which Rules Actually Help?
 See which rules have the most impact on your queries. Ranked by real usage.
 """)
@@ -2175,518 +2254,30 @@ See which rules have the most impact on your queries. Ranked by real usage.
                         
                         refresh_impact_btn.click(show_rule_impact, outputs=[impact_display])
                         demo.load(show_rule_impact, outputs=[impact_display])
-                    
-                    # Quick Setup (one-click domain context)
-                    with gr.Tab("⚙️ Quick Setup"):
-                        gr.Markdown("""### One-Click Domain Context
-Select your industry and units. We'll auto-populate domain instructions for faster training.
-""")
                         
-                        gr.Markdown("### Industry Type")
-                        industry_selector = gr.Checkboxgroup(
-                            choices=[
-                                "🏭 Textile Manufacturing",
-                                "📊 Retail & Inventory",
-                                "🏭 General Manufacturing",
-                                "💼 Finance & Accounting",
-                                "📦 Logistics & Shipping",
-                                "🏥 Healthcare",
-                                "🍽️ Food & Beverage"
-                            ],
-                            label="Select your industry",
-                            value=[]
-                        )
-                        
-                        gr.Markdown("### Common Units")
-                        units_selector = gr.Checkboxgroup(
-                            choices=[
-                                "LBS (Pounds)",
-                                "KG (Kilograms)",
-                                "Meters",
-                                "Feet",
-                                "Inches",
-                                "PKR (Pakistani Rupees)",
-                                "USD ($)",
-                                "Units/Pieces"
-                            ],
-                            label="Select units used in your data",
-                            value=[]
-                        )
-                        
-                        with gr.Row():
-                            generate_instructions_btn = gr.Button("🔧 Generate Instructions", variant="primary")
-                            clear_setup_btn = gr.Button("🔄 Clear", variant="secondary")
-                        
-                        setup_msg = gr.Markdown("")
-                        
-                        def generate_quick_setup(industries, units):
-                            if not industries and not units:
-                                return "❌ Select at least one industry or unit type"
-                            
-                            try:
-                                instructions = "# Auto-Generated Domain Context\n\n"
-                                
-                                if industries:
-                                    instructions += "## Industry Context\n"
-                                    for ind in industries:
-                                        if "Textile" in ind:
-                                            instructions += """- **Textile Manufacturing Database**
-  - Main entities: Suppliers, Fabrics (Greige & Finished), Yarn, Stock, Orders
-  - Key metrics: Meters, LBS, bags, PKR
-  - Common queries: Supplier inventory, greige received, yarn stock levels, order status
-  
-"""
-                                        elif "Retail" in ind:
-                                            instructions += """- **Retail & Inventory System**
-  - Tracks: Products, stock levels, suppliers, sales
-  - Metrics: Units, inventory value, reorder points
-  
-"""
-                                        elif "Manufacturing" in ind:
-                                            instructions += """- **Manufacturing Database**
-  - Tracks: Production, raw materials, finished goods, quality control
-  - Key focus: Batch tracking, defect rates, production efficiency
-  
-"""
-                                
-                                if units:
-                                    instructions += "## Unit Conventions\n"
-                                    for unit in units:
-                                        instructions += f"- {unit}\n"
-                                    instructions += "\n**Note:** Always convert units consistently in responses.\n"
-                                
-                                # Save to system instructions
-                                success, msg = save_system_instructions(instructions)
-                                
-                                return f"✅ {msg}\n\nDomain context saved! Your AI will now use this when interpreting queries."
-                            except Exception as e:
-                                return f"❌ Error: {e}"
-                        
-                        generate_instructions_btn.click(
-                            generate_quick_setup,
-                            inputs=[industry_selector, units_selector],
-                            outputs=[setup_msg]
-                        )
-                        
-                        clear_setup_btn.click(
-                            lambda: ("", ""),
-                            outputs=[industry_selector, units_selector]
-                        )
-                    
-                    # Advanced: Domain Context (customization for power users)
-                    with gr.Tab("🏢 Domain Context (Advanced)"):
-                        
-                        instructions_input = gr.Textbox(
-                            label="System Instructions",
-                            placeholder="""Example:
-This is a textile manufacturing database with the following main tables:
-- GreigeData: Contains information about greige fabric suppliers and inventory
-- YarnData: Tracks yarn suppliers, types, and stock levels
-- Orders: Customer orders and delivery tracking
-
-Key business rules:
-- Minimum stock level for yarn is 1000 kg
-- Greige fabric lead time is 30 days
-- Priority customers get 20% discount""",
-                            lines=15,
-                            value=load_system_instructions()
-                        )
-                        
-                        with gr.Row():
-                            save_instructions_btn = gr.Button("💾 Save Instructions", variant="primary")
-                            clear_instructions_btn = gr.Button("🗑️ Clear", variant="secondary")
-                        
-                        instructions_status = gr.Markdown("")
-                        
-                        def save_instructions(text):
-                            success, msg = save_system_instructions(text)
-                            return msg
-                        
-                        save_instructions_btn.click(
-                            save_instructions,
-                            inputs=[instructions_input],
-                            outputs=[instructions_status]
-                        )
-                        
-                        clear_instructions_btn.click(
-                            lambda: ("", "Instructions cleared"),
-                            outputs=[instructions_input, instructions_status]
-                        )
-                    
-                    # Optional: Column Training Tab (keeping as power-user feature but commented)
-                    # Column Training feature removed for adoption phase
-
-                    with gr.Tab("🤖 AI Schema Analysis"):
-                        gr.Markdown("""### Automatic Schema Analysis
-Let the AI analyze your database schema and generate training data automatically.""")
-                        
-                        analyze_btn = gr.Button("🚀 Analyze Database Schema", variant="primary", size="lg")
-                        analysis_output = gr.Markdown("")
-                        
-                        def analyze_schema():
-                            """Analyze database schema automatically."""
-                            try:
-                                db = get_sql_database()
-                                if not db:
-                                    return "❌ Database not available"
-                                
-                                schema = db.get_table_info()
-                                
-                                # Use LLM to analyze schema
-                                global current_llm, current_provider
-                                if current_llm is None:
-                                    config = load_config()
-                                    llm_config = config.get('llm', {})
-                                    provider_name = llm_config.get('provider', 'openai')
-                                    model = llm_config.get('model', 'gpt-4o-mini')
-                                    current_provider = create_provider(provider_name)
-                                    current_llm = current_provider.get_llm(model, 0.3, 2000)
-                                
-                                prompt = f"""Analyze this database schema and provide:
-1. Overview of what this database is for
-2. Key tables and their purposes
-3. Important relationships between tables
-4. Common query patterns that would be useful
-5. Suggested system instructions for an AI assistant
-
-Schema:
-{schema}
-
-Provide a comprehensive analysis:"""
-                                
-                                response = current_llm.invoke(prompt)
-                                analysis = response.content if hasattr(response, 'content') else str(response)
-                                
-                                # Save as system instructions
-                                save_system_instructions(f"Auto-generated analysis:\n\n{analysis}")
-                                
-                                return f"## ✅ Analysis Complete\n\n{analysis}\n\n---\n\n*Analysis saved to system instructions.*"
-                                
-                            except Exception as e:
-                                logger.error(f"Schema analysis error: {e}", exc_info=True)
-                                return f"❌ Error: {str(e)}"
-                        
-                        analyze_btn.click(
-                            analyze_schema,
-                            outputs=[analysis_output]
-                        )
-                    
-                    # Example Queries Tab
-                    with gr.Tab("🤖 AI Examples"):
-                        gr.Markdown("""### Intelligent Query Generator
-Automatically generate relevant example queries by analyzing your database schema.""")
-                        
-                        generate_btn = gr.Button("🤖 Generate Example Queries", variant="primary", size="lg")
-                        examples_output = gr.Markdown("")
-                        
-                        def generate_example_queries():
-                            """Auto-generate example queries based on schema analysis."""
-                            try:
-                                db = get_sql_database()
-                                if not db:
-                                    return "❌ Database not available"
-                                
-                                schema = db.get_table_info()
-                                
-                                # Use LLM to generate example queries
-                                global current_llm, current_provider
-                                if current_llm is None:
-                                    config = load_config()
-                                    llm_config = config.get('llm', {})
-                                    provider_name = llm_config.get('provider', 'openai')
-                                    model = llm_config.get('model', 'gpt-4o-mini')
-                                    current_provider = create_provider(provider_name)
-                                    current_llm = current_provider.get_llm(model, 0.3, 2000)
-                                
-                                prompt = f"""Analyze this database schema and generate 8-10 practical example questions that users would commonly ask.
-
-Schema:
-{schema}
-
-For each question, provide:
-1. A natural language question
-2. The SQL Server query that answers it
-
-Format each example as:
-**Q: [Natural language question]**
-```sql
-[SQL Server query]
-```
-
-Focus on:
-- Common business queries (totals, counts, summaries)
-- Date-based analysis (monthly, yearly trends)
-- Comparisons and rankings
-- Aggregations by category
-- Inventory/stock queries
-- Supplier/vendor analysis
-
-Generate the examples now:"""
-                                
-                                response = current_llm.invoke(prompt)
-                                examples = response.content if hasattr(response, 'content') else str(response)
-                                
-                                # Save to file
-                                examples_file = Path(__file__).parent.parent / "auto_generated_examples.md"
-                                with open(examples_file, 'w') as f:
-                                    f.write(examples)
-                                
-                                return f"## ✅ Examples Generated\n\n{examples}\n\n---\n\n*Examples saved to auto_generated_examples.md*"
-                                
-                            except Exception as e:
-                                logger.error(f"Example generation error: {e}", exc_info=True)
-                                return f"❌ Error: {str(e)}"
-                        
-                        generate_btn.click(
-                            generate_example_queries,
-                            outputs=[examples_output]
-                        )
-                    
-                    # Training Analytics Sub-tab
-                    with gr.Tab("📈 Training Analytics"):
-                        gr.Markdown("## 🎓 Learning Performance Dashboard")
-                        gr.Markdown("Analyze the effectiveness of your training rules and query learnings.")
-                        
-                        analytics_display = gr.Markdown("Loading analytics...")
-                        refresh_analytics_btn = gr.Button("🔄 Refresh Analytics", variant="primary")
-                        consolidate_btn = gr.Button("🧹 Run Consolidation", variant="secondary")
-
+                        # Rule Governance section (integrated)
                         gr.Markdown("---")
-                        gr.Markdown("### 📦 Training Versioning")
-                        export_btn2 = gr.Button("📤 Export Training Snapshot", variant="secondary")
-                        export_path_md = gr.Markdown()
-                        import_file = gr.File(label="Import Training Snapshot", file_types=[".json"], type="filepath")
-                        import_btn = gr.Button("📥 Import", variant="secondary")
-                        import_status_md = gr.Markdown()
+                        gr.Markdown("### 🛡️ Rule Governance")
+                        gr.Markdown("Manage rule lifecycle: owner, priority, status, and conflict detection.")
                         
-                        gr.Markdown("---")
-                        gr.Markdown("### 💰 Token Cost Savings")
-                        cost_savings = gr.Markdown()
-                        
-                        gr.Markdown("### 🏆 Top Performing Rules")
-                        rule_ranking = gr.Markdown()
-                        
-                        def show_training_analytics():
-                            """Display comprehensive training analytics."""
-                            try:
-                                from src.learnings import get_learning_stats, load_learnings
-                                from src.quick_training import get_training_stats
-                                import json
-                                from pathlib import Path
-                                # Prefer SQLite audit stats if available
-                                blocked_count = 0
-                                cache_count = 0
-                                total_events = 0
-                                try:
-                                    from src.knowledge_store import get_audit_stats, init_store
-                                    init_store()
-                                    s = get_audit_stats()
-                                    blocked_count = s.get("blocked_count", 0)
-                                    cache_count = s.get("cache_count", 0)
-                                    total_events = s.get("total_events", 0)
-                                except Exception:
-                                    pass
-                                
-                                learning_stats = get_learning_stats()
-                                training_stats = get_training_stats()
-
-                                # Fallback to JSON if SQLite has no events
-                                if total_events == 0:
-                                    audit_path = Path(__file__).parent.parent / "logs" / "audit_events.json"
-                                    if audit_path.exists():
-                                        try:
-                                            with open(audit_path, 'r', encoding='utf-8') as f:
-                                                events = json.load(f)
-                                            total_events = len(events)
-                                            for ev in events:
-                                                if ev.get("safety_blocked"):
-                                                    blocked_count += 1
-                                                if ev.get("cache_hit"):
-                                                    cache_count += 1
-                                        except Exception:
-                                            pass
-                                
-                                # Build analytics dashboard
-                                output = "## 📊 Learning System Performance\n\n"
-                                output += f"**Total Query Patterns Learned:** {learning_stats['total']}\n\n"
-                                output += f"**Successful Patterns:** {learning_stats['successful']}\n\n"
-                                output += f"**Total Queries Processed:** {learning_stats['total_queries']}\n\n"
-                                output += "\n### 🔒 Safety & Cache\n"
-                                output += f"**Safety Blocks:** {blocked_count} | **Cache Hits:** {cache_count} | **Audited Events:** {total_events}\n\n"
-                                
-                                if learning_stats['most_used']:
-                                    mu = learning_stats['most_used']
-                                    output += f"\n### 🔥 Most Popular Pattern\n"
-                                    output += f"**Query:** {mu['original_query']}\n\n"
-                                    output += f"**Clarified As:** {mu['clarified_query']}\n\n"
-                                    output += f"**Usage Count:** {mu.get('usage_count', 0)} times\n\n"
-                                
-                                output += "\n---\n\n"
-                                output += "## 🎯 Quick Training Rules\n\n"
-                                output += f"**Total Rules:** {training_stats['total']}\n\n"
-                                output += f"**Last Updated:** {training_stats['last_updated'] or 'Never'}\n\n"
-                                
-                                # Cost savings calculation
-                                # Estimate: each learned pattern saves ~50 tokens on average
-                                tokens_saved = learning_stats['successful'] * 50
-                                cost_per_1k_tokens = 0.002  # $0.002 per 1K tokens (gpt-4o-mini)
-                                estimated_savings = (tokens_saved / 1000) * cost_per_1k_tokens
-                                
-                                savings_output = f"### 💵 Estimated Token Savings\n\n"
-                                savings_output += f"**Tokens Saved by Learnings:** ~{tokens_saved:,} tokens\n\n"
-                                savings_output += f"**Estimated Cost Savings:** ${estimated_savings:.4f}\n\n"
-                                savings_output += f"*Based on {learning_stats['successful']} successful patterns averaging 50 tokens each*\n"
-                                
-                                # Rule ranking (simplified - just show count)
-                                # Per-rule impact: top by usage_count among approved
-                                try:
-                                    from src.quick_training import load_training_rules
-                                    data = load_training_rules()
-                                    rules = data.get("rules", [])
-                                    approved = [r for r in rules if r.get("status","draft") == "approved"]
-                                    approved.sort(key=lambda r: int(r.get("usage_count", 0)), reverse=True)
-                                    top = approved[:5]
-                                    ranking_output = "### 📋 Training Rules Impact\n\n"
-                                    if not top:
-                                        ranking_output += "No approved rules yet. Approve rules to track impact.\n"
-                                    else:
-                                        for i, r in enumerate(top, 1):
-                                            instr = (r.get("instruction","") or "").strip()
-                                            ranking_output += (
-                                                f"**{i}.** {instr[:80]}\n- Usage: {int(r.get('usage_count',0))} · Priority: {r.get('priority',5)} · Owner: {r.get('owner','')}\n\n"
-                                            )
-                                except Exception:
-                                    ranking_output = "### 📋 Training Rules Impact\n\nUnable to load rule impact at this time."
-                                
-                                return output, savings_output, ranking_output
-                                
-                            except Exception as e:
-                                logger.error(f"Analytics error: {e}", exc_info=True)
-                                return f"❌ Error: {str(e)}", "", ""
-                        
-                        refresh_analytics_btn.click(
-                            show_training_analytics,
-                            outputs=[analytics_display, cost_savings, rule_ranking]
-                        )
-                        
-                        def _run_consolidation():
-                            try:
-                                from src.consolidation import consolidate_training
-                                ok, msg = consolidate_training()
-                                return msg if ok else f"❌ {msg}"
-                            except Exception as e:
-                                return f"❌ Error: {e}"
-
-                        consolidate_btn.click(_run_consolidation, outputs=[analytics_display])
-                        
-                        # Load on tab open
-                        demo.load(show_training_analytics, outputs=[analytics_display, cost_savings, rule_ranking])
-
-                        def _export_training():
-                            try:
-                                from src.training_io import export_training
-                                ok, path = export_training()
-                                return f"{'✅ Exported:' if ok else '❌ Failed:'} {path}"
-                            except Exception as e:
-                                return f"❌ Error: {e}"
-
-                        def _import_training(fp: str):
-                            if not fp:
-                                return "⚠️ Please select a file"
-                            try:
-                                from src.training_io import import_training
-                                ok, msg = import_training(fp)
-                                return f"{'✅' if ok else '❌'} {msg}"
-                            except Exception as e:
-                                return f"❌ Error: {e}"
-
-                        export_btn2.click(_export_training, outputs=[export_path_md])
-                        import_btn.click(_import_training, inputs=[import_file], outputs=[import_status_md])
-                    
-                    # Rule Suggestions Sub-tab (from feedback)
-                    with gr.Tab("🧩 Rule Suggestions"):
-                        gr.Markdown("## Suggested Training Rules")
-                        gr.Markdown("Generated automatically from negative feedback with comments. Approve to add as Quick Training rules.")
-
-                        suggestions_output = gr.Markdown(visible=True)
-                        suggestions_select = gr.Dropdown(label="Select a suggestion to approve", choices=[], allow_custom_value=True, interactive=True)
-                        approve_btn = gr.Button("✅ Approve & Add Rule", variant="primary")
-                        refresh_suggestions_btn = gr.Button("🔄 Refresh Suggestions")
-
-                        def _load_rule_suggestions():
-                            items = get_rule_suggestions(limit=50)
-                            if not items:
-                                return "No rule suggestions available yet.", []
-                            # Build display markdown and dropdown choices
-                            md = "### Recent Suggestions\n\n"
-                            choices = []
-                            for idx, s in enumerate(items):
-                                ts = s.get("timestamp", "")[:19]
-                                q = (s.get("question", "") or "").strip()
-                                rule = (s.get("suggested_rule", "") or "").strip()
-                                md += f"**{idx+1}.** ({ts})\n- Query: _{q[:100]}_\n- Rule: {rule}\n\n"
-                                # Use index as value for selection
-                                choices.append(f"{idx+1}: {q[:50]}...")
-                            return md, choices
-
-                        def _approve_selected(selection: str):
-                            items = get_rule_suggestions(limit=50)
-                            if not items:
-                                return "❌ No suggestions to approve", gr.update(choices=[], value=None)
-                            try:
-                                # Parse index from selection "N: ..."
-                                idx = int(selection.split(":", 1)[0]) - 1
-                                s = items[idx]
-                                from src.quick_training import add_training_rule
-                                ok, msg = add_training_rule(s.get("suggested_rule", ""), status="approved")
-                                status = "✅ Rule added" if ok else f"❌ {msg}"
-                                md, choices = _load_rule_suggestions()
-                                return f"{status}\n\n{msg if not ok else s.get('suggested_rule','')}", gr.Dropdown(choices=choices, value=None)
-                            except Exception as e:
-                                return f"❌ Error: {e}", gr.update(choices=[], value=None)
-
-                        # Wire buttons
-                        refresh_suggestions_btn.click(_load_rule_suggestions, outputs=[suggestions_output, suggestions_select])
-                        approve_btn.click(_approve_selected, inputs=[suggestions_select], outputs=[suggestions_output, suggestions_select])
-
-                        # Load suggestions on tab open
-                        demo.load(_load_rule_suggestions, outputs=[suggestions_output, suggestions_select])
-
-                    # Rule Governance Sub-tab
-                    with gr.Tab("🛡️ Rule Governance"):
-                        gr.Markdown("## Govern Training Rules")
-                        gr.Markdown("Set owner, priority, and status. Only approved rules are injected into prompts.")
-
                         gov_rules_md = gr.Markdown()
                         gov_select = gr.Dropdown(label="Select Rule #", choices=[], allow_custom_value=True, interactive=True)
                         owner_in = gr.Textbox(label="Owner", placeholder="e.g., ameer")
                         priority_in = gr.Slider(label="Priority (1=high, 10=low)", minimum=1, maximum=10, step=1, value=5)
                         status_in = gr.Dropdown(label="Status", choices=["draft", "approved", "deprecated"], value="draft")
+                        
                         with gr.Row():
                             approve_btn2 = gr.Button("✅ Approve", variant="primary")
                             update_btn = gr.Button("💾 Update")
                             delete_btn = gr.Button("🗑️ Delete", variant="stop")
                             refresh_gov_btn = gr.Button("🔄 Refresh")
                         gov_msg = gr.Markdown()
-
-                        gr.Markdown("---")
-                        gr.Markdown("### 🔎 Conflict Detection")
-                        conflict_md = gr.Markdown()
-                        detect_conflicts_btn = gr.Button("🔍 Detect Conflicts", variant="secondary")
-                        deprecate_conflict_in = gr.Textbox(label="Deprecate Rule #", placeholder="Enter rule number to deprecate")
-                        deprecate_conflict_btn = gr.Button("🚫 Deprecate Selected", variant="stop")
-
-                        gr.Markdown("---")
-                        gr.Markdown("### 🧾 Audit Trail")
-                        audit_md = gr.Markdown()
-                        refresh_audit_btn = gr.Button("🔄 Refresh Audit Trail")
-
+                        
                         def _load_governance_rules():
                             data = load_training_rules()
                             rules = data.get("rules", [])
                             if not rules:
                                 return "No rules yet.", []
-                            # Premium card layout
                             md = "<div style=\"display:flex;flex-direction:column;gap:12px;\">"
                             choices = []
                             for idx, r in enumerate(rules, 1):
@@ -2704,7 +2295,7 @@ Generate the examples now:"""
                                 choices.append(str(idx))
                             md += "</div>"
                             return md, choices
-
+                        
                         def _populate_fields(rule_no: str):
                             try:
                                 idx = int(rule_no)
@@ -2720,7 +2311,7 @@ Generate the examples now:"""
                                 gr.Slider(value=int(r.get("priority",5))),
                                 gr.Dropdown(value=r.get("status","draft"))
                             )
-
+                        
                         def _approve_rule(rule_no: str):
                             try:
                                 idx = int(rule_no)
@@ -2728,8 +2319,8 @@ Generate the examples now:"""
                                 return f"❌ Invalid selection: {e}", gr.update(choices=[], value=None)
                             ok, msg = update_rule(idx, status="approved")
                             md, choices = _load_governance_rules()
-                            return (f"{'✅ Approved' if ok else '❌ ' + msg}", gr.Dropdown(choices=choices, value=rule_no if ok else None))
-
+                            return (f"{'✅ Approved' if ok else '❌ ' + msg}", gr.update(choices=choices, value=rule_no if ok else None))
+                        
                         def _update_rule(rule_no: str, owner: str, priority: int, status: str):
                             try:
                                 idx = int(rule_no)
@@ -2737,8 +2328,8 @@ Generate the examples now:"""
                                 return f"❌ Invalid selection: {e}", gr.update(choices=[], value=None)
                             ok, msg = update_rule(idx, owner=owner, priority=priority, status=status)
                             md, choices = _load_governance_rules()
-                            return (f"{'✅ Updated' if ok else '❌ ' + msg}", gr.Dropdown(choices=choices, value=rule_no if ok else None))
-
+                            return (f"{'✅ Updated' if ok else '❌ ' + msg}", gr.update(choices=choices, value=rule_no if ok else None))
+                        
                         def _delete_rule(rule_no: str):
                             try:
                                 idx = int(rule_no)
@@ -2746,70 +2337,100 @@ Generate the examples now:"""
                                 return f"❌ Invalid selection: {e}", gr.update(choices=[], value=None)
                             ok, msg = delete_rule(idx)
                             md, choices = _load_governance_rules()
-                            return (msg, gr.Dropdown(choices=choices, value=None))
-
-                        # Wiring
+                            return (msg, gr.update(choices=choices, value=None))
+                        
                         refresh_gov_btn.click(_load_governance_rules, outputs=[gov_rules_md, gov_select])
                         gov_select.change(_populate_fields, inputs=[gov_select], outputs=[owner_in, priority_in, status_in])
                         approve_btn2.click(_approve_rule, inputs=[gov_select], outputs=[gov_msg, gov_select])
                         update_btn.click(_update_rule, inputs=[gov_select, owner_in, priority_in, status_in], outputs=[gov_msg, gov_select])
                         delete_btn.click(_delete_rule, inputs=[gov_select], outputs=[gov_msg, gov_select])
-
-                        def _detect_conflicts():
-                            try:
-                                from src.quick_training import detect_rule_conflicts
-                                pairs = detect_rule_conflicts()
-                                if not pairs:
-                                    return "No potential conflicts detected."
-                                md = "### Potential Conflicts\n\n"
-                                for (i,j,score) in pairs[:10]:
-                                    md += f"- Rules #{i} and #{j} (similarity {score})\n"
-                                return md
-                            except Exception as e:
-                                return f"❌ Error: {e}"
-
-                        def _deprecate_rule(rule_no: str):
-                            try:
-                                idx = int(rule_no)
-                            except Exception as e:
-                                return f"❌ Invalid rule #: {e}", deprecate_conflict_in
-                            try:
-                                from src.quick_training import update_rule
-                                ok, msg = update_rule(idx, status="deprecated")
-                                md, choices = _load_governance_rules()
-                                return (f"{'✅ Deprecated' if ok else '❌ ' + msg}", gr.Textbox(value=""))
-                            except Exception as e:
-                                return f"❌ Error: {e}", deprecate_conflict_in
-
-                        detect_conflicts_btn.click(_detect_conflicts, outputs=[conflict_md])
-                        deprecate_conflict_btn.click(_deprecate_rule, inputs=[deprecate_conflict_in], outputs=[gov_msg, deprecate_conflict_in])
-
-                        def _load_rule_audit():
-                            try:
-                                from pathlib import Path
-                                import json
-                                audit_path = Path(__file__).parent.parent / "logs" / "training_rule_audit.json"
-                                if not audit_path.exists():
-                                    return "No audit entries yet."
-                                with open(audit_path, 'r', encoding='utf-8') as f:
-                                    events = json.load(f)
-                                last = events[-10:]
-                                md = "### Recent Rule Changes\n\n"
-                                for ev in last:
-                                    ts = ev.get("timestamp","")[:19]
-                                    act = ev.get("action","")
-                                    idx = ev.get("rule_index",0)
-                                    md += f"- [{ts}] {act.upper()} rule #{idx}\n"
-                                return md
-                            except Exception as e:
-                                return f"❌ Error: {e}"
-
-                        refresh_audit_btn.click(_load_rule_audit, outputs=[audit_md])
-
-                        # Initial load
                         demo.load(_load_governance_rules, outputs=[gov_rules_md, gov_select])
-
-                    # Custom Personas moved to Developer Settings
+                    
+                    # Workflow 3: Domain Setup (Schema Analysis + Examples + Custom Instructions combined)
+                    with gr.Tab("🏢 Domain Setup"):
+                        gr.Markdown("### Configure Database Context")
+                        gr.Markdown("Tell the AI about your database structure, domain, and business rules.")
+                        
+                        with gr.Tabs():
+                            with gr.Tab("✏️ Custom Instructions"):
+                                gr.Markdown("**Advanced:** Write custom system instructions for power users.")
+                                domain_instructions_input = gr.Textbox(
+                                    label="System Instructions",
+                                    placeholder="Enter domain-specific guidance, terminology, calculation rules...",
+                                    lines=15,
+                                    value=load_system_instructions()
+                                )
+                                save_instructions_btn = gr.Button("💾 Save Instructions", variant="primary")
+                                instructions_status = gr.Markdown("")
+                                
+                                def _save_instructions(text):
+                                    ok = save_system_instructions(text)
+                                    return "✅ Instructions saved!" if ok else "❌ Save failed"
+                                
+                                save_instructions_btn.click(_save_instructions, inputs=[domain_instructions_input], outputs=[instructions_status])
+                            
+                            with gr.Tab("🤖 AI Schema Analysis"):
+                                gr.Markdown("**Auto-generate** system instructions by analyzing your database schema.")
+                                schema_analyze_btn = gr.Button("🔍 Analyze Database Schema", variant="primary", size="lg")
+                                schema_result = gr.Markdown("")
+                                
+                                def analyze_schema_auto():
+                                    try:
+                                        engine = get_engine()
+                                        if not engine:
+                                            return "❌ Database not connected. Check Settings tab."
+                                        
+                                        # Get schema info
+                                        db = get_sql_database()
+                                        if not db:
+                                            return "❌ Failed to get database schema"
+                                        
+                                        schema_info = db.get_table_info()
+                                        instructions = f"# Database Schema Context\n\n{schema_info}\n\n## Guidelines\n- Use the tables and columns described above\n- Follow naming conventions observed in schema\n- Consider relationships between tables\n"
+                                        save_system_instructions(instructions)
+                                        
+                                        return f"✅ **Schema Analyzed & Saved**\n\n```\n{instructions[:500]}...\n```\n\nFull instructions saved."
+                                    except Exception as e:
+                                        logger.error(f"Schema analysis error: {e}", exc_info=True)
+                                        return f"❌ Error: {e}"
+                                
+                                schema_analyze_btn.click(analyze_schema_auto, outputs=[schema_result])
+                            
+                            with gr.Tab("📝 AI Example Queries"):
+                                gr.Markdown("**Auto-generate** sample queries based on your schema.")
+                                examples_btn = gr.Button("✨ Generate Examples", variant="primary", size="lg")
+                                examples_result = gr.Markdown("")
+                                
+                                def generate_examples_auto():
+                                    try:
+                                        engine = get_engine()
+                                        if not engine:
+                                            return "❌ Database not connected."
+                                        
+                                        db = get_sql_database()
+                                        if not db:
+                                            return "❌ Failed to get database schema"
+                                        
+                                        schema_info = db.get_table_info()
+                                        output = "# Auto-Generated Schema Reference\n\n"
+                                        output += "Use this schema information to generate example queries:\n\n"
+                                        output += f"```\n{schema_info}\n```\n\n"
+                                        output += "**Suggested workflow:**\n"
+                                        output += "1. Review the schema above\n"
+                                        output += "2. Identify key tables and relationships\n"
+                                        output += "3. Create example queries in the Chat tab\n"
+                                        output += "4. Test and save successful patterns as training rules\n"
+                                        
+                                        # Save to file
+                                        with open("auto_generated_examples.md", "w") as f:
+                                            f.write(output)
+                                        
+                                        return f"✅ **Schema Reference Generated**\n\n{output[:600]}...\n\nSaved to `auto_generated_examples.md`"
+                                    except Exception as e:
+                                        logger.error(f"Example generation error: {e}", exc_info=True)
+                                        return f"❌ Error: {e}"
+                                
+                                examples_btn.click(generate_examples_auto, outputs=[examples_result])
             
             # Developer Tab (merged from Developer Tools + Developer Settings)
             with gr.Tab("🛠️ Developer"):
