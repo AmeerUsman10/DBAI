@@ -42,11 +42,16 @@ This file tracks planned changes, work in progress, and completed tasks to maint
 ## 🚧 IN PROGRESS
 
 ### Currently Working On
-- Nothing active - Ready for next task
+- **Framework Migration: Gradio → Chainlit**
+  - Decision made: Jan 7, 2026 11:55 AM
+  - Reason: Gradio limitations (no in-bubble feedback, limited customization, not premium look)
+  - Target: Chainlit for LLM-focused chat interface
+  - Status: About to start migration
 
 ### Recent Work (Last Session)
 - Created Developer Notes tab in Gradio UI (completed)
 - User wanted notes in VS Code instead (THIS FILE)
+- **DECISION: Moving away from Gradio to Chainlit**
 
 ---
 
@@ -136,6 +141,35 @@ This file tracks planned changes, work in progress, and completed tasks to maint
 ---
 
 ## 📝 SESSION NOTES
+
+### Session: January 7, 2026 - 11:55 AM
+**Topic:** Framework Migration Decision
+
+**User Request:**
+> "Save this state and let's move from Gradio"
+
+**Decision Made:**
+- Migrating from Gradio to Chainlit
+- Gradio limitations became clear:
+  - No in-bubble feedback (buttons below chat, not within messages)
+  - Limited customization (theme constraints)
+  - Doesn't look premium/professional
+  - Copy-to-clipboard needs JavaScript workarounds
+  - Feedback applies to last message only, not per-message
+  
+**Current State Saved:**
+- All Gradio work committed and pushed
+- Tagged version for rollback if needed
+- Development notes file created for tracking
+
+**Next Steps:**
+1. Research Chainlit implementation approach
+2. Create Chainlit prototype
+3. Migrate core features (chat, settings, training)
+4. Preserve all backend logic (src/*.py modules stay same)
+5. Test and compare with Gradio version
+
+---
 
 ### Session: January 7, 2026 - 11:50 AM
 **Topic:** Developer Notes Implementation
