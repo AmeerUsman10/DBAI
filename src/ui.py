@@ -858,26 +858,34 @@ Keep it concise and factual."""
                                 formatted_value = f"{value:,}"
                                 display_rows = [[formatted_value]]
                         
-                        # Calculate column widths for better alignment
-                        col_widths = {}
-                        for i, col in enumerate(result['columns']):
-                            col_widths[i] = max(
-                                len(str(col)),
-                                max((len(str(row[i])) for row in display_rows[:20]), default=0)
-                            )
+                        # Create professional HTML table with styling
+                        response += '<div style="overflow-x: auto; max-height: 600px;">'
+                        response += '<table style="width: 100%; border-collapse: collapse; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">'
                         
-                        # Header
-                        header_cells = [str(col).ljust(col_widths[i]) for i, col in enumerate(result['columns'])]
-                        response += "| " + " | ".join(header_cells) + " |\n"
+                        # Header with gradient background
+                        response += '<thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">'
+                        response += '<tr>'
+                        for col in result['columns']:
+                            response += f'<th style="padding: 14px 16px; text-align: left; font-weight: 600; border-bottom: 3px solid #5568d3; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px;">{col}</th>'
+                        response += '</tr>'
+                        response += '</thead>'
                         
-                        # Separator
-                        separator_cells = ["-" * col_widths[i] for i in range(len(result['columns']))]
-                        response += "| " + " | ".join(separator_cells) + " |\n"
-                        
-                        # Rows (limit to 20)
-                        for row in display_rows[:20]:
-                            row_cells = [str(v).ljust(col_widths[i]) for i, v in enumerate(row)]
-                            response += "| " + " | ".join(row_cells) + " |\n"
+                        # Body with alternating rows
+                        response += '<tbody>'
+                        for idx, row in enumerate(display_rows[:100]):  # Show up to 100 rows
+                            bg_color = "#f8f9fa" if idx % 2 == 0 else "#ffffff"
+                            response += f'<tr style="background-color: {bg_color}; transition: background-color 0.2s;">'
+                            for val in row:
+                                # Format numbers with commas
+                                if isinstance(val, (int, float)):
+                                    formatted_val = f"{val:,.2f}" if isinstance(val, float) else f"{val:,}"
+                                else:
+                                    formatted_val = str(val) if val is not None else ""
+                                response += f'<td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; color: #212529;">{formatted_val}</td>'
+                            response += '</tr>'
+                        response += '</tbody>'
+                        response += '</table>'
+                        response += '</div>\n'
                         
                         # Add auto-chart if enabled and data is suitable
                         global auto_chart_enabled
@@ -886,8 +894,8 @@ Keep it concise and factual."""
                             if chart:
                                 response += f"\n{chart}\n"
                         
-                        if len(result['rows']) > 20:
-                            response += f"\n*Showing 20 of {len(result['rows'])} rows*"
+                        if len(result['rows']) > 100:
+                            response += f"\n\n*Showing first 100 of {len(result['rows']):,} rows*"
                 else:
                     response += f"**Result:** {result.get('message', 'Success')}"
             else:
@@ -1302,37 +1310,10 @@ def build_ui():
                         choices=get_all_personas(),
                         value="default",
                         label="🎭 Persona",
-                        scale=1
-                    )
-                    
-                    # Query Templates - Quick access to common queries
-                    query_template_selector = gr.Dropdown(
-                        choices=[
-                            "Custom Query",
-                            "Top 10 Suppliers by Total Received",
-                            "Total Yarn Stock (Current)",
-                            "Monthly Yarn Arrivals",
-                            "Supplier Performance (Last 30 Days)",
-                            "Stock Levels by Department",
-                            "Recent Greige Production",
-                            "Year-over-Year Comparison"
-                        ],
-                        value="Custom Query",
-                        label="📋 Quick Templates",
-                        scale=2,
-                        info="Select a common query template"
+                        info="Select AI personality or create custom personas in Train tab"
                     )
                 
-                # Bookmarks Panel - Expandable
-                with gr.Accordion("⭐ Saved Bookmarks", open=False):
-                    with gr.Row():
-                        bookmark_current_btn = gr.Button("💾 Bookmark Current Query", size="sm", variant="secondary")
-                        refresh_bookmarks_btn = gr.Button("🔄 Refresh", size="sm")
-                    
-                    bookmarks_display = gr.Markdown("No bookmarks yet. Run a query and click 'Bookmark Current Query' to save it!")
-                    bookmark_status = gr.Markdown("")
-                
-                # Auto-Charts Toggle
+                # Auto-Charts Toggle - Keep this, it's useful
                 with gr.Row():
                     auto_chart_checkbox = gr.Checkbox(
                         label="📊 Auto-generate charts for numeric results",
@@ -1456,30 +1437,6 @@ def build_ui():
                     outputs=export_csv_btn
                 )
                 
-                # Query Template Selection - Load template into input
-                def load_query_template(template_name):
-                    """Load a query template into the input field."""
-                    templates = {
-                        "Top 10 Suppliers by Total Received": "Show me the top 10 suppliers by total amount received",
-                        "Total Yarn Stock (Current)": "What is the current total yarn stock in LBS?",
-                        "Monthly Yarn Arrivals": "Show monthly breakdown of yarn arrivals this year",
-                        "Supplier Performance (Last 30 Days)": "Supplier performance analysis for the last 30 days",
-                        "Stock Levels by Department": "Show stock levels grouped by department",
-                        "Recent Greige Production": "Show greige production from the last 7 days",
-                        "Year-over-Year Comparison": "Compare this year's yarn arrivals vs last year"
-                    }
-                    
-                    if template_name == "Custom Query":
-                        return ""
-                    
-                    return templates.get(template_name, "")
-                
-                query_template_selector.change(
-                    load_query_template,
-                    inputs=[query_template_selector],
-                    outputs=[question_input]
-                )
-                
                 # Auto-chart Toggle
                 def toggle_auto_chart(enabled):
                     """Toggle auto-chart generation."""
@@ -1491,66 +1448,6 @@ def build_ui():
                     toggle_auto_chart,
                     inputs=[auto_chart_checkbox],
                     outputs=[]
-                )
-                
-                # Bookmark Current Query
-                def bookmark_current_query():
-                    """Save the last successful query as a bookmark."""
-                    try:
-                        if not last_query_info.get("question") or not last_query_info.get("success"):
-                            return "❌ No successful query to bookmark. Run a query first!"
-                        
-                        success = save_bookmark(
-                            question=last_query_info["question"],
-                            sql=last_query_info.get("sql", ""),
-                            folder="custom",
-                            name=last_query_info["question"][:50],
-                            description=f"Query from {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-                        )
-                        
-                        if success:
-                            return f"✅ Bookmarked: {last_query_info['question'][:50]}..."
-                        return "❌ Failed to save bookmark"
-                        
-                    except Exception as e:
-                        logger.error(f"Bookmark error: {e}")
-                        return f"❌ Error: {str(e)}"
-                
-                def display_bookmarks():
-                    """Display all saved bookmarks."""
-                    try:
-                        bookmarks = get_bookmarks_by_folder()
-                        
-                        if not bookmarks:
-                            return "No bookmarks yet. Run a query and click 'Bookmark Current Query' to save it!"
-                        
-                        output = f"### 📚 Your Bookmarks ({len(bookmarks)})\n\n"
-                        
-                        # Show most recent 10
-                        for bm in bookmarks[:10]:
-                            output += f"**{bm['name']}**\n"
-                            output += f"*{bm['description']}*\n"
-                            output += f"```\n{bm['question']}\n```\n"
-                            output += f"Used {bm.get('use_count', 0)} times\n\n"
-                            output += "---\n\n"
-                        
-                        if len(bookmarks) > 10:
-                            output += f"\n*Showing 10 of {len(bookmarks)} bookmarks*"
-                        
-                        return output
-                        
-                    except Exception as e:
-                        logger.error(f"Display bookmarks error: {e}")
-                        return f"❌ Error: {str(e)}"
-                
-                bookmark_current_btn.click(
-                    bookmark_current_query,
-                    outputs=[bookmark_status]
-                )
-                
-                refresh_bookmarks_btn.click(
-                    display_bookmarks,
-                    outputs=[bookmarks_display]
                 )
             
             # Settings Tab
@@ -1602,22 +1499,104 @@ def build_ui():
                 test_output = gr.Textbox(label="Connection Status", interactive=False)
                 
                 gr.Markdown("## Database Settings")
+                gr.Markdown("Configure your SQL Server connection. Supports both local and remote databases.")
                 
-                with gr.Row():
-                    db_server = gr.Textbox(label="Server", value="localhost")
-                    db_name = gr.Textbox(label="Database", value="master")
+                with gr.Tabs():
+                    with gr.Tab("🏠 Local Database"):
+                        gr.Markdown("### Local SQL Server Express Connection")
+                        with gr.Row():
+                            local_server = gr.Textbox(
+                                label="Server",
+                                value="localhost",
+                                info="Usually 'localhost' or '(localdb)\\MSSQLLocalDB'"
+                            )
+                            local_db_name = gr.Textbox(
+                                label="Database",
+                                value="master",
+                                info="Database name"
+                            )
+                        
+                        with gr.Row():
+                            local_driver = gr.Dropdown(
+                                choices=[
+                                    "ODBC Driver 18 for SQL Server",
+                                    "ODBC Driver 17 for SQL Server",
+                                    "SQL Server Native Client 11.0",
+                                    "SQL Server"
+                                ],
+                                label="Driver",
+                                value="ODBC Driver 18 for SQL Server",
+                                info="Select your installed SQL Server driver"
+                            )
+                        
+                        local_use_windows_auth = gr.Checkbox(
+                            label="Use Windows Authentication (Trusted Connection)",
+                            value=True,
+                            info="Recommended for local SQL Server Express"
+                        )
+                        
+                        with gr.Row(visible=False) as local_creds_row:
+                            local_username = gr.Textbox(label="Username")
+                            local_password = gr.Textbox(label="Password", type="password")
+                        
+                        local_use_windows_auth.change(
+                            lambda x: gr.update(visible=not x),
+                            inputs=[local_use_windows_auth],
+                            outputs=[local_creds_row]
+                        )
+                        
+                        test_local_btn = gr.Button("🔌 Test Local Connection", variant="secondary")
+                        save_local_btn = gr.Button("💾 Save Local Settings", variant="primary")
+                    
+                    with gr.Tab("🌐 Remote Database"):
+                        gr.Markdown("### Remote SQL Server Connection")
+                        with gr.Row():
+                            remote_server = gr.Textbox(
+                                label="Server Address",
+                                placeholder="192.168.1.100 or myserver.database.windows.net",
+                                info="IP address or hostname"
+                            )
+                            remote_port = gr.Textbox(
+                                label="Port",
+                                value="1433",
+                                info="Default SQL Server port"
+                            )
+                        
+                        with gr.Row():
+                            remote_db_name = gr.Textbox(
+                                label="Database",
+                                placeholder="YourDatabase"
+                            )
+                            remote_driver = gr.Dropdown(
+                                choices=[
+                                    "ODBC Driver 18 for SQL Server",
+                                    "ODBC Driver 17 for SQL Server",
+                                    "SQL Server Native Client 11.0"
+                                ],
+                                label="Driver",
+                                value="ODBC Driver 18 for SQL Server"
+                            )
+                        
+                        with gr.Row():
+                            remote_username = gr.Textbox(label="Username", placeholder="sa or db_user")
+                            remote_password = gr.Textbox(label="Password", type="password")
+                        
+                        remote_encrypt = gr.Checkbox(
+                            label="Encrypt connection (TLS/SSL)",
+                            value=True,
+                            info="Required for Azure SQL Database"
+                        )
+                        
+                        remote_trust_cert = gr.Checkbox(
+                            label="Trust Server Certificate",
+                            value=False,
+                            info="Enable if using self-signed certificates"
+                        )
+                        
+                        test_remote_btn = gr.Button("🔌 Test Remote Connection", variant="secondary")
+                        save_remote_btn = gr.Button("💾 Save Remote Settings", variant="primary")
                 
-                with gr.Row():
-                    db_driver = gr.Textbox(
-                        label="Driver",
-                        value="ODBC Driver 18 for SQL Server"
-                    )
-                
-                with gr.Row():
-                    db_username = gr.Textbox(label="Username (optional)")
-                    db_password = gr.Textbox(label="Password (optional)", type="password")
-                
-                save_settings_btn = gr.Button("Save Settings", variant="primary")
+                connection_status = gr.Markdown("")
                 settings_output = gr.Textbox(label="Status", interactive=False)
                 
                 # Event handlers
@@ -1643,12 +1622,69 @@ def build_ui():
                     outputs=[test_output]
                 )
                 
-                save_settings_btn.click(
-                    save_settings,
-                    inputs=[
-                        provider_dropdown, model_dropdown, temperature_slider, max_tokens_slider,
-                        db_server, db_name, db_driver, db_username, db_password
-                    ],
+                # Local database connection handlers
+                def test_local_connection(server, db_name, driver, use_windows_auth, username, password):
+                    try:
+                        import pyodbc
+                        if use_windows_auth:
+                            conn_str = f"DRIVER={{{driver}}};SERVER={server};DATABASE={db_name};Trusted_Connection=yes;TrustServerCertificate=yes;"
+                        else:
+                            conn_str = f"DRIVER={{{driver}}};SERVER={server};DATABASE={db_name};UID={username};PWD={password};TrustServerCertificate=yes;"
+                        
+                        conn = pyodbc.connect(conn_str, timeout=5)
+                        conn.close()
+                        return "✅ Local database connection successful!"
+                    except Exception as e:
+                        return f"❌ Connection failed: {str(e)}"
+                
+                def save_local_settings(provider, model, temp, max_tokens, server, db_name, driver, use_windows_auth, username, password):
+                    return save_settings(provider, model, temp, max_tokens, server, db_name, driver, 
+                                       "" if use_windows_auth else username, 
+                                       "" if use_windows_auth else password)
+                
+                test_local_btn.click(
+                    test_local_connection,
+                    inputs=[local_server, local_db_name, local_driver, local_use_windows_auth, local_username, local_password],
+                    outputs=[connection_status]
+                )
+                
+                save_local_btn.click(
+                    save_local_settings,
+                    inputs=[provider_dropdown, model_dropdown, temperature_slider, max_tokens_slider,
+                           local_server, local_db_name, local_driver, local_use_windows_auth, local_username, local_password],
+                    outputs=[settings_output]
+                )
+                
+                # Remote database connection handlers
+                def test_remote_connection(server, port, db_name, driver, username, password, encrypt, trust_cert):
+                    try:
+                        import pyodbc
+                        server_with_port = f"{server},{port}" if port else server
+                        encrypt_str = "yes" if encrypt else "no"
+                        trust_str = "yes" if trust_cert else "no"
+                        
+                        conn_str = f"DRIVER={{{driver}}};SERVER={server_with_port};DATABASE={db_name};UID={username};PWD={password};Encrypt={encrypt_str};TrustServerCertificate={trust_str};"
+                        
+                        conn = pyodbc.connect(conn_str, timeout=10)
+                        conn.close()
+                        return "✅ Remote database connection successful!"
+                    except Exception as e:
+                        return f"❌ Connection failed: {str(e)}"
+                
+                def save_remote_settings(provider, model, temp, max_tokens, server, port, db_name, driver, username, password, encrypt, trust_cert):
+                    server_with_port = f"{server},{port}" if port else server
+                    return save_settings(provider, model, temp, max_tokens, server_with_port, db_name, driver, username, password)
+                
+                test_remote_btn.click(
+                    test_remote_connection,
+                    inputs=[remote_server, remote_port, remote_db_name, remote_driver, remote_username, remote_password, remote_encrypt, remote_trust_cert],
+                    outputs=[connection_status]
+                )
+                
+                save_remote_btn.click(
+                    save_remote_settings,
+                    inputs=[provider_dropdown, model_dropdown, temperature_slider, max_tokens_slider,
+                           remote_server, remote_port, remote_db_name, remote_driver, remote_username, remote_password, remote_encrypt, remote_trust_cert],
                     outputs=[settings_output]
                 )
                 
@@ -1657,7 +1693,7 @@ def build_ui():
                     load_settings,
                     outputs=[
                         provider_dropdown, model_dropdown, temperature_slider, max_tokens_slider,
-                        db_server, db_name, db_driver, db_username, db_password
+                        local_server, local_db_name, local_driver, local_username, local_password
                     ]
                 )
                 
@@ -2462,6 +2498,10 @@ Generate the examples now:"""
                             inputs=[persona_id_input, persona_name_input, persona_desc_input,
                                    persona_tone, persona_complexity, persona_domain, persona_instructions],
                             outputs=[persona_status]
+                        ).then(
+                            # Refresh the persona dropdown in Chat tab
+                            lambda: gr.update(choices=get_all_personas()),
+                            outputs=[persona_selector]
                         )
                         
                         refresh_personas_btn.click(
