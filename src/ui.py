@@ -1941,114 +1941,332 @@ def build_ui():
             
             # Train Tab - Premium UX
             with gr.Tab("🎓 Train"):
-                gr.Markdown("## Training & Knowledge System")
-                gr.Markdown("Shape how the AI interprets your data. Approve rules, add context, and monitor impact — a premium, governance-ready experience.")
+                gr.Markdown("## 🚀 Test & Learn Training")
+                gr.Markdown("**Training with velocity.** Test a rule on real queries, see SQL improvements, then save with one click. Build adoption momentum.")
                 
                 with gr.Tabs():
-                    # Quick Training Tab (FREE-FORM INSTRUCTIONS)
-                    with gr.Tab("⚡ Quick Rules"):
-                        gr.Markdown("""### Add Rules in Plain English
-Tell the AI exactly how to interpret your queries. These rules apply immediately!
+                    # Main: Test This Rule (NEW ADOPTION-FOCUSED)
+                    with gr.Tab("✅ Test This Rule"):
+                        gr.Markdown("""### Step 1: Enter Your Training Rule
+**Plain English:** Tell the AI how to interpret specific queries or terms.
 
-**Examples:**
-- "When I ask 'total greige rcvd', always return meters of greige fabric received"
-- "When I say 'arrival yarn', I mean LBS of yarn received, not amount in PKR"
-- "Stock check should show current inventory in both LBS and bags"
+Examples:
+- "When users say 'total arrival yarn', return LBS received (not PKR amount)"
+- "Greige received = meters of greige fabric from suppliers"
+- "Stock check always shows current inventory in both LBS and bags"
 """)
                         
-                        training_instruction = gr.Textbox(
-                            label="Training Instruction",
-                            placeholder='Example: When I ask "total arrival yarn", return total LBS received, NOT total amount in PKR.',
-                            lines=3
+                        test_rule_input = gr.Textbox(
+                            label="Training Rule",
+                            placeholder='e.g., "When I ask for total arrival, multiply by 2 because we track in half-units"',
+                            lines=2
+                        )
+                        
+                        gr.Markdown("### Step 2: Test With a Sample Query")
+                        test_sample_query = gr.Textbox(
+                            label="Sample Query",
+                            placeholder='e.g., "What was total arrival yarn last week?"',
+                            lines=2
                         )
                         
                         with gr.Row():
-                            add_training_btn = gr.Button("✅ Add Rule", variant="primary", size="lg")
-                            clear_training_input_btn = gr.Button("🔄 Clear", variant="secondary")
+                            test_rule_btn = gr.Button("🧪 Test Rule", variant="primary", size="lg")
+                            clear_test_btn = gr.Button("🔄 Clear", variant="secondary")
                         
-                        training_status = gr.Markdown("")
+                        test_result_md = gr.Markdown("")
                         
-                        gr.Markdown("---")
-                        gr.Markdown("### Active Training Rules")
-                        training_rules_display = gr.Markdown("")
-
-                        gr.Markdown("---")
-                        gr.Markdown("### 🔎 Preview Effective Prompt")
-                        preview_prompt_btn = gr.Button("👀 Preview Rules Injection", variant="secondary")
-                        preview_prompt_md = gr.Markdown("")
+                        gr.Markdown("### Step 3: Review & Save")
+                        with gr.Row():
+                            save_rule_btn = gr.Button("💾 Save Rule", variant="primary")
+                            discard_btn = gr.Button("❌ Discard", variant="secondary")
+                        save_msg = gr.Markdown("")
                         
-                        def add_training(instruction):
-                            """Add a quick training rule."""
-                            # LOG: User adding training rule
-                            logger.info(f"USER TRAINING: Adding rule - '{instruction[:100]}'")
+                        # Hidden state to track test result
+                        test_result_state = gr.State({})
+                        
+                        def test_training_rule(rule_text, sample_query):
+                            """Test a training rule with a sample query."""
+                            if not rule_text.strip() or not sample_query.strip():
+                                return {"error": "❌ Enter both rule and sample query"}, "❌ Enter both rule and sample query"
                             
-                            success, msg = add_training_rule(instruction)
-                            
-                            if success:
-                                logger.info(f"TRAINING SUCCESS: Rule added - {msg}")
-                                
-                                # Track training event
-                                session_tracker.track_training_event(
-                                    event_type="quick_training_rule_added",
-                                    details={
-                                        "instruction": instruction,
-                                        "success": True,
-                                        "message": msg
-                                    }
-                                )
-                                
-                                # Get stats to show in message
-                                stats = get_training_stats()
-                                display_msg = f"{msg}\n\n🎉 **New training event!** This rule is now active."
-                                return display_msg, format_rules_display(), ""
-                            else:
-                                logger.warning(f"TRAINING FAILED: {msg}")
-                                
-                                # Track failed training attempt
-                                session_tracker.track_training_event(
-                                    event_type="quick_training_rule_failed",
-                                    details={
-                                        "instruction": instruction,
-                                        "success": False,
-                                        "error": msg
-                                    }
-                                )
-                                
-                                return f"❌ {msg}", format_rules_display(), instruction
-                        
-                        add_training_btn.click(
-                            add_training,
-                            inputs=[training_instruction],
-                            outputs=[training_status, training_rules_display, training_instruction]
-                        )
-                        
-                        clear_training_input_btn.click(
-                            lambda: "",
-                            outputs=[training_instruction]
-                        )
-                        
-                        # Load rules on page load
-                        demo.load(
-                            format_rules_display,
-                            outputs=[training_rules_display]
-                        )
-
-                        def _preview_rules_injection():
                             try:
-                                from src.quick_training import get_training_rules_for_prompt
-                                text = get_training_rules_for_prompt()
-                                if not text:
-                                    return "No approved rules yet. Approve rules in Governance to inject into prompts."
-                                return f"### Effective Prompt Injection\n\n{text}"
+                                # Get current SQL without rule (baseline)
+                                logger.info(f"Testing rule: {rule_text[:100]}")
+                                
+                                # Call LLM to get SQL with and without the rule
+                                global current_llm, current_provider
+                                if current_llm is None:
+                                    config = load_config()
+                                    llm_config = config.get('llm', {})
+                                    provider_name = llm_config.get('provider', 'openai')
+                                    model = llm_config.get('model', 'gpt-4o-mini')
+                                    current_provider = create_provider(provider_name)
+                                    current_llm = current_provider.get_llm(model, 0.3, 2000)
+                                
+                                # Get database schema
+                                db = get_sql_database()
+                                schema = db.get_table_info() if db else "Schema unavailable"
+                                
+                                # Baseline SQL (without rule)
+                                baseline_prompt = f"""Database schema:
+{schema}
+
+User query: {sample_query}
+
+Generate SQL Server query for this request. Return ONLY the SQL."""
+                                
+                                baseline_response = current_llm.invoke(baseline_prompt)
+                                baseline_sql = baseline_response.content if hasattr(baseline_response, 'content') else str(baseline_response)
+                                baseline_sql = baseline_sql.strip().replace("```sql", "").replace("```", "").strip()
+                                
+                                # Enhanced SQL (with rule)
+                                enhanced_prompt = f"""Database schema:
+{schema}
+
+Training rule: {rule_text}
+
+User query: {sample_query}
+
+Generate SQL Server query for this request, taking the training rule into account. Return ONLY the SQL."""
+                                
+                                enhanced_response = current_llm.invoke(enhanced_prompt)
+                                enhanced_sql = enhanced_response.content if hasattr(enhanced_response, 'content') else str(enhanced_response)
+                                enhanced_sql = enhanced_sql.strip().replace("```sql", "").replace("```", "").strip()
+                                
+                                # Display comparison
+                                result_md = f"""
+### ✅ Test Complete
+
+#### Baseline SQL (without rule)
+```sql
+{baseline_sql[:500]}
+```
+
+#### Enhanced SQL (with rule)
+```sql
+{enhanced_sql[:500]}
+```
+
+**Rule applied:** Yes ✅
+
+---
+*Does the enhanced version look better? If yes, save the rule below.*
+"""
+                                
+                                return {
+                                    "rule": rule_text,
+                                    "baseline_sql": baseline_sql,
+                                    "enhanced_sql": enhanced_sql,
+                                    "sample_query": sample_query
+                                }, result_md
+                            except Exception as e:
+                                logger.error(f"Test error: {e}", exc_info=True)
+                                return {"error": str(e)}, f"❌ Test failed: {e}"
+                        
+                        def save_tested_rule(state_data):
+                            """Save the tested rule."""
+                            if not state_data or "error" in state_data:
+                                return "❌ No valid test result to save"
+                            
+                            try:
+                                rule_text = state_data.get("rule", "")
+                                ok, msg = add_training_rule(rule_text)
+                                
+                                if ok:
+                                    logger.info(f"Rule saved: {rule_text[:100]}")
+                                    session_tracker.track_training_event(
+                                        event_type="test_and_learn_rule_saved",
+                                        details={"rule": rule_text}
+                                    )
+                                    return f"✅ Rule saved! {msg}"
+                                else:
+                                    return f"❌ Save failed: {msg}"
                             except Exception as e:
                                 return f"❌ Error: {e}"
-
-                        preview_prompt_btn.click(_preview_rules_injection, outputs=[preview_prompt_md])
+                        
+                        test_rule_btn.click(
+                            test_training_rule,
+                            inputs=[test_rule_input, test_sample_query],
+                            outputs=[test_result_state, test_result_md]
+                        )
+                        
+                        save_rule_btn.click(
+                            save_tested_rule,
+                            inputs=[test_result_state],
+                            outputs=[save_msg]
+                        )
+                        
+                        clear_test_btn.click(
+                            lambda: ("", "", {}, "", ""),
+                            outputs=[test_rule_input, test_sample_query, test_result_state, test_result_md, save_msg]
+                        )
+                        
+                        discard_btn.click(
+                            lambda: ("", "", {}, "", "Discarded. Enter a new rule."),
+                            outputs=[test_rule_input, test_sample_query, test_result_state, test_result_md, save_msg]
+                        )
                     
-                    # System Instructions Tab
-                    with gr.Tab("🏢 Domain Instructions"):
-                        gr.Markdown("""### Business & Data Context
-Provide information about your database to help the AI understand your data better.""")
+                    # Rule Impact Dashboard (shows which rules help)
+                    with gr.Tab("📊 Rule Impact"):
+                        gr.Markdown("""### Which Rules Actually Help?
+See which rules have the most impact on your queries. Ranked by real usage.
+""")
+                        impact_display = gr.Markdown("Loading impact analysis...")
+                        refresh_impact_btn = gr.Button("🔄 Refresh Impact", variant="secondary")
+                        
+                        def show_rule_impact():
+                            try:
+                                from src.quick_training import load_training_rules
+                                data = load_training_rules()
+                                rules = data.get("rules", [])
+                                
+                                if not rules:
+                                    return "No rules yet. Create rules in 'Test This Rule' tab."
+                                
+                                # Filter and rank by usage
+                                approved = [r for r in rules if r.get("status","draft") == "approved"]
+                                approved.sort(key=lambda r: int(r.get("usage_count", 0)), reverse=True)
+                                
+                                if not approved:
+                                    return "No approved rules yet. Test and save rules in the 'Test This Rule' tab."
+                                
+                                output = "### 🏆 Rule Performance Ranking\n\n"
+                                output += "| Rank | Rule | Usage | Priority |\n"
+                                output += "|------|------|-------|----------|\n"
+                                
+                                for i, r in enumerate(approved, 1):
+                                    instr = (r.get("instruction", "") or "").strip()
+                                    usage = int(r.get("usage_count", 0))
+                                    priority = r.get("priority", 5)
+                                    prio_label = "🔴 HIGH" if priority <= 3 else ("🟡 MED" if priority <= 7 else "🟢 LOW")
+                                    
+                                    # Create a progress bar
+                                    bar_width = max(1, usage // 5)  # Scale: 5 usages = 1 unit
+                                    bar = "█" * min(bar_width, 20)
+                                    
+                                    output += f"| {i} | {instr[:60]}... | {usage}x {bar} | {prio_label} |\n"
+                                
+                                output += "\n---\n\n"
+                                output += "### 💡 Insights\n\n"
+                                top_rule = approved[0]
+                                top_usage = int(top_rule.get("usage_count", 0))
+                                
+                                if top_usage > 0:
+                                    output += f"🌟 **Top Performer:** This rule has helped {top_usage} queries\n\n"
+                                
+                                total_usage = sum(int(r.get("usage_count", 0)) for r in approved)
+                                output += f"📈 **Total Impact:** {total_usage} successful queries using your rules\n\n"
+                                
+                                avg_usage = total_usage / len(approved) if approved else 0
+                                output += f"📊 **Average per Rule:** {avg_usage:.1f} uses\n\n"
+                                
+                                return output
+                            except Exception as e:
+                                logger.error(f"Impact display error: {e}", exc_info=True)
+                                return f"❌ Error: {e}"
+                        
+                        refresh_impact_btn.click(show_rule_impact, outputs=[impact_display])
+                        demo.load(show_rule_impact, outputs=[impact_display])
+                    
+                    # Quick Setup (one-click domain context)
+                    with gr.Tab("⚙️ Quick Setup"):
+                        gr.Markdown("""### One-Click Domain Context
+Select your industry and units. We'll auto-populate domain instructions for faster training.
+""")
+                        
+                        gr.Markdown("### Industry Type")
+                        industry_selector = gr.Checkboxgroup(
+                            choices=[
+                                "🏭 Textile Manufacturing",
+                                "📊 Retail & Inventory",
+                                "🏭 General Manufacturing",
+                                "💼 Finance & Accounting",
+                                "📦 Logistics & Shipping",
+                                "🏥 Healthcare",
+                                "🍽️ Food & Beverage"
+                            ],
+                            label="Select your industry",
+                            value=[]
+                        )
+                        
+                        gr.Markdown("### Common Units")
+                        units_selector = gr.Checkboxgroup(
+                            choices=[
+                                "LBS (Pounds)",
+                                "KG (Kilograms)",
+                                "Meters",
+                                "Feet",
+                                "Inches",
+                                "PKR (Pakistani Rupees)",
+                                "USD ($)",
+                                "Units/Pieces"
+                            ],
+                            label="Select units used in your data",
+                            value=[]
+                        )
+                        
+                        with gr.Row():
+                            generate_instructions_btn = gr.Button("🔧 Generate Instructions", variant="primary")
+                            clear_setup_btn = gr.Button("🔄 Clear", variant="secondary")
+                        
+                        setup_msg = gr.Markdown("")
+                        
+                        def generate_quick_setup(industries, units):
+                            if not industries and not units:
+                                return "❌ Select at least one industry or unit type"
+                            
+                            try:
+                                instructions = "# Auto-Generated Domain Context\n\n"
+                                
+                                if industries:
+                                    instructions += "## Industry Context\n"
+                                    for ind in industries:
+                                        if "Textile" in ind:
+                                            instructions += """- **Textile Manufacturing Database**
+  - Main entities: Suppliers, Fabrics (Greige & Finished), Yarn, Stock, Orders
+  - Key metrics: Meters, LBS, bags, PKR
+  - Common queries: Supplier inventory, greige received, yarn stock levels, order status
+  
+"""
+                                        elif "Retail" in ind:
+                                            instructions += """- **Retail & Inventory System**
+  - Tracks: Products, stock levels, suppliers, sales
+  - Metrics: Units, inventory value, reorder points
+  
+"""
+                                        elif "Manufacturing" in ind:
+                                            instructions += """- **Manufacturing Database**
+  - Tracks: Production, raw materials, finished goods, quality control
+  - Key focus: Batch tracking, defect rates, production efficiency
+  
+"""
+                                
+                                if units:
+                                    instructions += "## Unit Conventions\n"
+                                    for unit in units:
+                                        instructions += f"- {unit}\n"
+                                    instructions += "\n**Note:** Always convert units consistently in responses.\n"
+                                
+                                # Save to system instructions
+                                success, msg = save_system_instructions(instructions)
+                                
+                                return f"✅ {msg}\n\nDomain context saved! Your AI will now use this when interpreting queries."
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+                        
+                        generate_instructions_btn.click(
+                            generate_quick_setup,
+                            inputs=[industry_selector, units_selector],
+                            outputs=[setup_msg]
+                        )
+                        
+                        clear_setup_btn.click(
+                            lambda: ("", ""),
+                            outputs=[industry_selector, units_selector]
+                        )
+                    
+                    # Advanced: Domain Context (customization for power users)
+                    with gr.Tab("🏢 Domain Context (Advanced)"):
                         
                         instructions_input = gr.Textbox(
                             label="System Instructions",
@@ -2087,337 +2305,9 @@ Key business rules:
                             outputs=[instructions_input, instructions_status]
                         )
                     
-                    # Interactive Column Training Tab
-                    with gr.Tab("📊 Column Training"):
-                        gr.Markdown("""### Interactive Column Training
-View your database schema and add training descriptions for tables and columns.
-These descriptions help the AI understand your data better.""")
-                        
-                        # Load schema button
-                        load_schema_btn = gr.Button("📥 Load Database Schema", variant="primary", size="lg")
-                        
-                        with gr.Row():
-                            with gr.Column(scale=1):
-                                gr.Markdown("#### Select Table & Column")
-                                table_dropdown = gr.Dropdown(
-                                    label="Table",
-                                    choices=[],
-                                    interactive=True
-                                )
-                                column_dropdown = gr.Dropdown(
-                                    label="Column",
-                                    choices=[],
-                                    interactive=True
-                                )
-                                column_type_display = gr.Textbox(
-                                    label="Column Type",
-                                    interactive=False,
-                                    value=""
-                                )
-                            
-                            with gr.Column(scale=2):
-                                gr.Markdown("#### Training Description")
-                                description_input = gr.Textbox(
-                                    label="What does this column represent?",
-                                    placeholder="Example: This column stores the supplier name (e.g., 'Ahmed Textile', 'XYZ Fabrics'). Used for filtering and grouping orders by supplier.",
-                                    lines=4
-                                )
-                                unit_input = gr.Textbox(
-                                    label="Unit (if applicable)",
-                                    placeholder="e.g., PKR, LBS, meters, inches"
-                                )
-                                examples_input = gr.Textbox(
-                                    label="Example Values",
-                                    placeholder="e.g., Ahmed Textile, XYZ Mills, ABC Fabrics"
-                                )
-                                
-                                with gr.Row():
-                                    save_training_btn = gr.Button("💾 Save Training", variant="primary")
-                                    clear_training_btn = gr.Button("🔄 Clear", variant="secondary")
-                                
-                                training_status = gr.Markdown("")
-                        
-                        gr.Markdown("---")
-                        gr.Markdown("#### Current Training Data")
-                        training_display = gr.Markdown("")
-                        
-                        # Functions for column training
-                        def load_schema_for_training():
-                            """Load database schema and return table names."""
-                            try:
-                                db = get_sql_database()
-                                if not db:
-                                    return (
-                                        gr.Dropdown(choices=[], value=None),
-                                        gr.Dropdown(choices=[], value=None),
-                                        "",
-                                        "❌ Database not available"
-                                    )
-                                
-                                # Get table info
-                                schema_info = db.get_table_info()
-                                
-                                # Parse table names from schema
-                                tables = []
-                                for line in schema_info.split('\n'):
-                                    if 'CREATE TABLE' in line:
-                                        # Extract table name
-                                        parts = line.split('CREATE TABLE')[1].strip().split('(')[0].strip()
-                                        # Remove schema prefix if exists
-                                        table_name = parts.split('.')[-1].strip('[]')
-                                        if table_name and table_name not in tables:
-                                            tables.append(table_name)
-                                
-                                if not tables:
-                                    return (
-                                        gr.Dropdown(choices=[], value=None),
-                                        gr.Dropdown(choices=[], value=None),
-                                        "",
-                                        "❌ No tables found in database"
-                                    )
-                                
-                                return (
-                                    gr.Dropdown(choices=tables, value=tables[0] if tables else None),
-                                    gr.Dropdown(choices=[], value=None),
-                                    "",
-                                    f"✅ Loaded {len(tables)} tables"
-                                )
-                                
-                            except Exception as e:
-                                logger.error(f"Schema load error: {e}", exc_info=True)
-                                return (
-                                    gr.Dropdown(choices=[], value=None),
-                                    gr.Dropdown(choices=[], value=None),
-                                    "",
-                                    f"❌ Error: {str(e)}"
-                                )
-                        
-                        def get_columns_for_table(table_name):
-                            """Get columns for selected table."""
-                            if not table_name:
-                                return gr.Dropdown(choices=[], value=None), "", ""
-                            
-                            try:
-                                db = get_sql_database()
-                                if not db:
-                                    return gr.Dropdown(choices=[], value=None), "", "❌ Database not available"
-                                
-                                # Get table info
-                                schema_info = db.get_table_info()
-                                
-                                # Parse columns for this table
-                                columns = []
-                                in_table = False
-                                for line in schema_info.split('\n'):
-                                    if f'CREATE TABLE' in line and table_name in line:
-                                        in_table = True
-                                        continue
-                                    
-                                    if in_table:
-                                        if line.strip().startswith(')'):
-                                            break
-                                        
-                                        # Extract column name and type
-                                        cleaned = line.strip().strip(',').strip()
-                                        if cleaned and not cleaned.startswith('PRIMARY') and not cleaned.startswith('FOREIGN'):
-                                            # Remove brackets and split
-                                            parts = cleaned.replace('[', '').replace(']', '').split()
-                                            if len(parts) >= 2:
-                                                col_name = parts[0]
-                                                columns.append(col_name)
-                                
-                                if columns:
-                                    return gr.Dropdown(choices=columns, value=columns[0]), "", f"✅ Found {len(columns)} columns"
-                                else:
-                                    return gr.Dropdown(choices=[], value=None), "", "❌ No columns found"
-                                
-                            except Exception as e:
-                                logger.error(f"Column fetch error: {e}", exc_info=True)
-                                return gr.Dropdown(choices=[], value=None), "", f"❌ Error: {str(e)}"
-                        
-                        def get_column_type(table_name, column_name):
-                            """Get column type from schema."""
-                            if not table_name or not column_name:
-                                return ""
-                            
-                            try:
-                                db = get_sql_database()
-                                if not db:
-                                    return "Unknown"
-                                
-                                schema_info = db.get_table_info()
-                                
-                                # Parse column type
-                                in_table = False
-                                for line in schema_info.split('\n'):
-                                    if f'CREATE TABLE' in line and table_name in line:
-                                        in_table = True
-                                        continue
-                                    
-                                    if in_table:
-                                        if line.strip().startswith(')'):
-                                            break
-                                        
-                                        if column_name in line:
-                                            # Extract type
-                                            cleaned = line.strip().strip(',').strip()
-                                            parts = cleaned.replace('[', '').replace(']', '').split()
-                                            if len(parts) >= 2:
-                                                return parts[1]
-                                
-                                return "Unknown"
-                                
-                            except Exception as e:
-                                logger.error(f"Column type error: {e}", exc_info=True)
-                                return "Error"
-                        
-                        def save_column_training(table, column, description, unit, examples):
-                            """Save training data for a column."""
-                            if not table or not column:
-                                return "❌ Please select a table and column"
-                            
-                            if not description.strip():
-                                return "❌ Please provide a description"
-                            
-                            try:
-                                # Load current metadata
-                                metadata = load_metadata()
-                                
-                                # Ensure table exists in metadata
-                                if "tables" not in metadata:
-                                    metadata["tables"] = {}
-                                
-                                if table not in metadata["tables"]:
-                                    metadata["tables"][table] = {}
-                                
-                                # Save column training
-                                column_data = {
-                                    "description": description.strip(),
-                                    "type": get_column_type(table, column),
-                                    "unit": unit.strip() if unit.strip() else None,
-                                    "unit_full": None,
-                                    "examples": [ex.strip() for ex in examples.split(',') if ex.strip()] if examples else []
-                                }
-                                metadata["tables"][table][column] = column_data
-                                
-                                # Save metadata
-                                save_metadata(metadata)
-                                
-                                # Track training event
-                                session_tracker.track_training_event(
-                                    event_type="column_metadata_updated",
-                                    details={
-                                        "table": table,
-                                        "column": column,
-                                        "description": description.strip(),
-                                        "unit": unit.strip() if unit.strip() else None,
-                                        "examples_count": len([ex.strip() for ex in examples.split(',') if ex.strip()] if examples else [])
-                                    }
-                                )
-                                
-                                return f"✅ Training saved for {table}.{column}"
-                                
-                            except Exception as e:
-                                logger.error(f"Save training error: {e}", exc_info=True)
-                                
-                                # Track failed training attempt
-                                session_tracker.track_error(
-                                    error_type="column_training_save_failed",
-                                    message=str(e),
-                                    context={
-                                        "table": table,
-                                        "column": column
-                                    }
-                                )
-                                
-                                return f"❌ Error: {str(e)}"
-                        
-                        def display_current_training():
-                            """Display current training data from metadata."""
-                            try:
-                                metadata = load_metadata()
-                                
-                                if "tables" not in metadata or not metadata["tables"]:
-                                    return "No training data yet. Start by loading the schema and adding descriptions!"
-                                
-                                output = "### Trained Columns\n\n"
-                                
-                                for table_name, table_data in metadata["tables"].items():
-                                    output += f"#### 📋 {table_name}\n\n"
-                                    
-                                    # Handle both old format (columns as dict) and new format (description + columns)
-                                    columns = table_data if not isinstance(table_data.get('columns'), dict) else table_data.get('columns', {})
-                                    
-                                    for col_name, col_data in columns.items():
-                                        # Skip non-column metadata like 'description'
-                                        if col_name in ['description', 'business_terms', 'common_queries']:
-                                            continue
-                                        
-                                        # Handle both string and dict formats
-                                        if isinstance(col_data, str):
-                                            output += f"**{col_name}**\n"
-                                            output += f"- *Description:* {col_data}\n\n"
-                                        elif isinstance(col_data, dict):
-                                            col_type = col_data.get('type', 'Unknown')
-                                            output += f"**{col_name}** ({col_type})\n"
-                                            output += f"- *Description:* {col_data.get('description', 'N/A')}\n"
-                                            
-                                            if col_data.get('unit'):
-                                                output += f"- *Unit:* {col_data.get('unit')}\n"
-                                            
-                                            if col_data.get('examples'):
-                                                examples_str = ', '.join(str(ex) for ex in col_data['examples'][:3])
-                                                output += f"- *Examples:* {examples_str}\n"
-                                            
-                                            output += "\n"
-                                    
-                                    output += "---\n\n"
-                                
-                                return output
-                                
-                            except Exception as e:
-                                logger.error(f"Display training error: {e}", exc_info=True)
-                                return f"❌ Error loading training data: {str(e)}"
-                        
-                        # Event handlers for column training
-                        load_schema_btn.click(
-                            load_schema_for_training,
-                            outputs=[table_dropdown, column_dropdown, column_type_display, training_status]
-                        )
-                        
-                        table_dropdown.change(
-                            get_columns_for_table,
-                            inputs=[table_dropdown],
-                            outputs=[column_dropdown, column_type_display, training_status]
-                        )
-                        
-                        column_dropdown.change(
-                            get_column_type,
-                            inputs=[table_dropdown, column_dropdown],
-                            outputs=[column_type_display]
-                        )
-                        
-                        save_training_btn.click(
-                            save_column_training,
-                            inputs=[table_dropdown, column_dropdown, description_input, unit_input, examples_input],
-                            outputs=[training_status]
-                        ).then(
-                            display_current_training,
-                            outputs=[training_display]
-                        )
-                        
-                        clear_training_btn.click(
-                            lambda: ("", "", ""),
-                            outputs=[description_input, unit_input, examples_input]
-                        )
-                        
-                        # Load training data on tab open
-                        demo.load(
-                            display_current_training,
-                            outputs=[training_display]
-                        )
-                    
-                    # Schema Analysis Tab
+                    # Optional: Column Training Tab (keeping as power-user feature but commented)
+                    # Column Training feature removed for adoption phase
+
                     with gr.Tab("🤖 AI Schema Analysis"):
                         gr.Markdown("""### Automatic Schema Analysis
 Let the AI analyze your database schema and generate training data automatically.""")
@@ -3188,22 +3078,20 @@ Then tell me it's pushed and I'll analyze it!
 
                 gr.Markdown("---")
                 gr.Markdown("## 🎭 Personas")
-                gr.Markdown("Design specialized assistants with unique characteristics and domain expertise.")
-
+                gr.Markdown("**Coming Soon** — Design specialized assistants with unique characteristics and domain expertise.")
+                
                 with gr.Row():
                     with gr.Column(scale=1):
                         gr.Markdown("### ➕ Create New Persona")
-                        persona_id_input = gr.Textbox(label="Persona ID", placeholder="e.g., logistics_expert", info="Unique identifier (no spaces)")
-                        persona_name_input = gr.Textbox(label="Display Name", placeholder="e.g., Logistics Expert")
-                        persona_desc_input = gr.Textbox(label="Description", placeholder="What makes this persona unique?", lines=2)
-                        persona_tone = gr.Dropdown(choices=["friendly", "professional", "technical"], value="professional", label="Communication Tone")
-                        persona_complexity = gr.Dropdown(choices=["simple", "balanced", "detailed"], value="balanced", label="Response Complexity")
-                        persona_domain = gr.Dropdown(choices=["general", "finance", "logistics", "retail", "manufacturing"], value="general", label="Domain Expertise")
-                        persona_instructions = gr.Textbox(label="Custom Instructions", placeholder="Additional guidance for this persona...", lines=4)
-                        save_persona_btn = gr.Button("💾 Save Persona", variant="primary")
-                        persona_status = gr.Markdown("")
-
-                    with gr.Column(scale=1):
+                        persona_id_input = gr.Textbox(label="Persona ID", placeholder="e.g., logistics_expert", info="Unique identifier (no spaces)", interactive=False)
+                        persona_name_input = gr.Textbox(label="Display Name", placeholder="e.g., Logistics Expert", interactive=False)
+                        persona_desc_input = gr.Textbox(label="Description", placeholder="What makes this persona unique?", lines=2, interactive=False)
+                        persona_tone = gr.Dropdown(choices=["friendly", "professional", "technical"], value="professional", label="Communication Tone", interactive=False)
+                        persona_complexity = gr.Dropdown(choices=["simple", "balanced", "detailed"], value="balanced", label="Response Complexity", interactive=False)
+                        persona_domain = gr.Dropdown(choices=["general", "finance", "logistics", "retail", "manufacturing"], value="general", label="Domain Expertise", interactive=False)
+                        persona_instructions = gr.Textbox(label="Custom Instructions", placeholder="Additional guidance for this persona...", lines=4, interactive=False)
+                        save_persona_btn = gr.Button("💾 Save Persona (Coming Soon)", variant="secondary", interactive=False)
+                        persona_status = gr.Markdown("*This feature is coming in the next release.*")
                         gr.Markdown("### 📊 Persona Performance")
                         persona_list_display = gr.Markdown("Loading personas...")
                         refresh_personas_btn = gr.Button("🔄 Refresh List", size="sm")
