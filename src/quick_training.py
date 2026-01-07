@@ -40,7 +40,7 @@ def save_training_rules(rules_data: Dict) -> bool:
         logger.error(f"Error saving training rules: {e}")
         return False
 
-def add_training_rule(instruction: str) -> Tuple[bool, str]:
+def add_training_rule(instruction: str, owner: str = "", priority: int = 5, status: str = "draft") -> Tuple[bool, str]:
     """
     Add a free-form training instruction.
     
@@ -57,10 +57,21 @@ def add_training_rule(instruction: str) -> Tuple[bool, str]:
         rules_data = load_training_rules()
         
         # Add new rule
+        # Normalize fields
+        status_norm = status if status in {"draft", "approved", "deprecated"} else "draft"
+        try:
+            prio = int(priority)
+        except Exception:
+            prio = 5
+        prio = max(1, min(prio, 10))
+
         new_rule = {
             "instruction": instruction.strip(),
             "added_at": datetime.now().isoformat(),
-            "usage_count": 0
+            "usage_count": 0,
+            "owner": owner or "",
+            "priority": prio,
+            "status": status_norm
         }
         
         rules_data["rules"].append(new_rule)
@@ -90,10 +101,15 @@ def get_training_rules_for_prompt() -> str:
         if not rules_data["rules"]:
             return ""
         
-        prompt = "\n### User-Defined Training Rules:\n"
+        # Use only approved rules, ordered by priority (lower number = higher priority)
+        approved = [r for r in rules_data["rules"] if r.get("status", "draft") == "approved"]
+        approved = sorted(approved, key=lambda r: r.get("priority", 5))
+        if not approved:
+            return ""
+
+        prompt = "\n### User-Defined Training Rules (Approved):\n"
         prompt += "The user has provided the following specific instructions on how to interpret queries:\n\n"
-        
-        for i, rule in enumerate(rules_data["rules"], 1):
+        for i, rule in enumerate(approved, 1):
             prompt += f"{i}. {rule['instruction']}\n"
         
         prompt += "\nIMPORTANT: Follow these rules precisely when generating SQL queries.\n"
@@ -138,7 +154,8 @@ def format_rules_display() -> str:
                     pass
             
             output += f"**Rule #{len(rules_data['rules']) - i + 1}** (Added: {added_date})\n"
-            output += f"> {rule['instruction']}\n\n"
+            output += f"> {rule['instruction']}\n"
+            output += f"- Status: {rule.get('status','draft')} · Priority: {rule.get('priority',5)} · Owner: {rule.get('owner','')}\n\n"
         
         return output
         
@@ -169,4 +186,33 @@ def delete_rule(rule_index: int) -> Tuple[bool, str]:
             
     except Exception as e:
         logger.error(f"Error deleting rule: {e}", exc_info=True)
+        return False, f"Error: {str(e)}"
+
+def update_rule(rule_index: int, owner: str = None, priority: int = None, status: str = None) -> Tuple[bool, str]:
+    """Update governance fields for a rule by index (1-based)."""
+    try:
+        rules_data = load_training_rules()
+        if rule_index < 1 or rule_index > len(rules_data["rules"]):
+            return False, f"Invalid rule number. Must be between 1 and {len(rules_data['rules'])}"
+
+        rule = rules_data["rules"][rule_index - 1]
+
+        if owner is not None:
+            rule["owner"] = owner
+        if priority is not None:
+            try:
+                prio = int(priority)
+            except Exception:
+                prio = rule.get("priority", 5)
+            rule["priority"] = max(1, min(prio, 10))
+        if status is not None:
+            rule["status"] = status if status in {"draft", "approved", "deprecated"} else rule.get("status", "draft")
+
+        rules_data["metadata"]["last_updated"] = datetime.now().isoformat()
+        if save_training_rules(rules_data):
+            return True, "✅ Rule updated"
+        else:
+            return False, "Failed to save changes"
+    except Exception as e:
+        logger.error(f"Error updating rule: {e}", exc_info=True)
         return False, f"Error: {str(e)}"

@@ -124,6 +124,20 @@ def save_learning(
         # Save to file
         with open(LEARNINGS_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+
+        # Best-effort dual-write to SQLite knowledge store
+        try:
+            from src.knowledge_store import insert_learning, init_store
+            init_store()
+            insert_learning({
+                "original_query": original_query,
+                "clarified_query": clarified_query,
+                "sql": sql_query,
+                "outcome": feedback,
+                "usage_count": 1
+            })
+        except Exception:
+            pass
         
         return True
         

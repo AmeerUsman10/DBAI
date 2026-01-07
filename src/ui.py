@@ -16,17 +16,18 @@ from dotenv import load_dotenv, set_key
 
 from src.providers import create_provider
 from src.database import reload_engine, test_connection, get_engine, run_query, get_sql_database, load_metadata, save_metadata
-from src.llm import make_sql_chain, make_presentation_chain, make_describe_chain, extract_sql_from_response
+from src.llm import make_sql_chain, make_presentation_chain, make_describe_chain, extract_sql_from_response, validate_sql
+from src.telemetry import TelemetryLogger
 from src.uploader import process_excel_files, check_table_exists, import_dataframe_to_db
 from src.trainer import save_training_example
 from src.diagnostics import collect_diagnostics
 from src.clarity import analyze_query_clarity, needs_clarification
 from src.learnings import save_learning, get_learning_stats
-from src.quick_training import add_training_rule, get_training_stats, format_rules_display
+from src.quick_training import add_training_rule, get_training_stats, format_rules_display, update_rule, delete_rule, load_training_rules
 from src.session_tracker import get_session_tracker, reset_session_tracker
 from src.query_classifier import classify_query, needs_movement_clarification, get_clarification_for_classification
 from src.query_templates import generate_sql_from_template
-from src.feedback import save_feedback, get_feedback_statistics, format_feedback_for_display, get_recent_feedback, format_recent_feedback
+from src.feedback import save_feedback, get_feedback_statistics, format_feedback_for_display, get_recent_feedback, format_recent_feedback, get_rule_suggestions
 from src.dev_notes import load_notes, save_notes, add_quick_note, get_notes_preview
 from src.query_optimizer import (
     cache_query_result, get_cached_result, cache_sql_generation, get_cached_sql,
@@ -468,6 +469,18 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
             pending_clarification["options"] = []
             # Keep original_query for learning after successful execution
     
+    # Resolve persona overlay for prompt shaping
+    persona_overlay = ""
+    try:
+        if persona in PERSONAS:
+            persona_overlay = PERSONAS[persona]["prompt"]
+        else:
+            cp = get_custom_persona(persona)
+            if cp:
+                persona_overlay = generate_persona_prompt(cp)
+    except Exception:
+        persona_overlay = ""
+
     # CLASSIFY FIRST to detect breakdown/template potential (always needed)
     classification = classify_query(question)
     logger.info(f"Query classified as: {classification['type']} (confidence: {classification['confidence']}%)")
@@ -625,6 +638,38 @@ Your response:"""
                 performance={"total_time_ms": int((time.time() - start_time) * 1000), "tokens": {"total_tokens": 0}},
                 error=None
             )
+
+            # Append cache stats footer
+            try:
+                stats = get_cache_stats() or {}
+                rc = stats.get("result_cache", {})
+                sc = stats.get("sql_cache", {})
+                size_mb = stats.get("cache_size_mb", 0)
+                response += (
+                    f"\n\n<sub>🗄️ Cache: results={rc.get('total_entries',0)}, hits={rc.get('total_hits',0)} · "
+                    f"sql={sc.get('total_entries',0)}, reuses={sc.get('total_reuses',0)} · size={size_mb:.2f}MB</sub>"
+                )
+            except Exception:
+                pass
+
+            # Audit event for cache hit
+            try:
+                TelemetryLogger.log_audit_event({
+                    "session_id": session_tracker.session_id,
+                    "message_id": message_id,
+                    "question": question,
+                    "provider": "cache",
+                    "model": "n/a",
+                    "generation_method": "cache",
+                    "tokens_total": 0,
+                    "sql_query": sql_query,
+                    "success": True,
+                    "execution_time_ms": int((time.time() - start_time) * 1000),
+                    "cache_hit": True,
+                    "safety_blocked": False
+                })
+            except Exception:
+                pass
             
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": response})
@@ -684,7 +729,7 @@ Your response:"""
             logger.info(f"⚠️ Template not available, using LLM generation")
             # Generate SQL using LLM
             sql_chain = make_sql_chain(current_llm, db)
-            sql_response_obj = sql_chain({"question": question})
+            sql_response_obj = sql_chain({"question": question, "persona_overlay": persona_overlay, "message_id": message_id})
             
             # Extract token usage from SQL generation
             if isinstance(sql_response_obj, dict) and 'response' in sql_response_obj:
@@ -708,6 +753,57 @@ Your response:"""
         
         # LOG: Generated SQL query
         logger.info(f"GENERATED SQL ({generation_method}): {sql_query}")
+
+        # SAFETY CHECK: Validate SQL before execution
+        is_valid, safety_msg = validate_sql(sql_query)
+        if not is_valid:
+            # Prepare blocked response with guidance
+            response = (
+                f"❌ Query blocked by safety guardrails: {safety_msg}\n\n"
+                "Only single-statement SELECT queries are allowed. "
+                "Please rephrase your request or use a safer query." 
+            )
+
+            # Track attempted execution (blocked)
+            execution_data = {
+                "sql_query": sql_query,
+                "success": False,
+                "blocked_by_safety": True,
+                "reason": safety_msg,
+                "execution_time_ms": 0
+            }
+
+            # Add generation method indicator
+            method_icon = "⚡" if generation_method == "template" else "🤖"
+            method_text = "Template" if generation_method == "template" else "LLM"
+            response += f"\n\n<sub>{method_icon} Generated via {method_text} · 🚫 Safety blocked</sub>"
+
+            # Track lifecycle and return
+            total_time_ms = int((time.time() - start_time) * 1000)
+            session_tracker.track_query(
+                user_question=question,
+                clarity_analysis=clarity_data,
+                llm_interaction={
+                    "provider": provider_name if generation_method == "llm" else "template",
+                    "model": model if generation_method == "llm" else "rule-based",
+                    "temperature": temperature,
+                    "sql_generated": sql_query,
+                    "tokens": response_tokens,
+                    "generation_method": generation_method
+                },
+                execution=execution_data,
+                response={"type": "error", "text": response, "length_chars": len(response)},
+                performance={
+                    "total_time_ms": total_time_ms,
+                    "query_time_ms": 0,
+                    "tokens": response_tokens
+                },
+                error={"type": "SafetyBlocked", "message": safety_msg}
+            )
+
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": response})
+            return "", history, message_id, response
         
         # Track LLM interaction
         llm_data = {
@@ -939,6 +1035,19 @@ Keep it concise and factual."""
         elif generation_method == "template":
             response += f"\n\n<sub>⚡ Zero tokens used (template-based)</sub>"
         
+        # Append cache stats footer for non-cache path
+        try:
+            stats = get_cache_stats() or {}
+            rc = stats.get("result_cache", {})
+            sc = stats.get("sql_cache", {})
+            size_mb = stats.get("cache_size_mb", 0)
+            response += (
+                f"\n\n<sub>🗄️ Cache: results={rc.get('total_entries',0)}, hits={rc.get('total_hits',0)} · "
+                f"sql={sc.get('total_entries',0)}, reuses={sc.get('total_reuses',0)} · size={size_mb:.2f}MB</sub>"
+            )
+        except Exception:
+            pass
+
         # LOG: Final response sent to user
         logger.info(f"RESPONSE SENT: {len(response)} chars | Success: {success} | Tokens: {response_tokens.get('total_tokens', 0)}")
         logger.debug(f"RESPONSE PREVIEW: {response[:200]}")
@@ -996,9 +1105,36 @@ Keep it concise and factual."""
             },
             error=None
         )
+
+        # Update persona stats if custom persona in use
+        try:
+            if persona not in PERSONAS:
+                tokens_total = response_tokens.get("total_tokens", 0)
+                update_persona_stats(persona_id=persona, success=bool(success), tokens=tokens_total)
+        except Exception:
+            pass
         
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
+
+        # Audit event for normal execution
+        try:
+            TelemetryLogger.log_audit_event({
+                "session_id": session_tracker.session_id,
+                "message_id": message_id,
+                "question": question,
+                "provider": provider_name if generation_method == "llm" else "template",
+                "model": model if generation_method == "llm" else "rule-based",
+                "generation_method": generation_method,
+                "tokens_total": response_tokens.get("total_tokens", 0),
+                "sql_query": sql_query,
+                "success": bool(success),
+                "execution_time_ms": execution_data.get("execution_time_ms", 0) if execution_data else 0,
+                "cache_hit": False,
+                "safety_blocked": False
+            })
+        except Exception:
+            pass
         return "", history, message_id, response
         
     except Exception as e:
@@ -2389,6 +2525,7 @@ Generate the examples now:"""
                         
                         analytics_display = gr.Markdown("Loading analytics...")
                         refresh_analytics_btn = gr.Button("🔄 Refresh Analytics", variant="primary")
+                        consolidate_btn = gr.Button("🧹 Run Consolidation", variant="secondary")
                         
                         gr.Markdown("---")
                         gr.Markdown("### 💰 Token Cost Savings")
@@ -2402,15 +2539,37 @@ Generate the examples now:"""
                             try:
                                 from src.learnings import get_learning_stats, load_learnings
                                 from src.quick_training import get_training_stats
+                                import json
+                                from pathlib import Path
                                 
                                 learning_stats = get_learning_stats()
                                 training_stats = get_training_stats()
+
+                                # Load audit events for safety/cache metrics (if available)
+                                audit_path = Path(__file__).parent.parent / "logs" / "audit_events.json"
+                                blocked_count = 0
+                                cache_count = 0
+                                total_events = 0
+                                if audit_path.exists():
+                                    try:
+                                        with open(audit_path, 'r', encoding='utf-8') as f:
+                                            events = json.load(f)
+                                        total_events = len(events)
+                                        for ev in events:
+                                            if ev.get("safety_blocked"):
+                                                blocked_count += 1
+                                            if ev.get("cache_hit"):
+                                                cache_count += 1
+                                    except Exception:
+                                        pass
                                 
                                 # Build analytics dashboard
                                 output = "## 📊 Learning System Performance\n\n"
                                 output += f"**Total Query Patterns Learned:** {learning_stats['total']}\n\n"
                                 output += f"**Successful Patterns:** {learning_stats['successful']}\n\n"
                                 output += f"**Total Queries Processed:** {learning_stats['total_queries']}\n\n"
+                                output += "\n### 🔒 Safety & Cache\n"
+                                output += f"**Safety Blocks:** {blocked_count} | **Cache Hits:** {cache_count} | **Audited Events:** {total_events}\n\n"
                                 
                                 if learning_stats['most_used']:
                                     mu = learning_stats['most_used']
@@ -2451,9 +2610,153 @@ Generate the examples now:"""
                             outputs=[analytics_display, cost_savings, rule_ranking]
                         )
                         
+                        def _run_consolidation():
+                            try:
+                                from src.consolidation import consolidate_training
+                                ok, msg = consolidate_training()
+                                return msg if ok else f"❌ {msg}"
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+
+                        consolidate_btn.click(_run_consolidation, outputs=[analytics_display])
+                        
                         # Load on tab open
                         demo.load(show_training_analytics, outputs=[analytics_display, cost_savings, rule_ranking])
                     
+                    # Rule Suggestions Sub-tab (from feedback)
+                    with gr.Tab("🧩 Rule Suggestions"):
+                        gr.Markdown("## Suggested Training Rules")
+                        gr.Markdown("Generated automatically from negative feedback with comments. Approve to add as Quick Training rules.")
+
+                        suggestions_output = gr.Markdown(visible=True)
+                        suggestions_select = gr.Dropdown(label="Select a suggestion to approve", choices=[], interactive=True)
+                        approve_btn = gr.Button("✅ Approve & Add Rule", variant="primary")
+                        refresh_suggestions_btn = gr.Button("🔄 Refresh Suggestions")
+
+                        def _load_rule_suggestions():
+                            items = get_rule_suggestions(limit=50)
+                            if not items:
+                                return "No rule suggestions available yet.", []
+                            # Build display markdown and dropdown choices
+                            md = "### Recent Suggestions\n\n"
+                            choices = []
+                            for idx, s in enumerate(items):
+                                ts = s.get("timestamp", "")[:19]
+                                q = (s.get("question", "") or "").strip()
+                                rule = (s.get("suggested_rule", "") or "").strip()
+                                md += f"**{idx+1}.** ({ts})\n- Query: _{q[:100]}_\n- Rule: {rule}\n\n"
+                                # Use index as value for selection
+                                choices.append(f"{idx+1}: {q[:50]}...")
+                            return md, choices
+
+                        def _approve_selected(selection: str):
+                            items = get_rule_suggestions(limit=50)
+                            if not items:
+                                return "❌ No suggestions to approve", gr.Dropdown(choices=[])
+                            try:
+                                # Parse index from selection "N: ..."
+                                idx = int(selection.split(":", 1)[0]) - 1
+                                s = items[idx]
+                                from src.quick_training import add_training_rule
+                                ok, msg = add_training_rule(s.get("suggested_rule", ""), status="approved")
+                                status = "✅ Rule added" if ok else f"❌ {msg}"
+                                md, choices = _load_rule_suggestions()
+                                return f"{status}\n\n{msg if not ok else s.get('suggested_rule','')}", gr.Dropdown(choices=choices, value=None)
+                            except Exception as e:
+                                return f"❌ Error: {e}", gr.Dropdown(choices=[])
+
+                        # Wire buttons
+                        refresh_suggestions_btn.click(_load_rule_suggestions, outputs=[suggestions_output, suggestions_select])
+                        approve_btn.click(_approve_selected, inputs=[suggestions_select], outputs=[suggestions_output, suggestions_select])
+
+                        # Load suggestions on tab open
+                        demo.load(_load_rule_suggestions, outputs=[suggestions_output, suggestions_select])
+
+                    # Rule Governance Sub-tab
+                    with gr.Tab("🛡️ Rule Governance"):
+                        gr.Markdown("## Govern Training Rules")
+                        gr.Markdown("Set owner, priority, and status. Only approved rules are injected into prompts.")
+
+                        gov_rules_md = gr.Markdown()
+                        gov_select = gr.Dropdown(label="Select Rule #", choices=[], interactive=True)
+                        owner_in = gr.Textbox(label="Owner", placeholder="e.g., ameer")
+                        priority_in = gr.Slider(label="Priority (1=high, 10=low)", minimum=1, maximum=10, step=1, value=5)
+                        status_in = gr.Dropdown(label="Status", choices=["draft", "approved", "deprecated"], value="draft")
+                        with gr.Row():
+                            approve_btn2 = gr.Button("✅ Approve", variant="primary")
+                            update_btn = gr.Button("💾 Update")
+                            delete_btn = gr.Button("🗑️ Delete", variant="stop")
+                            refresh_gov_btn = gr.Button("🔄 Refresh")
+                        gov_msg = gr.Markdown()
+
+                        def _load_governance_rules():
+                            data = load_training_rules()
+                            rules = data.get("rules", [])
+                            if not rules:
+                                return "No rules yet.", []
+                            md = f"### Rules ({len(rules)})\n\n"
+                            choices = []
+                            for idx, r in enumerate(rules, 1):
+                                md += (
+                                    f"**#{idx}** - {r.get('instruction','')[:80]}\n"
+                                    f"- Status: {r.get('status','draft')} · Priority: {r.get('priority',5)} · Owner: {r.get('owner','')}\n\n"
+                                )
+                                choices.append(str(idx))
+                            return md, choices
+
+                        def _populate_fields(rule_no: str):
+                            try:
+                                idx = int(rule_no)
+                            except:
+                                return owner_in, priority_in, status_in
+                            data = load_training_rules()
+                            rules = data.get("rules", [])
+                            if idx < 1 or idx > len(rules):
+                                return owner_in, priority_in, status_in
+                            r = rules[idx - 1]
+                            return (
+                                gr.Textbox(value=r.get("owner","")),
+                                gr.Slider(value=int(r.get("priority",5))),
+                                gr.Dropdown(value=r.get("status","draft"))
+                            )
+
+                        def _approve_rule(rule_no: str):
+                            try:
+                                idx = int(rule_no)
+                            except Exception as e:
+                                return f"❌ Invalid selection: {e}", gr.Dropdown(choices=[])
+                            ok, msg = update_rule(idx, status="approved")
+                            md, choices = _load_governance_rules()
+                            return (f"{'✅ Approved' if ok else '❌ ' + msg}", gr.Dropdown(choices=choices, value=rule_no if ok else None))
+
+                        def _update_rule(rule_no: str, owner: str, priority: int, status: str):
+                            try:
+                                idx = int(rule_no)
+                            except Exception as e:
+                                return f"❌ Invalid selection: {e}", gr.Dropdown(choices=[])
+                            ok, msg = update_rule(idx, owner=owner, priority=priority, status=status)
+                            md, choices = _load_governance_rules()
+                            return (f"{'✅ Updated' if ok else '❌ ' + msg}", gr.Dropdown(choices=choices, value=rule_no if ok else None))
+
+                        def _delete_rule(rule_no: str):
+                            try:
+                                idx = int(rule_no)
+                            except Exception as e:
+                                return f"❌ Invalid selection: {e}", gr.Dropdown(choices=[])
+                            ok, msg = delete_rule(idx)
+                            md, choices = _load_governance_rules()
+                            return (msg, gr.Dropdown(choices=choices, value=None))
+
+                        # Wiring
+                        refresh_gov_btn.click(_load_governance_rules, outputs=[gov_rules_md, gov_select])
+                        gov_select.change(_populate_fields, inputs=[gov_select], outputs=[owner_in, priority_in, status_in])
+                        approve_btn2.click(_approve_rule, inputs=[gov_select], outputs=[gov_msg, gov_select])
+                        update_btn.click(_update_rule, inputs=[gov_select, owner_in, priority_in, status_in], outputs=[gov_msg, gov_select])
+                        delete_btn.click(_delete_rule, inputs=[gov_select], outputs=[gov_msg, gov_select])
+
+                        # Initial load
+                        demo.load(_load_governance_rules, outputs=[gov_rules_md, gov_select])
+
                     # Custom Personas Sub-tab
                     with gr.Tab("🎭 Custom Personas"):
                         gr.Markdown("## Create Custom AI Personas")
@@ -2604,14 +2907,14 @@ Generate the examples now:"""
                         demo.load(list_personas_display, outputs=[persona_list_display])
                         demo.load(show_persona_ranking, outputs=[persona_ranking])
             
-            # Developer Tools Tab (NEW)
+            # Developer Tools Tab (UPDATED)
             with gr.Tab("🔬 Developer Tools"):
-                gr.Markdown("## Session Intelligence & Observability")
-                gr.Markdown("Control what gets tracked and export session data for Copilot analysis.")
+                gr.Markdown("## Developer Insights")
+                gr.Markdown("Session summaries, cache stats, feedback analytics, and export.")
                 
                 with gr.Row():
                     with gr.Column(scale=1):
-                        gr.Markdown("### 📊 Current Session")
+                        gr.Markdown("### Session Summary")
                         
                         session_summary = gr.Markdown("Loading session data...")
                         refresh_summary_btn = gr.Button("🔄 Refresh Summary", size="sm")
@@ -2650,7 +2953,7 @@ Generate the examples now:"""
                         
                         # Cache Statistics Section
                         gr.Markdown("---")
-                        gr.Markdown("### ⚡ Query Cache Performance")
+                        gr.Markdown("### Cache Performance")
                         cache_stats_display = gr.Markdown("Loading cache stats...")
                         refresh_cache_btn = gr.Button("🔄 Refresh Cache Stats", size="sm")
                         clear_cache_btn = gr.Button("🗑️ Clear All Cache", size="sm", variant="stop")
@@ -2710,7 +3013,7 @@ Generate the examples now:"""
                         
                         # Feedback Analytics Section
                         gr.Markdown("---")
-                        gr.Markdown("### 📊 User Feedback Analytics")
+                        gr.Markdown("### Feedback Analytics")
                         
                         feedback_stats_display = gr.Markdown("No feedback data yet.")
                         recent_feedback_display = gr.Markdown("")
@@ -2780,31 +3083,47 @@ Then tell me it's pushed and I'll analyze it!
                         export_btn.click(export_session_report, outputs=[export_status, export_file_download, export_file_download])
                     
                     with gr.Column(scale=1):
-                        gr.Markdown("### ⚙️ Observability Settings")
+                        gr.Markdown("### Controls")
+                        gr.Markdown("Observability and diagnostics moved to 🛠️ Developer Settings.")
+                
+                # Load session summary on page load
+                demo.load(
+                    get_current_session_summary,
+                    outputs=[session_summary]
+                )
+
+            # Developer Settings Tab (NEW)
+            with gr.Tab("🛠️ Developer Settings"):
+                gr.Markdown("## Observability & Diagnostics")
+                gr.Markdown("Configure developer mode features and collect diagnostics for troubleshooting.")
+
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.Markdown("### Observability Settings")
                         gr.Markdown("**Tier 1** (Always On): Essential metrics  \n**Tier 2** (Developer Mode): Detailed debugging")
-                        
+
                         # Configuration controls
                         tier1_checkbox = gr.Checkbox(label="✅ Tier 1: Essential Metrics", value=True, interactive=False)
-                        
+
                         gr.Markdown("---")
                         tier2_checkbox = gr.Checkbox(label="🔧 Tier 2: Developer Mode", value=False, info="Enable detailed debugging")
-                        
+
                         # Sub-features (dependent on Tier 2)
                         gr.Markdown("**⚙️ Tier 2 Features** (only work when Developer Mode is ON):")
                         capture_llm_prompts = gr.Checkbox(label="📝 Capture Full LLM Prompts", value=False, info="⚠️ Very detailed", interactive=False)
                         capture_sample_data = gr.Checkbox(label="📊 Capture Sample Data", value=False, info="⚠️ Privacy concern", interactive=False)
-                        
+
                         gr.Markdown("---")
                         save_config_btn = gr.Button("💾 Save Configuration", variant="secondary")
                         config_status = gr.Markdown("")
-                        
+
                         def toggle_tier2_features(tier2_enabled):
                             """Enable/disable sub-features based on Tier 2 state."""
                             return (
                                 gr.update(interactive=tier2_enabled),  # capture_llm_prompts
                                 gr.update(interactive=tier2_enabled),  # capture_sample_data
                             )
-                        
+
                         def save_configuration(tier2, llm_prompts, sample_data):
                             """Save observability configuration."""
                             try:
@@ -2815,7 +3134,7 @@ Then tell me it's pushed and I'll analyze it!
                                     "capture_sample_data": sample_data if tier2 else False,
                                 })
                                 session_tracker.save_config(new_config)
-                                
+
                                 status = "✅ **Configuration Saved!**\n\n"
                                 status += "🔧 Developer Mode ENABLED" if tier2 else "📊 Essential mode only"
                                 if tier2:
@@ -2824,20 +3143,20 @@ Then tell me it's pushed and I'll analyze it!
                                 return status
                             except Exception as e:
                                 return f"❌ Error: {str(e)}"
-                        
+
                         # Wire up Tier 2 toggle to enable/disable sub-features
                         tier2_checkbox.change(
                             toggle_tier2_features,
                             inputs=[tier2_checkbox],
                             outputs=[capture_llm_prompts, capture_sample_data]
                         )
-                        
+
                         save_config_btn.click(
                             save_configuration,
                             inputs=[tier2_checkbox, capture_llm_prompts, capture_sample_data],
                             outputs=[config_status]
                         )
-                        
+
                         # Guidance
                         gr.Markdown("---")
                         gr.Markdown("""
@@ -2850,139 +3169,21 @@ Then tell me it's pushed and I'll analyze it!
 - 💬 Asking for help  
 - 🐛 Complex bugs  
 """)
-                
-                # Load session summary on page load
-                demo.load(
-                    get_current_session_summary,
-                    outputs=[session_summary]
-                )
 
-            # Developer Notes Tab (NEW)
-            with gr.Tab("📝 Developer Notes"):
-                gr.Markdown("## 📝 Development Change Log & Notes")
-                gr.Markdown("**Keep track of planned changes, work in progress, completed tasks, bugs, and ideas.**")
-                gr.Markdown("*This helps maintain context across long development sessions and prevents forgetting planned changes.*")
-                
-                with gr.Row():
-                    save_notes_btn = gr.Button("💾 Save Notes", variant="primary", size="sm", scale=1)
-                    refresh_notes_btn = gr.Button("🔄 Refresh", variant="secondary", size="sm", scale=1)
-                
-                notes_status = gr.Markdown("")
-                
-                notes_editor = gr.Textbox(
-                    label="Notes (Markdown supported)",
-                    placeholder="Loading notes...",
-                    lines=30,
-                    max_lines=50,
-                    show_label=False
-                )
-                
-                gr.Markdown("---")
-                gr.Markdown("### Quick Add")
-                gr.Markdown("Add a timestamped note to a specific section:")
-                
-                with gr.Row():
-                    quick_note_input = gr.Textbox(
-                        placeholder="Enter a quick note...",
-                        label="Quick Note",
-                        scale=3
-                    )
-                    quick_section_dropdown = gr.Dropdown(
-                        choices=[
-                            "🎯 Planned Changes (Not Started)",
-                            "🚧 In Progress",
-                            "✅ Completed",
-                            "🐛 Known Bugs",
-                            "💡 Ideas & Future Enhancements",
-                            "📝 Session Notes",
-                            "🔧 Configuration Changes",
-                            "📚 Technical Decisions"
-                        ],
-                        value="📝 Session Notes",
-                        label="Section",
-                        scale=2
-                    )
-                    add_note_btn = gr.Button("➕ Add", variant="secondary", size="sm", scale=1)
-                
-                quick_note_status = gr.Markdown("")
-                
-                # Event handlers
-                def handle_save_notes(content):
-                    """Save notes to file."""
-                    success, message = save_notes(content)
-                    return message
-                
-                def handle_refresh_notes():
-                    """Reload notes from file."""
-                    content = load_notes()
-                    return content, "🔄 Notes refreshed from disk"
-                
-                def handle_add_quick_note(note, section):
-                    """Add a quick timestamped note."""
-                    if not note or not note.strip():
-                        return gr.update(), "⚠️ Please enter a note"
-                    
-                    # Remove emoji prefix from section for function call
-                    section_clean = section.split(' ', 1)[1] if ' ' in section else section
-                    
-                    success, message = add_quick_note(note, section_clean)
-                    
-                    if success:
-                        # Reload notes to show the update
-                        updated_content = load_notes()
-                        return updated_content, message, ""
-                    else:
-                        return gr.update(), message, gr.update()
-                
-                # Wire up event handlers
-                save_notes_btn.click(
-                    handle_save_notes,
-                    inputs=[notes_editor],
-                    outputs=[notes_status]
-                )
-                
-                refresh_notes_btn.click(
-                    handle_refresh_notes,
-                    outputs=[notes_editor, notes_status]
-                )
-                
-                add_note_btn.click(
-                    handle_add_quick_note,
-                    inputs=[quick_note_input, quick_section_dropdown],
-                    outputs=[notes_editor, quick_note_status, quick_note_input]
-                )
-                
-                # Load notes on page load
-                demo.load(
-                    load_notes,
-                    outputs=[notes_editor]
-                )
-                
-                gr.Markdown("---")
-                gr.Markdown("""
-### 💡 Tips
-- **Markdown supported**: Use `#` for headings, `-` for lists, `**bold**`, `*italic*`, etc.
-- **Checkbox format**: Use `- [ ]` for unchecked, `- [x]` for checked tasks
-- **Auto-timestamp**: Quick Add automatically adds timestamp to your notes
-- **Persistent**: Notes are saved to `logs/dev_notes.md` and persist across sessions
-- **Version control**: This file is tracked in git, so you can see change history
-                """)
+                    with gr.Column(scale=1):
+                        gr.Markdown("### Diagnostics")
+                        gr.Markdown("Collect system information, configuration, and logs for troubleshooting.")
+                        dev_collect_btn = gr.Button("🔍 Collect Diagnostics", variant="primary")
+                        dev_download_file = gr.File(label="Download Diagnostics File")
+                        dev_collect_btn.click(
+                            collect_and_download_diagnostics,
+                            outputs=[dev_download_file]
+                        )
+
             
-            # Diagnostics Tab
-            with gr.Tab("🔍 Diagnostics"):
-                gr.Markdown("## System Diagnostics")
-                gr.Markdown("Collect system information, configuration, and logs for troubleshooting.")
-                
-                collect_btn = gr.Button("Collect Diagnostics", variant="primary")
-                download_file = gr.File(label="Download Diagnostics File")
-                
-                collect_btn.click(
-                    collect_and_download_diagnostics,
-                    outputs=[download_file]
-                )
         
         gr.Markdown("---")
-        gr.Markdown("💡 **Tip:** Use Developer Notes to track planned changes and prevent forgetting tasks. Use Diagnostics to collect logs for troubleshooting.")
+        gr.Markdown("💡 **Tip:** Diagnostics are available under 🛠️ Developer Settings.")
     
     return demo
 

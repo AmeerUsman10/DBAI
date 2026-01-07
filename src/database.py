@@ -11,6 +11,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from langchain_community.utilities import SQLDatabase
+from src.llm import validate_sql
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +179,12 @@ def run_query(query: str) -> Tuple[bool, Any]:
         return False, "Database engine not available"
     
     try:
+        # Safety net: validate SQL here as well
+        is_valid, safety_msg = validate_sql(query)
+        if not is_valid:
+            logger.warning(f"Query blocked by safety validator in database.run_query: {safety_msg}")
+            return False, f"Query blocked: {safety_msg}"
+
         with engine.connect() as conn:
             result = conn.execute(text(query))
             

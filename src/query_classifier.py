@@ -259,20 +259,40 @@ def classify_query(query: str) -> Dict:
 
 
 def needs_movement_clarification(classification: Dict) -> bool:
-    """Check if query needs movement type clarification."""
-    # Business rule: Only ask for movement type if user explicitly mentions it in context
-    # Example: "top suppliers for arrivals" vs "top suppliers" (no clarification needed)
-    # Default behavior: Show across all movement types, both departments
-    return False  # Disabled - let template handle multi-department by default
+    """Check if query needs movement type clarification (minimal adaptive rule)."""
+    try:
+        params = classification.get('params', {})
+        # Ask when ranking suppliers without explicit movement type
+        return (
+            classification.get('type') == 'ranking' and
+            params.get('entity') in ('supplier', 'suppliers') and
+            not params.get('movement_type')
+        )
+    except Exception:
+        return False
 
 
 def get_clarification_for_classification(classification: Dict) -> List[str]:
-    """Get specific clarification options based on classification."""
-    if needs_movement_clarification(classification):
-        return [
-            "Top suppliers by ARRIVAL (incoming stock)",
-            "Top suppliers by ISSUE (outgoing/used stock)",
-            "Top suppliers by REJECTION (returned stock)",
-            "Top suppliers across ALL movement types"
-        ]
-    return None
+    """Get specific clarification options based on classification (with minimal adaptive bias)."""
+    if not needs_movement_clarification(classification):
+        return None
+    options = [
+        "Top suppliers by ARRIVAL (incoming stock)",
+        "Top suppliers by ISSUE (outgoing/used stock)",
+        "Top suppliers by REJECTION (returned stock)",
+        "Top suppliers across ALL movement types"
+    ]
+    # Adaptive bias: reorder based on observed clarified queries in learnings
+    try:
+        from src.learnings import load_learnings
+        data = load_learnings()
+        counts = {opt: 0 for opt in options}
+        for l in data.get("learnings", []):
+            cq = (l.get("clarified_query", "") or "").lower()
+            for opt in options:
+                if opt.lower() in cq:
+                    counts[opt] += 1
+        options.sort(key=lambda o: counts.get(o, 0), reverse=True)
+    except Exception:
+        pass
+    return options

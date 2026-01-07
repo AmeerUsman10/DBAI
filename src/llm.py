@@ -124,7 +124,7 @@ def make_sql_chain(llm, db):
         metadata = load_metadata()
         
         # Build enhanced prompt template
-        def build_enhanced_prompt(question: str) -> str:
+        def build_enhanced_prompt(question: str, persona_overlay: str = "") -> str:
             # Get relevant learnings for this question
             learnings = get_relevant_learnings(question, limit=3)
             learnings_text = format_learnings_for_prompt(learnings)
@@ -163,11 +163,14 @@ def make_sql_chain(llm, db):
                                     metadata_context += f"    - \"{pattern['pattern']}\" usually means: {pattern['intent']}\n"
             
             # Build full prompt
+            persona_section = f"\n\nPERSONA OVERLAY:\n{persona_overlay}\n" if persona_overlay else ""
+
             enhanced_template = f"""Given the database schema below, write a SQL Server query to answer the user's question.
 
 Database Schema:
 {schema}
 {metadata_context}
+{persona_section}
 
 {learnings_text}
 
@@ -211,7 +214,22 @@ SQL Query:"""
         # Simple chain that formats prompt and calls LLM
         def sql_chain(inputs: dict) -> dict:
             question = inputs.get("question", "")
-            formatted_prompt = build_enhanced_prompt(question)
+            persona_overlay = inputs.get("persona_overlay", "")
+            formatted_prompt = build_enhanced_prompt(question, persona_overlay)
+            # Log prompt metadata (hash only)
+            try:
+                from src.session_tracker import get_session_tracker
+                from src.telemetry import TelemetryLogger
+                tracker = get_session_tracker()
+                TelemetryLogger.log_prompt_metadata(
+                    session_id=tracker.session_id,
+                    message_id=inputs.get("message_id", ""),
+                    question=question,
+                    prompt_text=formatted_prompt,
+                    generation_method="llm"
+                )
+            except Exception:
+                pass
             response = llm.invoke(formatted_prompt)
             
             # Extract content from response

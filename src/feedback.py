@@ -14,10 +14,13 @@ logger = logging.getLogger(__name__)
 # Feedback storage location
 FEEDBACK_DIR = Path(__file__).parent.parent / "logs" / "feedback"
 FEEDBACK_FILE = FEEDBACK_DIR / "feedback_data.json"
+SUGGESTIONS_DIR = Path(__file__).parent.parent / "logs" / "training"
+SUGGESTIONS_FILE = SUGGESTIONS_DIR / "rule_suggestions.json"
 
 def ensure_feedback_dir():
     """Ensure feedback directory exists."""
     FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+    SUGGESTIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 def load_feedback_data() -> Dict:
     """Load feedback data from file."""
@@ -90,7 +93,30 @@ def save_feedback(
         
         # Save to file
         save_feedback_data(data)
+
+        # Best-effort dual-write to SQLite knowledge store
+        try:
+            from src.knowledge_store import insert_feedback_event, init_store
+            init_store()
+            insert_feedback_event(event)
+        except Exception:
+            pass
         
+        # Generate rule suggestion from negative feedback with comments
+        try:
+            if feedback_type == "thumbs_down" and feedback_text:
+                suggestion = {
+                    "timestamp": event["timestamp"],
+                    "message_id": message_id,
+                    "question": question,
+                    "suggested_rule": f"For queries like '{question}': {feedback_text}",
+                    "source": "feedback",
+                    "session_id": session_id
+                }
+                _append_rule_suggestion(suggestion)
+        except Exception as e:
+            logger.warning(f"Failed to generate rule suggestion: {e}")
+
         logger.info(f"Feedback saved: {feedback_type} for message {message_id}")
         return True
         
@@ -231,3 +257,35 @@ def format_recent_feedback(events: List[Dict]) -> str:
         output += "\n"
     
     return output
+
+# --- Rule Suggestions Helpers ---
+
+def _append_rule_suggestion(suggestion: Dict):
+    """Append a rule suggestion to the suggestions store."""
+    ensure_feedback_dir()
+    try:
+        suggestions = []
+        if SUGGESTIONS_FILE.exists():
+            with open(SUGGESTIONS_FILE, 'r', encoding='utf-8') as f:
+                suggestions = json.load(f)
+        suggestions.append(suggestion)
+        with open(SUGGESTIONS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(suggestions, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Error saving rule suggestion: {e}")
+
+
+def get_rule_suggestions(limit: int = 20) -> List[Dict]:
+    """Retrieve recent rule suggestions generated from feedback."""
+    ensure_feedback_dir()
+    try:
+        if not SUGGESTIONS_FILE.exists():
+            return []
+        with open(SUGGESTIONS_FILE, 'r', encoding='utf-8') as f:
+            suggestions = json.load(f)
+        # Sort newest first
+        suggestions = sorted(suggestions, key=lambda s: s.get("timestamp",""), reverse=True)
+        return suggestions[:limit]
+    except Exception as e:
+        logger.error(f"Error loading rule suggestions: {e}")
+        return []
