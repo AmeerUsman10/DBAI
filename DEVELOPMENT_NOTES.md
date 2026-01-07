@@ -7,25 +7,39 @@ This file tracks planned changes, work in progress, and completed tasks to maint
 
 ## 🎯 PLANNED CHANGES (Priority Order)
 
-### CHAINLIT MIGRATION - In Progress
-**Phase 1: Core Chat (Today)** ← CURRENT
+### CHAINLIT MIGRATION - ✅ CORE COMPLETE!
+
+**Phase 1: Core Chat (COMPLETED IN 2 HOURS!)** ✅
 - [x] Install Chainlit package
 - [x] Create chainlit_app.py with basic structure
-- [x] Integrate chat_query() function from src/ui.py
-- [x] Add per-message feedback actions (thumbs up/down) using cl.Action
+- [x] Integrate full chat_query() logic from Gradio
+- [x] Add per-message feedback actions (thumbs up/down IN bubbles)
 - [x] Implement message streaming
-- [x] Test basic chat functionality ← **READY FOR TESTING**
+- [x] **Add query classification/templates** ✅
+- [x] **Add query caching** ✅
+- [x] **Add clarity checking** ✅
+- [x] **Add conversational query detection** ✅
+- [x] **Add learning system integration** ✅
+- [x] **Add training rules integration** ✅
+- [x] Test basic chat functionality ✅
 
-**Status:** ✅ Initial Chainlit app created and running on http://localhost:7861
-**What works:**
-- Chat interface with streaming responses
-- SQL generation and execution
-- Per-message thumbs up/down buttons (IN the message, not below!)
-- Settings sidebar (provider, model, temperature, persona, database)
-- Session state management
-- Feedback tracking integration
+**STATUS: 🎉 CORE FUNCTIONALITY 100% COMPLETE**
 
-**Next:** Open http://localhost:7861 in browser to test
+**What Works (All Features from Gradio):**
+- ✅ Chat interface with SQL generation
+- ✅ **Per-message thumbs up/down (IN chat bubbles!)**
+- ✅ **Feedback with comment collection** (uses AskUserMessage)
+- ✅ **Auto-creates training rules from negative feedback**
+- ✅ Query classification (80%+ confidence = template SQL)
+- ✅ Query caching (⚡ indicator when cache hit)
+- ✅ Clarity checking with numbered options
+- ✅ Conversational queries (meta questions about results)
+- ✅ Learning system (tracks clarifications)
+- ✅ Session tracking with observability
+- ✅ Settings sidebar (provider, model, temperature, persona, database)
+- ✅ Message streaming with progress indicators
+- ✅ Generation method display (⚡ Template vs 🤖 LLM)
+- ✅ Stats footer (learned patterns, training rules, method)
 
 ---
 
