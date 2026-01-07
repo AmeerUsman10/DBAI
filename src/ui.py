@@ -2606,7 +2606,7 @@ Generate the examples now:"""
                         gr.Markdown("Generated automatically from negative feedback with comments. Approve to add as Quick Training rules.")
 
                         suggestions_output = gr.Markdown(visible=True)
-                        suggestions_select = gr.Dropdown(label="Select a suggestion to approve", choices=[], interactive=True)
+                        suggestions_select = gr.Dropdown(label="Select a suggestion to approve", choices=[], allow_custom_value=True, interactive=True)
                         approve_btn = gr.Button("✅ Approve & Add Rule", variant="primary")
                         refresh_suggestions_btn = gr.Button("🔄 Refresh Suggestions")
 
@@ -2629,7 +2629,7 @@ Generate the examples now:"""
                         def _approve_selected(selection: str):
                             items = get_rule_suggestions(limit=50)
                             if not items:
-                                return "❌ No suggestions to approve", gr.Dropdown(choices=[])
+                                return "❌ No suggestions to approve", gr.update(choices=[], value=None)
                             try:
                                 # Parse index from selection "N: ..."
                                 idx = int(selection.split(":", 1)[0]) - 1
@@ -2640,7 +2640,7 @@ Generate the examples now:"""
                                 md, choices = _load_rule_suggestions()
                                 return f"{status}\n\n{msg if not ok else s.get('suggested_rule','')}", gr.Dropdown(choices=choices, value=None)
                             except Exception as e:
-                                return f"❌ Error: {e}", gr.Dropdown(choices=[])
+                                return f"❌ Error: {e}", gr.update(choices=[], value=None)
 
                         # Wire buttons
                         refresh_suggestions_btn.click(_load_rule_suggestions, outputs=[suggestions_output, suggestions_select])
@@ -2655,7 +2655,7 @@ Generate the examples now:"""
                         gr.Markdown("Set owner, priority, and status. Only approved rules are injected into prompts.")
 
                         gov_rules_md = gr.Markdown()
-                        gov_select = gr.Dropdown(label="Select Rule #", choices=[], interactive=True)
+                        gov_select = gr.Dropdown(label="Select Rule #", choices=[], allow_custom_value=True, interactive=True)
                         owner_in = gr.Textbox(label="Owner", placeholder="e.g., ameer")
                         priority_in = gr.Slider(label="Priority (1=high, 10=low)", minimum=1, maximum=10, step=1, value=5)
                         status_in = gr.Dropdown(label="Status", choices=["draft", "approved", "deprecated"], value="draft")
@@ -2722,7 +2722,7 @@ Generate the examples now:"""
                             try:
                                 idx = int(rule_no)
                             except Exception as e:
-                                return f"❌ Invalid selection: {e}", gr.Dropdown(choices=[])
+                                return f"❌ Invalid selection: {e}", gr.update(choices=[], value=None)
                             ok, msg = update_rule(idx, status="approved")
                             md, choices = _load_governance_rules()
                             return (f"{'✅ Approved' if ok else '❌ ' + msg}", gr.Dropdown(choices=choices, value=rule_no if ok else None))
@@ -2731,7 +2731,7 @@ Generate the examples now:"""
                             try:
                                 idx = int(rule_no)
                             except Exception as e:
-                                return f"❌ Invalid selection: {e}", gr.Dropdown(choices=[])
+                                return f"❌ Invalid selection: {e}", gr.update(choices=[], value=None)
                             ok, msg = update_rule(idx, owner=owner, priority=priority, status=status)
                             md, choices = _load_governance_rules()
                             return (f"{'✅ Updated' if ok else '❌ ' + msg}", gr.Dropdown(choices=choices, value=rule_no if ok else None))
@@ -2740,7 +2740,7 @@ Generate the examples now:"""
                             try:
                                 idx = int(rule_no)
                             except Exception as e:
-                                return f"❌ Invalid selection: {e}", gr.Dropdown(choices=[])
+                                return f"❌ Invalid selection: {e}", gr.update(choices=[], value=None)
                             ok, msg = delete_rule(idx)
                             md, choices = _load_governance_rules()
                             return (msg, gr.Dropdown(choices=choices, value=None))
