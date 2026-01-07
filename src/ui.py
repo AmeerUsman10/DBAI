@@ -30,7 +30,7 @@ from src.query_templates import generate_sql_from_template
 from src.feedback import save_feedback, get_feedback_statistics, format_feedback_for_display, get_recent_feedback, format_recent_feedback, get_rule_suggestions
 
 # Version tracking - increment by 5 for each significant update
-UI_BUILD_VERSION = 15
+UI_BUILD_VERSION = 20
 from src.dev_notes import load_notes, save_notes, add_quick_note, get_notes_preview
 from src.query_optimizer import (
     cache_query_result, get_cached_result, cache_sql_generation, get_cached_sql,
@@ -1518,7 +1518,6 @@ def build_ui():
                 with gr.Row():
                     thumbs_up_btn = gr.Button("👍 Helpful", size="sm", variant="secondary", scale=1)
                     thumbs_down_btn = gr.Button("👎 Not helpful", size="sm", variant="secondary", scale=1)
-                    copy_response_btn = gr.Button("📋 Copy Response", size="sm", variant="secondary", scale=1)
                 
                 feedback_comment = gr.Textbox(
                     placeholder="What could be improved? (optional)",
@@ -1664,12 +1663,6 @@ def build_ui():
                         logger.error(f"Error saving detailed feedback: {e}")
                         return f"❌ Error saving feedback: {str(e)}"
                 
-                def copy_to_clipboard(response_text):
-                    """Copy response to clipboard (placeholder - actual implementation would need JS)."""
-                    if not response_text:
-                        return "⚠️ No response to copy."
-                    return "📋 Response copied! (use Ctrl+C to copy from the chat)"
-                
                 # Wire feedback buttons
                 thumbs_up_btn.click(
                     handle_thumbs_up,
@@ -1690,12 +1683,6 @@ def build_ui():
                 ).then(
                     lambda: (gr.update(value="", visible=False), gr.update(visible=False)),
                     outputs=[feedback_comment, submit_feedback_btn]
-                )
-                
-                copy_response_btn.click(
-                    copy_to_clipboard,
-                    inputs=[last_response_text],
-                    outputs=[feedback_status]
                 )
             
             # Settings Tab
@@ -2199,7 +2186,6 @@ Generate SQL Server query for this request, taking the training rule into accoun
 See which rules have the most impact on your queries. Ranked by real usage.
 """)
                         impact_display = gr.Markdown("Loading impact analysis...")
-                        refresh_impact_btn = gr.Button("🔄 Refresh Impact", variant="secondary")
                         
                         def show_rule_impact():
                             try:
@@ -2252,7 +2238,6 @@ See which rules have the most impact on your queries. Ranked by real usage.
                                 logger.error(f"Impact display error: {e}", exc_info=True)
                                 return f"❌ Error: {e}"
                         
-                        refresh_impact_btn.click(show_rule_impact, outputs=[impact_display])
                         demo.load(show_rule_impact, outputs=[impact_display])
                         
                         # Rule Governance section (integrated)
@@ -2270,7 +2255,6 @@ See which rules have the most impact on your queries. Ranked by real usage.
                             approve_btn2 = gr.Button("✅ Approve", variant="primary")
                             update_btn = gr.Button("💾 Update")
                             delete_btn = gr.Button("🗑️ Delete", variant="stop")
-                            refresh_gov_btn = gr.Button("🔄 Refresh")
                         gov_msg = gr.Markdown()
                         
                         def _load_governance_rules():
@@ -2339,7 +2323,6 @@ See which rules have the most impact on your queries. Ranked by real usage.
                             md, choices = _load_governance_rules()
                             return (msg, gr.update(choices=choices, value=None))
                         
-                        refresh_gov_btn.click(_load_governance_rules, outputs=[gov_rules_md, gov_select])
                         gov_select.change(_populate_fields, inputs=[gov_select], outputs=[owner_in, priority_in, status_in])
                         approve_btn2.click(_approve_rule, inputs=[gov_select], outputs=[gov_msg, gov_select])
                         update_btn.click(_update_rule, inputs=[gov_select, owner_in, priority_in, status_in], outputs=[gov_msg, gov_select])
@@ -2444,7 +2427,6 @@ See which rules have the most impact on your queries. Ranked by real usage.
                             gr.Markdown("### Session Summary")
                             
                             session_summary = gr.Markdown("Loading session data...")
-                            refresh_summary_btn = gr.Button("🔄 Refresh Summary", size="sm")
                             
                             def get_current_session_summary():
                                 """Get current session summary."""
@@ -2476,13 +2458,10 @@ See which rules have the most impact on your queries. Ranked by real usage.
                                 except Exception as e:
                                     return f"❌ Error: {str(e)}"
                             
-                            refresh_summary_btn.click(get_current_session_summary, outputs=[session_summary])
-                            
                             # Cache Statistics Section
                             gr.Markdown("---")
                             gr.Markdown("### Cache Performance")
                             cache_stats_display = gr.Markdown("Loading cache stats...")
-                            refresh_cache_btn = gr.Button("🔄 Refresh Cache Stats", size="sm")
                             clear_cache_btn = gr.Button("🗑️ Clear All Cache", size="sm", variant="stop")
                             cache_action_status = gr.Markdown("")
                             
@@ -2535,7 +2514,6 @@ See which rules have the most impact on your queries. Ranked by real usage.
                                 except Exception as e:
                                     return f"❌ Error: {str(e)}"
                             
-                            refresh_cache_btn.click(show_cache_stats, outputs=[cache_stats_display])
                             clear_cache_btn.click(clear_cache_action, outputs=[cache_action_status])
                             
                             # Feedback Analytics Section
@@ -2544,7 +2522,6 @@ See which rules have the most impact on your queries. Ranked by real usage.
                             
                             feedback_stats_display = gr.Markdown("No feedback data yet.")
                             recent_feedback_display = gr.Markdown("")
-                            refresh_feedback_btn = gr.Button("🔄 Refresh Feedback Stats", size="sm")
                             
                             def show_feedback_analytics():
                                 """Display feedback analytics."""
@@ -2560,15 +2537,11 @@ See which rules have the most impact on your queries. Ranked by real usage.
                                     logger.error(f"Feedback analytics error: {e}")
                                     return f"❌ Error: {str(e)}", ""
                             
-                            refresh_feedback_btn.click(
-                                show_feedback_analytics,
-                                outputs=[feedback_stats_display, recent_feedback_display]
-                            )
-                            
-                            # Load session summary on page load
+                            # Auto-load all session data on page load
                             demo.load(get_current_session_summary, outputs=[session_summary])
+                            demo.load(show_cache_stats, outputs=[cache_stats_display])
+                            demo.load(show_feedback_analytics, outputs=[feedback_stats_display, recent_feedback_display])
                 
-                # Sub-tab 2: Diagnostics & Export
                 with gr.Tab("📦 Diagnostics & Export"):
                     gr.Markdown("### Export Options")
                     gr.Markdown("Choose the right export for your needs: Quick session report or comprehensive diagnostic bundle.")
