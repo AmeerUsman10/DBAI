@@ -2788,14 +2788,23 @@ Generate the examples now:"""
                             rules = data.get("rules", [])
                             if not rules:
                                 return "No rules yet.", []
-                            md = f"### Rules ({len(rules)})\n\n"
+                            # Premium card layout
+                            md = "<div style=\"display:flex;flex-direction:column;gap:12px;\">"
                             choices = []
                             for idx, r in enumerate(rules, 1):
+                                instr = (r.get('instruction','') or '')
+                                status = r.get('status','draft')
+                                owner = r.get('owner','')
+                                prio = r.get('priority',5)
+                                usage = int(r.get('usage_count',0))
                                 md += (
-                                    f"**#{idx}** - {r.get('instruction','')[:80]}\n"
-                                    f"- Status: {r.get('status','draft')} · Priority: {r.get('priority',5)} · Owner: {r.get('owner','')}\n\n"
+                                    f"<div style=\"padding:12px 14px;border:1px solid #e9ecef;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.06);\">"
+                                    f"<div style=\"font-weight:600;color:#333;\">#{idx} · {instr[:120]}</div>"
+                                    f"<div style=\"margin-top:6px;color:#555;\">Status: {status} · Priority: {prio} · Owner: {owner} · Usage: {usage}</div>"
+                                    f"</div>"
                                 )
                                 choices.append(str(idx))
+                            md += "</div>"
                             return md, choices
 
                         def _populate_fields(rule_no: str):
@@ -2902,155 +2911,7 @@ Generate the examples now:"""
                         # Initial load
                         demo.load(_load_governance_rules, outputs=[gov_rules_md, gov_select])
 
-                    # Custom Personas Sub-tab
-                    with gr.Tab("🎭 Custom Personas"):
-                        gr.Markdown("## Create Custom AI Personas")
-                        gr.Markdown("Design specialized AI assistants with unique characteristics and domain expertise.")
-                        
-                        with gr.Row():
-                            with gr.Column(scale=1):
-                                gr.Markdown("### ➕ Create New Persona")
-                                
-                                persona_id_input = gr.Textbox(label="Persona ID", placeholder="e.g., logistics_expert", info="Unique identifier (no spaces)")
-                                persona_name_input = gr.Textbox(label="Display Name", placeholder="e.g., Logistics Expert")
-                                persona_desc_input = gr.Textbox(label="Description", placeholder="What makes this persona unique?", lines=2)
-                                
-                                persona_tone = gr.Dropdown(
-                                    choices=["friendly", "professional", "technical"],
-                                    value="professional",
-                                    label="Communication Tone"
-                                )
-                                
-                                persona_complexity = gr.Dropdown(
-                                    choices=["simple", "balanced", "detailed"],
-                                    value="balanced",
-                                    label="Response Complexity"
-                                )
-                                
-                                persona_domain = gr.Dropdown(
-                                    choices=["general", "finance", "logistics", "retail", "manufacturing"],
-                                    value="general",
-                                    label="Domain Expertise"
-                                )
-                                
-                                persona_instructions = gr.Textbox(
-                                    label="Custom Instructions",
-                                    placeholder="Additional guidance for this persona...",
-                                    lines=4
-                                )
-                                
-                                save_persona_btn = gr.Button("💾 Save Persona", variant="primary")
-                                persona_status = gr.Markdown("")
-                            
-                            with gr.Column(scale=1):
-                                gr.Markdown("### 📊 Persona Performance")
-                                
-                                persona_list_display = gr.Markdown("Loading personas...")
-                                refresh_personas_btn = gr.Button("🔄 Refresh List", size="sm")
-                                
-                                gr.Markdown("---")
-                                gr.Markdown("### 🏆 Effectiveness Ranking")
-                                persona_ranking = gr.Markdown()
-                        
-                        def save_new_persona(pid, name, desc, tone, complexity, domain, instructions):
-                            """Save a custom persona."""
-                            try:
-                                if not pid or not name:
-                                    return "❌ Persona ID and Name are required"
-                                
-                                # Validate ID (no spaces)
-                                if ' ' in pid:
-                                    return "❌ Persona ID cannot contain spaces"
-                                
-                                success = save_custom_persona(
-                                    persona_id=pid,
-                                    name=name,
-                                    description=desc,
-                                    tone=tone,
-                                    complexity=complexity,
-                                    domain_expertise=domain,
-                                    custom_instructions=instructions
-                                )
-                                
-                                if success:
-                                    return f"✅ Persona '{name}' saved successfully!\n\nYou can now select it from the persona dropdown in the Chat tab."
-                                else:
-                                    return "❌ Failed to save persona"
-                                    
-                            except Exception as e:
-                                logger.error(f"Persona save error: {e}")
-                                return f"❌ Error: {str(e)}"
-                        
-                        def list_personas_display():
-                            """Display all custom personas."""
-                            try:
-                                personas = list_custom_personas()
-                                
-                                if not personas:
-                                    return "No custom personas created yet.\n\nCreate your first persona using the form on the left!"
-                                
-                                output = f"### 📋 Custom Personas ({len(personas)})\n\n"
-                                
-                                for p in personas:
-                                    stats = p.get('stats', {})
-                                    total_queries = stats.get('total_queries', 0)
-                                    success_rate = 0
-                                    if total_queries > 0:
-                                        success_rate = (stats.get('successful_queries', 0) / total_queries) * 100
-                                    
-                                    output += f"#### {p['name']}\n"
-                                    output += f"**ID:** `{p['id']}`\n\n"
-                                    output += f"**Tone:** {p['tone']} | **Complexity:** {p['complexity']} | **Domain:** {p['domain_expertise']}\n\n"
-                                    output += f"**Usage:** {total_queries} queries | **Success Rate:** {success_rate:.1f}%\n\n"
-                                    output += f"---\n\n"
-                                
-                                return output
-                                
-                            except Exception as e:
-                                logger.error(f"Persona list error: {e}")
-                                return f"❌ Error: {str(e)}"
-                        
-                        def show_persona_ranking():
-                            """Show personas ranked by effectiveness."""
-                            try:
-                                ranking = get_persona_effectiveness_ranking()
-                                
-                                if not ranking:
-                                    return "No usage data yet for custom personas."
-                                
-                                output = "### 🏆 Top Performing Personas\n\n"
-                                
-                                for i, p in enumerate(ranking[:5], 1):
-                                    output += f"**{i}. {p['name']}**\n"
-                                    output += f"   Success Rate: {p['success_rate']:.1f}% | "
-                                    output += f"Queries: {p['total_queries']} | "
-                                    output += f"Avg Tokens: {p['avg_tokens']:.0f}\n\n"
-                                
-                                return output
-                                
-                            except Exception as e:
-                                logger.error(f"Ranking error: {e}")
-                                return f"❌ Error: {str(e)}"
-                        
-                        save_persona_btn.click(
-                            save_new_persona,
-                            inputs=[persona_id_input, persona_name_input, persona_desc_input,
-                                   persona_tone, persona_complexity, persona_domain, persona_instructions],
-                            outputs=[persona_status]
-                        ).then(
-                            # Refresh the persona dropdown in Chat tab
-                            lambda: gr.update(choices=get_all_personas()),
-                            outputs=[persona_selector]
-                        )
-                        
-                        refresh_personas_btn.click(
-                            list_personas_display,
-                            outputs=[persona_list_display]
-                        )
-                        
-                        # Load on page open
-                        demo.load(list_personas_display, outputs=[persona_list_display])
-                        demo.load(show_persona_ranking, outputs=[persona_ranking])
+                    # Custom Personas moved to Developer Settings
             
             # Developer Tools Tab (UPDATED)
             with gr.Tab("🔬 Developer Tools"):
@@ -3324,6 +3185,101 @@ Then tell me it's pushed and I'll analyze it!
                             collect_and_download_diagnostics,
                             outputs=[dev_download_file]
                         )
+
+                gr.Markdown("---")
+                gr.Markdown("## 🎭 Personas")
+                gr.Markdown("Design specialized assistants with unique characteristics and domain expertise.")
+
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.Markdown("### ➕ Create New Persona")
+                        persona_id_input = gr.Textbox(label="Persona ID", placeholder="e.g., logistics_expert", info="Unique identifier (no spaces)")
+                        persona_name_input = gr.Textbox(label="Display Name", placeholder="e.g., Logistics Expert")
+                        persona_desc_input = gr.Textbox(label="Description", placeholder="What makes this persona unique?", lines=2)
+                        persona_tone = gr.Dropdown(choices=["friendly", "professional", "technical"], value="professional", label="Communication Tone")
+                        persona_complexity = gr.Dropdown(choices=["simple", "balanced", "detailed"], value="balanced", label="Response Complexity")
+                        persona_domain = gr.Dropdown(choices=["general", "finance", "logistics", "retail", "manufacturing"], value="general", label="Domain Expertise")
+                        persona_instructions = gr.Textbox(label="Custom Instructions", placeholder="Additional guidance for this persona...", lines=4)
+                        save_persona_btn = gr.Button("💾 Save Persona", variant="primary")
+                        persona_status = gr.Markdown("")
+
+                    with gr.Column(scale=1):
+                        gr.Markdown("### 📊 Persona Performance")
+                        persona_list_display = gr.Markdown("Loading personas...")
+                        refresh_personas_btn = gr.Button("🔄 Refresh List", size="sm")
+                        gr.Markdown("---")
+                        gr.Markdown("### 🏆 Effectiveness Ranking")
+                        persona_ranking = gr.Markdown()
+
+                def save_new_persona(pid, name, desc, tone, complexity, domain, instructions):
+                    try:
+                        if not pid or not name:
+                            return "❌ Persona ID and Name are required"
+                        if ' ' in pid:
+                            return "❌ Persona ID cannot contain spaces"
+                        success = save_custom_persona(
+                            persona_id=pid,
+                            name=name,
+                            description=desc,
+                            tone=tone,
+                            complexity=complexity,
+                            domain_expertise=domain,
+                            custom_instructions=instructions
+                        )
+                        if success:
+                            return f"✅ Persona '{name}' saved successfully!\n\nSelect it from the persona dropdown in the Chat tab."
+                        else:
+                            return "❌ Failed to save persona"
+                    except Exception as e:
+                        logger.error(f"Persona save error: {e}")
+                        return f"❌ Error: {str(e)}"
+
+                def list_personas_display():
+                    try:
+                        personas = list_custom_personas()
+                        if not personas:
+                            return "No custom personas created yet.\n\nCreate your first persona using the form on the left!"
+                        output = f"### 📋 Custom Personas ({len(personas)})\n\n"
+                        for p in personas:
+                            stats = p.get('stats', {})
+                            total_queries = stats.get('total_queries', 0)
+                            success_rate = (stats.get('successful_queries', 0) / total_queries) * 100 if total_queries else 0
+                            output += f"#### {p['name']}\n"
+                            output += f"**ID:** `{p['id']}`\n\n"
+                            output += f"**Tone:** {p['tone']} | **Complexity:** {p['complexity']} | **Domain:** {p['domain_expertise']}\n\n"
+                            output += f"**Usage:** {total_queries} queries | **Success Rate:** {success_rate:.1f}%\n\n"
+                            output += f"---\n\n"
+                        return output
+                    except Exception as e:
+                        logger.error(f"Persona list error: {e}")
+                        return f"❌ Error: {str(e)}"
+
+                def show_persona_ranking():
+                    try:
+                        ranking = get_persona_effectiveness_ranking()
+                        if not ranking:
+                            return "No usage data yet for custom personas."
+                        output = "### 🏆 Top Performing Personas\n\n"
+                        for i, p in enumerate(ranking[:5], 1):
+                            output += f"**{i}. {p['name']}**\n"
+                            output += f"   Success Rate: {p['success_rate']:.1f}% | Queries: {p['total_queries']} | Avg Tokens: {p['avg_tokens']:.0f}\n\n"
+                        return output
+                    except Exception as e:
+                        logger.error(f"Ranking error: {e}")
+                        return f"❌ Error: {str(e)}"
+
+                save_persona_btn.click(
+                    save_new_persona,
+                    inputs=[persona_id_input, persona_name_input, persona_desc_input, persona_tone, persona_complexity, persona_domain, persona_instructions],
+                    outputs=[persona_status]
+                ).then(
+                    lambda: gr.update(choices=get_all_personas()),
+                    outputs=[persona_selector]
+                )
+
+                refresh_personas_btn.click(list_personas_display, outputs=[persona_list_display])
+                demo.load(list_personas_display, outputs=[persona_list_display])
+                demo.load(show_persona_ranking, outputs=[persona_ranking])
 
             
         
