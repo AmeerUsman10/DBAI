@@ -5,6 +5,8 @@ Provides a multi-tab interface for chat, settings, training, data import, and di
 import logging
 import os
 import json
+import io
+import csv
 from typing import List, Optional, Tuple
 import gradio as gr
 import yaml
@@ -34,6 +36,7 @@ session_tokens = {"total": 0, "prompt": 0, "completion": 0}  # Token tracking
 session_tracker = get_session_tracker()  # Initialize session tracking
 pending_clarification = {"question": None, "options": [], "original_query": None}  # Clarification state
 last_query_info = {"question": None, "sql": None, "result": None}  # For corrections
+last_query_result_data = None  # Store result data for CSV export
 training_mode_enabled = False  # Live training mode toggle
 
 # Persona definitions
@@ -150,6 +153,40 @@ def toggle_training_mode(enabled: bool) -> str:
         return "🎓 **Live Training Mode ACTIVE** - Feedback controls enabled"
     else:
         return "💬 Chat Mode - Standard responses"
+
+
+def export_to_csv():
+    """Export last query result to CSV file."""
+    global last_query_result_data
+    
+    if last_query_result_data is None or last_query_result_data.empty:
+        logger.warning("No data to export")
+        return None
+    
+    try:
+        from datetime import datetime
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        last_query_result_data.to_csv(output, index=False)
+        csv_content = output.getvalue()
+        output.close()
+        
+        # Create temporary file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"query_result_{timestamp}.csv"
+        filepath = f"logs/{filename}"
+        
+        os.makedirs("logs", exist_ok=True)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(csv_content)
+        
+        logger.info(f"Exported {len(last_query_result_data)} rows to {filepath}")
+        return filepath
+    
+    except Exception as e:
+        logger.error(f"Export error: {e}")
+        return None
 
 
 def submit_correction(feedback_type: str, correction_text: str) -> str:
@@ -657,13 +694,20 @@ Keep it concise and factual."""
         logger.debug(f"RESPONSE PREVIEW: {response[:200]}")
         
         # Save last query info for live training mode corrections
-        global last_query_info
+        global last_query_info, last_query_result_data
         last_query_info = {
             "question": question,
             "sql": sql_query,
             "result": response,
             "success": success
         }
+        
+        # Store result data for export
+        if success and isinstance(result, dict) and 'rows' in result and 'columns' in result:
+            import pandas as pd
+            last_query_result_data = pd.DataFrame(result['rows'], columns=result['columns'])
+        else:
+            last_query_result_data = None
         
         # Track complete query lifecycle
         total_time_ms = int((time.time() - start_time) * 1000)
@@ -1014,7 +1058,14 @@ def build_ui():
                 with gr.Row():
                     question_input = gr.Textbox(
                         placeholder="Ask a question about your database...",
-                        label="Your Question"
+                        label="Your Question",
+                        scale=4
+                    )
+                    export_csv_btn = gr.DownloadButton(
+                        "📥 Export CSV",
+                        variant="secondary",
+                        scale=1,
+                        size="sm"
                     )
                 
                 with gr.Row():
@@ -1111,6 +1162,12 @@ def build_ui():
                 )
                 
                 clear_btn.click(lambda: [], outputs=chatbot)
+                
+                # Export CSV button
+                export_csv_btn.click(
+                    fn=export_to_csv,
+                    outputs=export_csv_btn
+                )
             
             # Settings Tab
             with gr.Tab("⚙️ Settings"):

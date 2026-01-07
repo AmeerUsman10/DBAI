@@ -37,6 +37,22 @@ DETAIL_PATTERNS = [
     r'all\s+(\w+)\s+records?',  # "all yarn records"
 ]
 
+TIME_BASED_PATTERNS = [
+    r'last\s+(\d+)\s+(days?|months?|years?)',  # "last 30 days", "last 3 months"
+    r'this\s+(month|quarter|year)',  # "this month", "this year"
+    r'(?:in|for)\s+(january|february|march|april|may|june|july|august|september|october|november|december)',  # "in January"
+    r'between\s+(.+?)\s+and\s+(.+)',  # "between 2024-01-01 and 2024-12-31"
+    r'(monthly|quarterly|yearly)\s+(?:total|breakdown|trend)',  # "monthly breakdown"
+    r'year\s+to\s+date|ytd',  # "year to date"
+]
+
+COMPARISON_PATTERNS = [
+    r'compare\s+(\w+)\s+(?:vs|versus|and)\s+(\w+)',  # "compare yarn vs greige"
+    r'(\w+)\s+vs\s+(\w+)',  # "department A vs B"
+    r'difference\s+between\s+(\w+)\s+and\s+(\w+)',  # "difference between yarn and greige"
+    r'this\s+(month|quarter|year)\s+vs\s+last\s+(month|quarter|year)',  # "this month vs last month"
+]
+
 # Movement type keywords
 MOVEMENT_TYPES = {
     'arrival': 'Yarn Arrival',
@@ -92,7 +108,9 @@ def classify_query(query: str) -> Dict:
         'movement_type': None,
         'department': 'both',  # BUSINESS RULE: Default to both departments for suppliers
         'specific_value': None,
-        'breakdown': None  # For multi-dimensional segmentation
+        'breakdown': None,  # For multi-dimensional segmentation
+        'time_filter': None,  # For date-based filtering
+        'comparison': None  # For comparison queries
     }
     
     # Detect breakdown/segmentation request
@@ -122,6 +140,44 @@ def classify_query(query: str) -> Dict:
         if keyword in query_lower:
             params['movement_type'] = entry_type
             break
+    
+    # Try TIME_BASED patterns first (high priority)
+    for pattern in TIME_BASED_PATTERNS:
+        match = re.search(pattern, query_lower)
+        if match:
+            groups = match.groups()
+            
+            # Detect if it's a time-filtered ranking/aggregation
+            is_ranking = any(re.search(p, query_lower) for p in RANKING_PATTERNS)
+            is_aggregation = any(re.search(p, query_lower) for p in AGGREGATION_PATTERNS)
+            is_breakdown = 'monthly' in query_lower or 'quarterly' in query_lower or 'yearly' in query_lower
+            
+            if is_breakdown:
+                params['time_filter'] = {'type': 'breakdown', 'period': groups[0] if groups else 'monthly'}
+                params['breakdown'] = ['time']
+                return {
+                    'type': 'time_breakdown',
+                    'confidence': 90,
+                    'params': params
+                }
+            else:
+                # Extract time filter details
+                params['time_filter'] = {'type': 'filter', 'raw': match.group(0), 'groups': groups}
+                # Continue to check if it's ranking or aggregation with time filter
+                break
+    
+    # Try COMPARISON patterns
+    for pattern in COMPARISON_PATTERNS:
+        match = re.search(pattern, query_lower)
+        if match:
+            groups = match.groups()
+            params['comparison'] = {'entities': groups}
+            
+            return {
+                'type': 'comparison',
+                'confidence': 85,
+                'params': params
+            }
     
     # Try RANKING patterns
     for pattern in RANKING_PATTERNS:

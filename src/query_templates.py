@@ -8,6 +8,55 @@ from typing import Dict
 logger = logging.getLogger(__name__)
 
 
+def build_date_filter(time_filter: Dict, table_alias: str = "") -> str:
+    """
+    Build WHERE clause for date filtering.
+    
+    Args:
+        time_filter: Dict with 'type', 'raw', 'groups'
+        table_alias: Optional table alias prefix (e.g., 'c.')
+    
+    Returns:
+        WHERE clause string (e.g., "WHERE DATE >= DATEADD(day, -30, GETDATE())")
+    """
+    if not time_filter:
+        return ""
+    
+    prefix = f"{table_alias}." if table_alias else ""
+    date_col = f"{prefix}DATE"
+    
+    filter_type = time_filter.get('type')
+    groups = time_filter.get('groups', ())
+    raw = time_filter.get('raw', '').lower()
+    
+    # "last N days/months/years"
+    if 'last' in raw and len(groups) >= 2:
+        n = groups[0]
+        unit = groups[1].rstrip('s')  # Remove plural
+        return f"WHERE {date_col} >= DATEADD({unit}, -{n}, GETDATE())"
+    
+    # "this month/quarter/year"
+    if 'this month' in raw:
+        return f"WHERE {date_col} >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0) AND {date_col} < DATEADD(month, DATEDIFF(month, 0, GETDATE()) + 1, 0)"
+    elif 'this quarter' in raw:
+        return f"WHERE {date_col} >= DATEADD(quarter, DATEDIFF(quarter, 0, GETDATE()), 0) AND {date_col} < DATEADD(quarter, DATEDIFF(quarter, 0, GETDATE()) + 1, 0)"
+    elif 'this year' in raw:
+        return f"WHERE {date_col} >= DATEADD(year, DATEDIFF(year, 0, GETDATE()), 0) AND {date_col} < DATEADD(year, DATEDIFF(year, 0, GETDATE()) + 1, 0)"
+    
+    # "year to date" / "ytd"
+    if 'year to date' in raw or 'ytd' in raw:
+        return f"WHERE {date_col} >= DATEADD(year, DATEDIFF(year, 0, GETDATE()), 0)"
+    
+    # Month name ("in January")
+    months = ['january', 'february', 'march', 'april', 'may', 'june', 
+              'july', 'august', 'september', 'october', 'november', 'december']
+    for idx, month in enumerate(months, 1):
+        if month in raw:
+            return f"WHERE MONTH({date_col}) = {idx}"
+    
+    return ""
+
+
 def generate_sql_from_template(classification: Dict) -> str:
     """
     Generate SQL directly from classification without LLM.
@@ -29,6 +78,10 @@ def generate_sql_from_template(classification: Dict) -> str:
         return generate_segmentation_sql(params)
     elif query_type == 'detail':
         return generate_detail_sql(params)
+    elif query_type == 'time_breakdown':
+        return generate_time_breakdown_sql(params)
+    elif query_type == 'comparison':
+        return generate_comparison_sql(params)
     else:
         return None
 
@@ -48,6 +101,11 @@ def generate_ranking_sql(params: Dict) -> str:
     movement_type = params['movement_type']
     dept = params['department']
     breakdown = params.get('breakdown')
+    time_filter = params.get('time_filter')
+    
+    # Build date filter clause
+    date_filter_yarn = build_date_filter(time_filter)
+    date_filter_greige = build_date_filter(time_filter)
     
     # BUSINESS RULE: Suppliers default to BOTH departments combined
     if entity == 'supplier':
@@ -98,8 +156,20 @@ ORDER BY (
             return sql
         
         # AGGREGATED VIEW: Single ranking by total amount
-        yarn_where = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
-        greige_where = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
+        # Combine movement type and date filters
+        yarn_where_parts = []
+        if movement_type:
+            yarn_where_parts.append(f"ENTRY_TYPE = '{movement_type}'")
+        if date_filter_yarn:
+            yarn_where_parts.append(date_filter_yarn.replace('WHERE ', ''))
+        yarn_where = f"WHERE {' AND '.join(yarn_where_parts)}" if yarn_where_parts else ""
+        
+        greige_where_parts = []
+        if movement_type:
+            greige_where_parts.append(f"ENTRY_TYPE = '{movement_type}'")
+        if date_filter_greige:
+            greige_where_parts.append(date_filter_greige.replace('WHERE ', ''))
+        greige_where = f"WHERE {' AND '.join(greige_where_parts)}" if greige_where_parts else ""
         
         sql = f"""SELECT TOP {limit} Supplier, SUM(TotalAmount) as 'Total PKR', SUM(TotalQty) as 'Total Quantity', SUM(RecordCount) as 'Record Count'
 FROM (
@@ -331,6 +401,198 @@ ORDER BY DOCDATE DESC"""
     
     logger.info(f"Generated detail SQL from template")
     return sql
+
+
+def generate_time_breakdown_sql(params: Dict) -> str:
+    """
+    Generate time-based breakdown query (monthly/quarterly/yearly totals).
+    
+    Template: SELECT FORMAT(DATE, 'yyyy-MM'), SUM(metric)
+              FROM table
+              GROUP BY FORMAT(DATE, 'yyyy-MM')
+              ORDER BY FORMAT(DATE, 'yyyy-MM')
+    """
+    dept = params['department']
+    time_filter = params.get('time_filter', {})
+    period = time_filter.get('period', 'monthly')
+    
+    # Date format for grouping
+    if period == 'yearly':
+        date_format = 'yyyy'
+        label = 'Year'
+    elif period == 'quarterly':
+        date_format = 'yyyy-Q'
+        label = 'Quarter'
+    else:  # monthly
+        date_format = 'yyyy-MM'
+        label = 'Month'
+    
+    if dept == 'yarn':
+        sql = f"""SELECT 
+    FORMAT(DATE, '{date_format}') as '{label}',
+    SUM(AMOUNT) as 'Total PKR',
+    SUM(LBS) as 'Total LBS',
+    SUM(BAGS) as 'Total Bags',
+    COUNT(*) as 'Record Count'
+FROM YarnData
+GROUP BY FORMAT(DATE, '{date_format}')
+ORDER BY FORMAT(DATE, '{date_format}')"""
+    
+    elif dept == 'greige':
+        sql = f"""SELECT 
+    FORMAT(DATE, '{date_format}') as '{label}',
+    SUM(AMOUNT) as 'Total PKR',
+    SUM(METER) as 'Total Meters',
+    COUNT(*) as 'Record Count'
+FROM GreigeData
+GROUP BY FORMAT(DATE, '{date_format}')
+ORDER BY FORMAT(DATE, '{date_format}')"""
+    
+    else:  # both
+        sql = f"""SELECT 
+    Period as '{label}',
+    SUM(TotalPKR) as 'Total PKR',
+    SUM(TotalQty) as 'Total Quantity',
+    SUM(RecordCount) as 'Record Count'
+FROM (
+    SELECT FORMAT(DATE, '{date_format}') as Period,
+           SUM(AMOUNT) as TotalPKR,
+           SUM(LBS) as TotalQty,
+           COUNT(*) as RecordCount
+    FROM YarnData
+    GROUP BY FORMAT(DATE, '{date_format}')
+    
+    UNION ALL
+    
+    SELECT FORMAT(DATE, '{date_format}') as Period,
+           SUM(AMOUNT) as TotalPKR,
+           SUM(METER) as TotalQty,
+           COUNT(*) as RecordCount
+    FROM GreigeData
+    GROUP BY FORMAT(DATE, '{date_format}')
+) AS Combined
+GROUP BY Period
+ORDER BY Period"""
+    
+    logger.info(f"Generated {period} time breakdown SQL from template")
+    return sql
+
+
+def generate_comparison_sql(params: Dict) -> str:
+    """
+    Generate comparison query (Department A vs B, Supplier X vs Y, etc.).
+    
+    Template: SELECT entity, metrics FROM table WHERE entity IN (A, B)
+              GROUP BY entity
+    """
+    comparison = params.get('comparison', {})
+    entities = comparison.get('entities', ())
+    dept = params['department']
+    time_filter = params.get('time_filter')
+    
+    if not entities or len(entities) < 2:
+        return None
+    
+    entity1 = entities[0].strip()
+    entity2 = entities[1].strip()
+    
+    # Detect comparison type
+    if entity1 in ['yarn', 'greige'] or entity2 in ['yarn', 'greige']:
+        # Department comparison
+        date_filter = build_date_filter(time_filter)
+        
+        sql = f"""SELECT 
+    'Yarn' as Department,
+    SUM(AMOUNT) as 'Total PKR',
+    SUM(LBS) as 'Total Quantity',
+    SUM(BAGS) as 'Total Bags',
+    COUNT(*) as 'Record Count'
+FROM YarnData
+{date_filter}
+
+UNION ALL
+
+SELECT 
+    'Greige' as Department,
+    SUM(AMOUNT) as 'Total PKR',
+    SUM(METER) as 'Total Quantity',
+    NULL as 'Total Bags',
+    COUNT(*) as 'Record Count'
+FROM GreigeData
+{date_filter}"""
+        
+        logger.info(f"Generated department comparison SQL from template")
+        return sql
+    
+    else:
+        # Supplier comparison or other entity comparison
+        if dept == 'yarn':
+            table = 'YarnData'
+            entity_col = 'SUPPLIER'
+            date_filter = build_date_filter(time_filter)
+            
+            sql = f"""SELECT 
+    {entity_col} as 'Supplier',
+    SUM(AMOUNT) as 'Total PKR',
+    SUM(LBS) as 'Total LBS',
+    SUM(BAGS) as 'Total Bags',
+    COUNT(*) as 'Record Count'
+FROM {table}
+WHERE {entity_col} LIKE '%{entity1}%' OR {entity_col} LIKE '%{entity2}%'
+{date_filter.replace('WHERE', 'AND') if date_filter else ''}
+GROUP BY {entity_col}
+ORDER BY {entity_col}"""
+        
+        elif dept == 'greige':
+            table = 'GreigeData'
+            entity_col = 'SUPP_NAME'
+            date_filter = build_date_filter(time_filter)
+            
+            sql = f"""SELECT 
+    {entity_col} as 'Supplier',
+    SUM(AMOUNT) as 'Total PKR',
+    SUM(METER) as 'Total Meters',
+    COUNT(*) as 'Record Count'
+FROM {table}
+WHERE {entity_col} LIKE '%{entity1}%' OR {entity_col} LIKE '%{entity2}%'
+{date_filter.replace('WHERE', 'AND') if date_filter else ''}
+GROUP BY {entity_col}
+ORDER BY {entity_col}"""
+        
+        else:  # both
+            # Multi-department supplier comparison
+            date_filter_yarn = build_date_filter(time_filter)
+            date_filter_greige = build_date_filter(time_filter)
+            
+            sql = f"""SELECT 
+    Supplier,
+    SUM(TotalPKR) as 'Total PKR',
+    SUM(TotalQty) as 'Total Quantity',
+    COUNT(*) as 'Record Count'
+FROM (
+    SELECT SUPPLIER as Supplier,
+           SUM(AMOUNT) as TotalPKR,
+           SUM(LBS) as TotalQty
+    FROM YarnData
+    WHERE SUPPLIER LIKE '%{entity1}%' OR SUPPLIER LIKE '%{entity2}%'
+    {date_filter_yarn.replace('WHERE', 'AND') if date_filter_yarn else ''}
+    GROUP BY SUPPLIER
+    
+    UNION ALL
+    
+    SELECT SUPP_NAME as Supplier,
+           SUM(AMOUNT) as TotalPKR,
+           SUM(METER) as TotalQty
+    FROM GreigeData
+    WHERE SUPP_NAME LIKE '%{entity1}%' OR SUPP_NAME LIKE '%{entity2}%'
+    {date_filter_greige.replace('WHERE', 'AND') if date_filter_greige else ''}
+    GROUP BY SUPP_NAME
+) AS Combined
+GROUP BY Supplier
+ORDER BY Supplier"""
+        
+        logger.info(f"Generated supplier comparison SQL from template")
+        return sql
 
 
 def generate_ranking_both_departments(params: Dict) -> str:
