@@ -1298,9 +1298,36 @@ def collect_and_download_diagnostics() -> Optional[str]:
 def build_ui():
     """Build and return the Gradio interface."""
     
-    with gr.Blocks(title="DBAI - Database AI Assistant", theme=gr.themes.Default()) as demo:
-        gr.Markdown("# 🤖 DBAI - Database AI Assistant")
-        gr.Markdown("Ask questions about your database in natural language!")
+    # Professional theme configuration
+    theme = gr.themes.Soft(
+        primary_hue="indigo",
+        secondary_hue="purple",
+        neutral_hue="slate",
+        font=[gr.themes.GoogleFont("Inter"), "system-ui", "sans-serif"],
+        spacing_size="sm",
+        radius_size="md",
+    ).set(
+        body_background_fill="*neutral_50",
+        body_background_fill_dark="*neutral_900",
+        button_primary_background_fill="linear-gradient(90deg, *primary_500, *secondary_500)",
+        button_primary_background_fill_hover="linear-gradient(90deg, *primary_600, *secondary_600)",
+        button_primary_text_color="white",
+        block_title_text_weight="600",
+        block_label_text_weight="500",
+    )
+    
+    with gr.Blocks(title="DBAI - Database AI Assistant", theme=theme) as demo:
+        # Professional header with gradient
+        gr.HTML("""
+        <div style="text-align: center; padding: 2rem 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; margin-bottom: 2rem;">
+            <h1 style="color: white; font-size: 2.5rem; font-weight: 700; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                🤖 DBAI
+            </h1>
+            <p style="color: rgba(255,255,255,0.95); font-size: 1.1rem; margin: 0.5rem 0 0 0; font-weight: 400;">
+                Professional Database AI Assistant - Turn data into insights with natural language
+            </p>
+        </div>
+        """)
         
         with gr.Tabs():
             # Chat Tab
@@ -1458,13 +1485,15 @@ def build_ui():
                     provider_dropdown = gr.Dropdown(
                         choices=["openai", "groq"],
                         label="Provider",
-                        value="openai"
+                        value="openai",
+                        info="Select your LLM provider"
                     )
                     model_dropdown = gr.Dropdown(
-                        choices=[],
+                        choices=get_available_models("openai"),
                         label="Model",
                         value="gpt-4o-mini",
-                        allow_custom_value=True
+                        allow_custom_value=True,
+                        info="Choose the AI model to use"
                     )
                 
                 with gr.Row():
@@ -1695,12 +1724,6 @@ def build_ui():
                         provider_dropdown, model_dropdown, temperature_slider, max_tokens_slider,
                         local_server, local_db_name, local_driver, local_username, local_password
                     ]
-                )
-                
-                # Update model list when provider changes
-                demo.load(
-                    lambda: get_available_models("openai"),
-                    outputs=[model_dropdown]
                 )
             
             # Train Tab - Quick Setup
