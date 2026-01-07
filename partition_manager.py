@@ -16,6 +16,7 @@ import os
 import sys
 import subprocess
 import re
+import json
 from typing import List, Dict, Optional, Tuple, Any
 
 
@@ -80,11 +81,60 @@ class PartitionManager:
                             }
                             if partition['device'] != 'N/A':
                                 partitions.append(partition)
+            
+            # Windows support using PowerShell
+            elif sys.platform == 'win32':
+                # Use PowerShell to get partition information
+                ps_command = (
+                    "Get-Partition | Select-Object DriveLetter, DiskNumber, PartitionNumber, "
+                    "Size, @{Name='Type';Expression={'Partition'}} | "
+                    "ConvertTo-Json"
+                )
+                result = subprocess.run(
+                    ['powershell', '-Command', ps_command],
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                
+                import json
+                partition_data = json.loads(result.stdout)
+                
+                # Handle single partition (not a list)
+                if isinstance(partition_data, dict):
+                    partition_data = [partition_data]
+                
+                for part in partition_data:
+                    drive_letter = part.get('DriveLetter', '')
+                    disk_num = part.get('DiskNumber', 0)
+                    part_num = part.get('PartitionNumber', 0)
+                    size_bytes = part.get('Size', 0)
+                    
+                    # Create device identifier
+                    if drive_letter:
+                        device = f"{drive_letter}:"
+                        mountpoint = f"{drive_letter}:\\"
+                    else:
+                        device = f"Disk {disk_num} Partition {part_num}"
+                        mountpoint = 'N/A'
+                    
+                    partition = {
+                        'device': device,
+                        'size_bytes': int(size_bytes),
+                        'size_human': self.bytes_to_human(int(size_bytes)),
+                        'type': 'part',
+                        'mountpoint': mountpoint
+                    }
+                    partitions.append(partition)
                                 
         except subprocess.CalledProcessError as e:
             print(f"Error listing partitions: {e}")
         except FileNotFoundError:
             print("Required system tools not found. Running in simulation mode.")
+            # Return mock data for demonstration
+            partitions = self._get_mock_partitions()
+        except json.JSONDecodeError as e:
+            print(f"Error parsing partition data: {e}")
             # Return mock data for demonstration
             partitions = self._get_mock_partitions()
             
@@ -426,11 +476,20 @@ def main():
         epilog="""
 Examples:
   %(prog)s list
+  
+  # Linux/macOS examples:
   %(prog)s extend /dev/sda1 10GB
   %(prog)s shrink /dev/sda1 5GB
   %(prog)s resize /dev/sda1 100GB
   %(prog)s info /dev/sda1
   %(prog)s free /dev/sda1
+  
+  # Windows examples:
+  %(prog)s extend C: 10GB
+  %(prog)s shrink D: 5GB
+  %(prog)s resize C: 100GB
+  %(prog)s info C:
+  %(prog)s free C:
         """
     )
     
@@ -443,7 +502,7 @@ Examples:
     parser.add_argument(
         'device',
         nargs='?',
-        help='Partition device path (e.g., /dev/sda1)'
+        help='Partition device path (e.g., /dev/sda1 on Linux/macOS, C: on Windows)'
     )
     
     parser.add_argument(

@@ -229,7 +229,7 @@ python3 partition_manager.py resize /dev/sdb1 1TB
 
 - **Linux**: Uses `lsblk` for partition detection
 - **macOS**: Uses `diskutil` for partition detection
-- **Windows**: Falls back to mock data (can be extended with platform-specific tools)
+- **Windows 11**: Uses PowerShell `Get-Partition` cmdlet for partition detection
 - **Other**: Uses mock data for demonstration
 
 ## API Usage
@@ -282,7 +282,7 @@ python3 partition_manager.py --help
 2. **No Backup**: Does not create backups (would be required for real implementation)
 3. **No Filesystem Checks**: Does not validate filesystem compatibility
 4. **No Alignment**: Does not handle partition alignment requirements
-5. **Limited Platform Support**: Best on Linux, limited on other platforms
+5. **Windows Requirements**: Requires PowerShell on Windows systems
 
 ## Future Enhancements
 

@@ -5,6 +5,8 @@ MYSQL AI
 
 This repository now includes a **Partition Management Tool** - a simple and safe utility for managing disk partitions with size-related operations.
 
+**Supported Platforms:** Windows 11, Linux, macOS
+
 ### Features
 - List all available partitions
 - Extend partitions by a specified size
@@ -16,6 +18,28 @@ This repository now includes a **Partition Management Tool** - a simple and safe
 
 ### Quick Start
 
+**On Windows 11:**
+```bash
+# List all partitions
+python partition_manager.py list
+
+# Get information about a specific partition (use drive letter)
+python partition_manager.py info C:
+
+# Extend a partition by 10GB (dry run)
+python partition_manager.py extend C: 10GB
+
+# Shrink a partition by 5GB (dry run)
+python partition_manager.py shrink C: 5GB
+
+# Resize a partition to 100GB (dry run)
+python partition_manager.py resize C: 100GB
+
+# Check free space
+python partition_manager.py free C:
+```
+
+**On Linux/macOS:**
 ```bash
 # List all partitions
 python3 partition_manager.py list

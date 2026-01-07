@@ -1,8 +1,54 @@
 # Partition Management Tool - Quick Examples
 
-## Common Use Cases
+## Platform-Specific Examples
 
-### 1. Check what partitions are available
+### Windows 11
+
+#### 1. Check what partitions are available
+```bash
+python partition_manager.py list
+```
+
+Output:
+```
+================================================================================
+Device          Size         Type       Mount Point         
+================================================================================
+C:              250.0 GB     part       C:\                 
+D:              500.0 GB     part       D:\                 
+================================================================================
+```
+
+#### 2. Get detailed info about a specific partition
+```bash
+python partition_manager.py info C:
+```
+
+#### 3. Check how much free space is on a partition
+```bash
+python partition_manager.py free C:
+```
+
+#### 4. Plan to extend a partition (dry run)
+```bash
+python partition_manager.py extend C: 20GB
+```
+
+This shows what WOULD happen without actually doing it (safe mode).
+
+#### 5. Plan to shrink a partition (dry run)
+```bash
+python partition_manager.py shrink C: 10GB
+```
+
+#### 6. Plan to resize to a specific size (dry run)
+```bash
+python partition_manager.py resize C: 100GB
+```
+
+### Linux/macOS
+
+#### 1. Check what partitions are available
 ```bash
 python3 partition_manager.py list
 ```
@@ -18,29 +64,29 @@ Device          Size         Type       Mount Point
 ================================================================================
 ```
 
-### 2. Get detailed info about a specific partition
+#### 2. Get detailed info about a specific partition
 ```bash
 python3 partition_manager.py info /dev/sda1
 ```
 
-### 3. Check how much free space is on a partition
+#### 3. Check how much free space is on a partition
 ```bash
 python3 partition_manager.py free /dev/sda1
 ```
 
-### 4. Plan to extend a partition (dry run)
+#### 4. Plan to extend a partition (dry run)
 ```bash
 python3 partition_manager.py extend /dev/sda1 20GB
 ```
 
 This shows what WOULD happen without actually doing it (safe mode).
 
-### 5. Plan to shrink a partition (dry run)
+#### 5. Plan to shrink a partition (dry run)
 ```bash
 python3 partition_manager.py shrink /dev/sda1 10GB
 ```
 
-### 6. Plan to resize to a specific size (dry run)
+#### 6. Plan to resize to a specific size (dry run)
 ```bash
 python3 partition_manager.py resize /dev/sda1 100GB
 ```
@@ -56,14 +102,24 @@ python3 partition_manager.py resize /dev/sda1 100GB
 
 ## Running the Demo
 
-To see all features in action:
+**Windows 11:**
+```bash
+python demo_partition_manager.py
+```
+
+**Linux/macOS:**
 ```bash
 python3 demo_partition_manager.py
 ```
 
 ## Running Tests
 
-To verify everything works:
+**Windows 11:**
+```bash
+python test_partition_manager.py
+```
+
+**Linux/macOS:**
 ```bash
 python3 test_partition_manager.py
 ```
