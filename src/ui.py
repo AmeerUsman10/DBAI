@@ -742,6 +742,8 @@ Your response:"""
             if isinstance(sql_response_obj, dict):
                 sql_query = sql_response_obj.get('result', '')
                 llm_raw_response = str(sql_response_obj)
+                # Track applied rules for per-rule impact analytics
+                applied_rules = sql_response_obj.get('rules_applied', []) or []
             else:
                 sql_query = str(sql_response_obj)
                 llm_raw_response = sql_query
@@ -1133,6 +1135,13 @@ Keep it concise and factual."""
                 "cache_hit": False,
                 "safety_blocked": False
             })
+        except Exception:
+            pass
+        # Update per-rule usage stats if any rules were applied
+        try:
+            if success and applied_rules:
+                from src.quick_training import bump_rule_usage
+                bump_rule_usage(applied_rules)
         except Exception:
             pass
         return "", history, message_id, response
@@ -2606,9 +2615,25 @@ Generate the examples now:"""
                                 savings_output += f"*Based on {learning_stats['successful']} successful patterns averaging 50 tokens each*\n"
                                 
                                 # Rule ranking (simplified - just show count)
-                                ranking_output = f"### 📋 Training Rules Impact\n\n"
-                                ranking_output += f"Your {training_stats['total']} training rules are actively guiding the AI.\n\n"
-                                ranking_output += f"*Detailed per-rule analytics coming in next update*\n"
+                                # Per-rule impact: top by usage_count among approved
+                                try:
+                                    from src.quick_training import load_training_rules
+                                    data = load_training_rules()
+                                    rules = data.get("rules", [])
+                                    approved = [r for r in rules if r.get("status","draft") == "approved"]
+                                    approved.sort(key=lambda r: int(r.get("usage_count", 0)), reverse=True)
+                                    top = approved[:5]
+                                    ranking_output = "### 📋 Training Rules Impact\n\n"
+                                    if not top:
+                                        ranking_output += "No approved rules yet. Approve rules to track impact.\n"
+                                    else:
+                                        for i, r in enumerate(top, 1):
+                                            instr = (r.get("instruction","") or "").strip()
+                                            ranking_output += (
+                                                f"**{i}.** {instr[:80]}\n- Usage: {int(r.get('usage_count',0))} · Priority: {r.get('priority',5)} · Owner: {r.get('owner','')}\n\n"
+                                            )
+                                except Exception:
+                                    ranking_output = "### 📋 Training Rules Impact\n\nUnable to load rule impact at this time."
                                 
                                 return output, savings_output, ranking_output
                                 

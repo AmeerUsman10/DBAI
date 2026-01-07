@@ -115,7 +115,7 @@ def make_sql_chain(llm, db):
     try:
         from src.database import load_metadata
         from src.learnings import get_relevant_learnings, format_learnings_for_prompt
-        from src.quick_training import get_training_rules_for_prompt
+        from src.quick_training import get_training_rules_for_prompt, get_approved_rules
         
         # Get schema information
         schema = db.get_table_info()
@@ -124,13 +124,22 @@ def make_sql_chain(llm, db):
         metadata = load_metadata()
         
         # Build enhanced prompt template
-        def build_enhanced_prompt(question: str, persona_overlay: str = "") -> str:
+        def build_enhanced_prompt(question: str, persona_overlay: str = "") -> Tuple[str, list]:
             # Get relevant learnings for this question
             learnings = get_relevant_learnings(question, limit=3)
             learnings_text = format_learnings_for_prompt(learnings)
             
             # Get quick training rules
-            training_rules = get_training_rules_for_prompt()
+            # Build training rules section and track applied rule indices
+            approved_rules = get_approved_rules()
+            training_rules = ""
+            applied_indices = []
+            if approved_rules:
+                training_rules = "\n### User-Defined Training Rules (Approved):\nThe user has provided the following specific instructions on how to interpret queries:\n\n"
+                for i, rule in enumerate(approved_rules, 1):
+                    training_rules += f"{i}. {rule['instruction']}\n"
+                    applied_indices.append(i)
+                training_rules += "\nIMPORTANT: Follow these rules precisely when generating SQL queries.\n"
             
             # Build metadata context
             metadata_context = ""
@@ -209,13 +218,13 @@ EXAMPLES - Copy this format EXACTLY:
 
 SQL Query:"""
             
-            return enhanced_template
+            return enhanced_template, applied_indices
         
         # Simple chain that formats prompt and calls LLM
         def sql_chain(inputs: dict) -> dict:
             question = inputs.get("question", "")
             persona_overlay = inputs.get("persona_overlay", "")
-            formatted_prompt = build_enhanced_prompt(question, persona_overlay)
+            formatted_prompt, applied_indices = build_enhanced_prompt(question, persona_overlay)
             # Log prompt metadata (hash only)
             try:
                 from src.session_tracker import get_session_tracker
@@ -241,7 +250,7 @@ SQL Query:"""
                 result = str(response)
             
             # Return both result and raw response for token tracking
-            return {"result": result, "response": response}
+            return {"result": result, "response": response, "rules_applied": applied_indices}
         
         return sql_chain
         

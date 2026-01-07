@@ -120,6 +120,33 @@ def get_training_rules_for_prompt() -> str:
         logger.error(f"Error formatting training rules: {e}")
         return ""
 
+def get_approved_rules() -> List[Dict]:
+    """Return approved training rules ordered by priority."""
+    try:
+        data = load_training_rules()
+        rules = [r for r in data.get("rules", []) if r.get("status", "draft") == "approved"]
+        rules.sort(key=lambda r: r.get("priority", 5))
+        return rules
+    except Exception as e:
+        logger.error(f"Error getting approved rules: {e}")
+        return []
+
+def bump_rule_usage(indices: List[int]) -> None:
+    """Increment usage_count for specific rules by 1 each. Indices are 1-based into current rules list."""
+    if not indices:
+        return
+    try:
+        data = load_training_rules()
+        rules = data.get("rules", [])
+        # Ensure unique indices and valid range
+        for idx in sorted(set(indices)):
+            if 1 <= idx <= len(rules):
+                rules[idx - 1]["usage_count"] = int(rules[idx - 1].get("usage_count", 0)) + 1
+        data["metadata"]["last_updated"] = datetime.now().isoformat()
+        save_training_rules(data)
+    except Exception as e:
+        logger.error(f"Error bumping rule usage: {e}")
+
 def get_training_stats() -> Dict:
     """Get training rules statistics."""
     try:
