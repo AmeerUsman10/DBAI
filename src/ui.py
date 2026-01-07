@@ -26,6 +26,7 @@ from src.quick_training import add_training_rule, get_training_stats, format_rul
 from src.session_tracker import get_session_tracker, reset_session_tracker
 from src.query_classifier import classify_query, needs_movement_clarification, get_clarification_for_classification
 from src.query_templates import generate_sql_from_template
+from src.feedback import save_feedback, get_feedback_statistics, format_feedback_for_display, get_recent_feedback, format_recent_feedback
 from src.query_optimizer import (
     cache_query_result, get_cached_result, cache_sql_generation, get_cached_sql,
     get_cache_stats, clear_expired_cache, clear_all_cache
@@ -424,7 +425,7 @@ def create_simple_chart(rows, columns):
         return None
 
 
-def chat_query(question: str, history: List, persona: str = "default") -> Tuple[str, List]:
+def chat_query(question: str, history: List, persona: str = "default") -> Tuple[str, List, str, str]:
     """
     Process a natural language query with clarity checking and learning.
     
@@ -434,12 +435,16 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         persona: Selected persona
         
     Returns:
-        Tuple of (response, updated_history)
+        Tuple of (empty_string, updated_history, message_id, response_text)
     """
     global current_llm, current_provider, session_tokens, pending_clarification, session_tracker, last_query_info, last_query_result_data
     
     if not question.strip():
-        return "", history
+        return "", history, "", ""
+    
+    # Generate unique message ID for feedback tracking
+    import uuid
+    message_id = str(uuid.uuid4())[:8]
     
     # Initialize tracking variables
     import time
@@ -511,7 +516,7 @@ Your response:"""
                 
                 history.append({"role": "user", "content": question})
                 history.append({"role": "assistant", "content": response})
-                return "", history
+                return "", history, message_id, response
                 
             except Exception as e:
                 logger.error(f"Conversation handling error: {e}")
@@ -564,7 +569,7 @@ Your response:"""
                 history.append({"role": "user", "content": question})
                 history.append({"role": "assistant", "content": response})
                 
-                return "", history
+                return "", history, message_id, response
     
     try:
         # Load config and initialize provider if needed
@@ -622,7 +627,7 @@ Your response:"""
             
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": response})
-            return "", history
+            return "", history, message_id, response
         
         # HYBRID APPROACH: Try template-based generation first
         # (classification already done before clarity check)
@@ -663,7 +668,7 @@ Your response:"""
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": response})
             
-            return "", history
+            return "", history, message_id, response
         
         # Try template generation for high-confidence classifications
         if classification['confidence'] >= 80:
@@ -957,6 +962,7 @@ Keep it concise and factual."""
         
         # Save last query info for live training mode corrections
         last_query_info = {
+            "message_id": message_id,
             "question": question,
             "sql": sql_query,
             "result": response,
@@ -992,7 +998,7 @@ Keep it concise and factual."""
         
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
-        return "", history
+        return "", history, message_id, response
         
     except Exception as e:
         logger.error(f"Chat query error: {e}", exc_info=True)
@@ -1018,7 +1024,7 @@ Keep it concise and factual."""
         
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
-        return "", history
+        return "", history, message_id, response
 
 # Settings Tab Functions
 def get_available_models(provider: str) -> List[str]:
@@ -1353,8 +1359,26 @@ def build_ui():
                 with gr.Row():
                     clear_btn = gr.Button("🗑️ Clear Chat", size="sm", variant="secondary", scale=1)
                 
-                # Query event tracking
+                # Feedback controls
+                gr.Markdown("### Rate the last response")
+                with gr.Row():
+                    thumbs_up_btn = gr.Button("👍 Helpful", size="sm", variant="secondary", scale=1)
+                    thumbs_down_btn = gr.Button("👎 Not helpful", size="sm", variant="secondary", scale=1)
+                    copy_response_btn = gr.Button("📋 Copy Response", size="sm", variant="secondary", scale=1)
+                
+                feedback_comment = gr.Textbox(
+                    placeholder="What could be improved? (optional)",
+                    label="Additional Feedback",
+                    lines=2,
+                    visible=False
+                )
+                submit_feedback_btn = gr.Button("Submit Feedback", visible=False, variant="primary", size="sm")
+                feedback_status = gr.Markdown("")
+                
+                # Query event tracking and state
                 is_running = gr.State(False)
+                current_message_id = gr.State("")
+                last_response_text = gr.State("")
                 
                 # Handle button click
                 send_stop_btn.click(
@@ -1363,9 +1387,9 @@ def build_ui():
                 ).then(
                     chat_query,
                     inputs=[question_input, chatbot, persona_selector],
-                    outputs=[question_input, chatbot]
+                    outputs=[question_input, chatbot, current_message_id, last_response_text]
                 ).then(
-                    lambda: (False, gr.update(value="▶ Send", variant="primary")),
+                    lambda: (False, gr.update(value="Send ▶", variant="primary")),
                     outputs=[is_running, send_stop_btn]
                 )
                 
@@ -1375,9 +1399,9 @@ def build_ui():
                 ).then(
                     chat_query,
                     inputs=[question_input, chatbot, persona_selector],
-                    outputs=[question_input, chatbot]
+                    outputs=[question_input, chatbot, current_message_id, last_response_text]
                 ).then(
-                    lambda: (False, gr.update(value="▶ Send", variant="primary")),
+                    lambda: (False, gr.update(value="Send ▶", variant="primary")),
                     outputs=[is_running, send_stop_btn]
                 )
                 
@@ -1400,6 +1424,124 @@ def build_ui():
                     toggle_auto_chart,
                     inputs=[auto_chart_checkbox],
                     outputs=[]
+                )
+                
+                # Feedback event handlers
+                def handle_thumbs_up(msg_id):
+                    """Handle thumbs up feedback."""
+                    if not msg_id or msg_id == "":
+                        return "⚠️ Please send a query first before providing feedback."
+                    
+                    try:
+                        # Get query info from last_query_info
+                        question = last_query_info.get("question", "")
+                        sql = last_query_info.get("sql", "")
+                        response = last_query_info.get("result", "")
+                        session_id = session_tracker.session_id if session_tracker else None
+                        
+                        # Save feedback
+                        save_feedback(
+                            message_id=msg_id,
+                            feedback_type="thumbs_up",
+                            question=question,
+                            sql_query=sql,
+                            response=response,
+                            session_id=session_id
+                        )
+                        
+                        # Track in session
+                        if session_tracker:
+                            session_tracker.track_training_event(
+                                event_type="positive_feedback",
+                                details={"message_id": msg_id}
+                            )
+                        
+                        return "✅ Thanks for your feedback! This helps improve future responses."
+                    except Exception as e:
+                        logger.error(f"Error saving thumbs up: {e}")
+                        return f"❌ Error saving feedback: {str(e)}"
+                
+                def handle_thumbs_down(msg_id):
+                    """Show feedback comment field on thumbs down."""
+                    if not msg_id or msg_id == "":
+                        return "⚠️ Please send a query first.", gr.update(visible=False), gr.update(visible=False)
+                    
+                    return "👎 Please tell us what was wrong so we can improve:", gr.update(visible=True), gr.update(visible=True)
+                
+                def submit_detailed_feedback(msg_id, feedback_text):
+                    """Submit detailed negative feedback."""
+                    if not msg_id or msg_id == "":
+                        return "⚠️ Please send a query first before providing feedback."
+                    
+                    try:
+                        # Get query info
+                        question = last_query_info.get("question", "")
+                        sql = last_query_info.get("sql", "")
+                        response = last_query_info.get("result", "")
+                        session_id = session_tracker.session_id if session_tracker else None
+                        
+                        # Save feedback
+                        save_feedback(
+                            message_id=msg_id,
+                            feedback_type="thumbs_down",
+                            question=question,
+                            sql_query=sql,
+                            response=response,
+                            feedback_text=feedback_text,
+                            session_id=session_id
+                        )
+                        
+                        # Track in session
+                        if session_tracker:
+                            session_tracker.track_training_event(
+                                event_type="negative_feedback",
+                                details={"message_id": msg_id, "feedback": feedback_text}
+                            )
+                        
+                        # If feedback provided, create training rule
+                        if feedback_text and feedback_text.strip():
+                            rule = f"CORRECTION for '{question}': {feedback_text}"
+                            add_training_rule(rule)
+                            return "✅ Feedback submitted and training rule created! This will help improve similar queries."
+                        else:
+                            return "✅ Feedback submitted. Thanks for helping us improve!"
+                            
+                    except Exception as e:
+                        logger.error(f"Error saving detailed feedback: {e}")
+                        return f"❌ Error saving feedback: {str(e)}"
+                
+                def copy_to_clipboard(response_text):
+                    """Copy response to clipboard (placeholder - actual implementation would need JS)."""
+                    if not response_text:
+                        return "⚠️ No response to copy."
+                    return "📋 Response copied! (use Ctrl+C to copy from the chat)"
+                
+                # Wire feedback buttons
+                thumbs_up_btn.click(
+                    handle_thumbs_up,
+                    inputs=[current_message_id],
+                    outputs=[feedback_status]
+                )
+                
+                thumbs_down_btn.click(
+                    handle_thumbs_down,
+                    inputs=[current_message_id],
+                    outputs=[feedback_status, feedback_comment, submit_feedback_btn]
+                )
+                
+                submit_feedback_btn.click(
+                    submit_detailed_feedback,
+                    inputs=[current_message_id, feedback_comment],
+                    outputs=[feedback_status]
+                ).then(
+                    lambda: (gr.update(value="", visible=False), gr.update(visible=False)),
+                    outputs=[feedback_comment, submit_feedback_btn]
+                )
+                
+                copy_response_btn.click(
+                    copy_to_clipboard,
+                    inputs=[last_response_text],
+                    outputs=[feedback_status]
                 )
             
             # Settings Tab
@@ -2564,6 +2706,33 @@ Generate the examples now:"""
                         
                         refresh_cache_btn.click(show_cache_stats, outputs=[cache_stats_display])
                         clear_cache_btn.click(clear_cache_action, outputs=[cache_action_status])
+                        
+                        # Feedback Analytics Section
+                        gr.Markdown("---")
+                        gr.Markdown("### 📊 User Feedback Analytics")
+                        
+                        feedback_stats_display = gr.Markdown("No feedback data yet.")
+                        recent_feedback_display = gr.Markdown("")
+                        refresh_feedback_btn = gr.Button("🔄 Refresh Feedback Stats", size="sm")
+                        
+                        def show_feedback_analytics():
+                            """Display feedback analytics."""
+                            try:
+                                stats = get_feedback_statistics()
+                                recent = get_recent_feedback(limit=5)
+                                
+                                stats_md = format_feedback_for_display(stats)
+                                recent_md = format_recent_feedback(recent)
+                                
+                                return stats_md, recent_md
+                            except Exception as e:
+                                logger.error(f"Feedback analytics error: {e}")
+                                return f"❌ Error: {str(e)}", ""
+                        
+                        refresh_feedback_btn.click(
+                            show_feedback_analytics,
+                            outputs=[feedback_stats_display, recent_feedback_display]
+                        )
                         
                         # Export button
                         gr.Markdown("---")
