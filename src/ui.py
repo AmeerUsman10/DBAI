@@ -274,6 +274,39 @@ def extract_token_usage(response) -> dict:
     
     return tokens
 
+def is_conversational_query(question: str, last_question: str = None) -> bool:
+    """
+    Detect if user is asking a conversational question vs a data query.
+    
+    Returns True if conversational (no SQL needed), False if data query.
+    """
+    question_lower = question.lower()
+    
+    # Strong conversational indicators
+    conversational_patterns = [
+        r'\b(the above|these results?|that data|this table|previous)\b',
+        r'\b(why|how come|explain|what does (this|that|it) mean)\b',
+        r'\b(different|same|changed|not matching)\b',
+        r'\b(you (said|showed|returned|gave))\b',
+        r'\b(earlier|before|last time)\b',
+        r'^(why|how|what) (is|are|did|does)',
+        r'\btell me (about|why|how)\b'
+    ]
+    
+    import re
+    for pattern in conversational_patterns:
+        if re.search(pattern, question_lower):
+            return True
+    
+    # If very short and no data keywords, likely conversational
+    if len(question.split()) < 5:
+        data_keywords = ['total', 'sum', 'count', 'show', 'list', 'get', 'find', 'top', 'supplier', 'yarn', 'greige']
+        has_data_keyword = any(keyword in question_lower for keyword in data_keywords)
+        if not has_data_keyword:
+            return True
+    
+    return False
+
 def chat_query(question: str, history: List, persona: str = "default") -> Tuple[str, List]:
     """
     Process a natural language query with clarity checking and learning.
@@ -317,6 +350,54 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         # CLASSIFY FIRST to detect breakdown/template potential
         classification = classify_query(question)
         logger.info(f"Query classified as: {classification['type']} (confidence: {classification['confidence']}%)")
+        
+        # Check if this is a conversational query (not a data request)
+        is_conversation = is_conversational_query(question, last_query_info.get("question"))
+
+        if is_conversation:
+            # Handle as conversation - use LLM directly without SQL
+            try:
+                conversation_prompt = f"""The user is asking a conversational question about previous results or context.
+
+User's question: "{question}"
+
+Previous query: "{last_query_info.get('question', 'None')}"
+Previous result (first 500 chars): "{str(last_query_info.get('result', ''))[:500]}"
+
+Respond conversationally and naturally. If they're comparing results or asking for clarification, explain based on the context shown above. Do NOT generate SQL. Just have a helpful conversation.
+
+Your response:"""
+                
+                conversation_response = current_llm.invoke(conversation_prompt)
+                response_text = conversation_response.content if hasattr(conversation_response, 'content') else str(conversation_response)
+                
+                # Extract tokens
+                conv_tokens = extract_token_usage(conversation_response)
+                session_tokens['prompt'] += conv_tokens['prompt_tokens']
+                session_tokens['completion'] += conv_tokens['completion_tokens']
+                session_tokens['total'] += conv_tokens['total_tokens']
+                
+                response = f"{response_text}\n\n<sub>💬 Conversational response · 🔹 Tokens: {conv_tokens['total_tokens']} · Session: {session_tokens['total']:,}</sub>"
+                
+                # Track conversation
+                total_time_ms = int((time.time() - start_time) * 1000)
+                session_tracker.track_query(
+                    user_question=question,
+                    clarity_analysis=None,
+                    llm_interaction={"provider": provider_name, "model": model, "type": "conversation", "tokens": conv_tokens},
+                    execution=None,
+                    response={"type": "conversation", "text": response},
+                    performance={"total_time_ms": total_time_ms, "tokens": conv_tokens},
+                    error=None
+                )
+                
+                history.append({"role": "user", "content": question})
+                history.append({"role": "assistant", "content": response})
+                return "", history
+                
+            except Exception as e:
+                logger.error(f"Conversation handling error: {e}")
+                # Fall through to normal query handling if conversation fails
         
         # Skip clarity check if breakdown detected or high-confidence template
         skip_clarity = (
@@ -1967,36 +2048,54 @@ Then tell me it's pushed and I'll analyze it!
                         tier1_checkbox = gr.Checkbox(label="✅ Tier 1: Essential Metrics", value=True, interactive=False)
                         
                         gr.Markdown("---")
-                        tier2_checkbox = gr.Checkbox(label="🔧 Tier 2: Developer Mode", value=False, info="Detailed debugging")
-                        capture_llm_prompts = gr.Checkbox(label="📝 Capture Full LLM Prompts", value=False, info="⚠️ Very detailed")
-                        capture_reasoning = gr.Checkbox(label="🧠 Capture Reasoning Chain", value=True, info="✅ Recommended")
-                        capture_sample_data = gr.Checkbox(label="📊 Capture Sample Data", value=False, info="⚠️ Privacy concern")
+                        tier2_checkbox = gr.Checkbox(label="🔧 Tier 2: Developer Mode", value=False, info="Enable detailed debugging")
+                        
+                        # Sub-features (dependent on Tier 2)
+                        gr.Markdown("**⚙️ Tier 2 Features** (only work when Developer Mode is ON):")
+                        capture_llm_prompts = gr.Checkbox(label="📝 Capture Full LLM Prompts", value=False, info="⚠️ Very detailed", interactive=False)
+                        capture_sample_data = gr.Checkbox(label="📊 Capture Sample Data", value=False, info="⚠️ Privacy concern", interactive=False)
                         
                         gr.Markdown("---")
                         save_config_btn = gr.Button("💾 Save Configuration", variant="secondary")
                         config_status = gr.Markdown("")
                         
-                        def save_configuration(tier2, llm_prompts, reasoning, sample_data):
+                        def toggle_tier2_features(tier2_enabled):
+                            """Enable/disable sub-features based on Tier 2 state."""
+                            return (
+                                gr.update(interactive=tier2_enabled),  # capture_llm_prompts
+                                gr.update(interactive=tier2_enabled),  # capture_sample_data
+                            )
+                        
+                        def save_configuration(tier2, llm_prompts, sample_data):
                             """Save observability configuration."""
                             try:
                                 new_config = session_tracker.config.copy()
                                 new_config.update({
                                     "tier2_enabled": tier2,
-                                    "capture_llm_prompts": llm_prompts,
-                                    "capture_reasoning_chain": reasoning,
-                                    "capture_sample_data": sample_data
+                                    "capture_llm_prompts": llm_prompts if tier2 else False,
+                                    "capture_sample_data": sample_data if tier2 else False,
                                 })
                                 session_tracker.save_config(new_config)
                                 
                                 status = "✅ **Configuration Saved!**\n\n"
                                 status += "🔧 Developer Mode ENABLED" if tier2 else "📊 Essential mode only"
+                                if tier2:
+                                    status += f"\n- LLM Prompts: {'ON' if llm_prompts else 'OFF'}"
+                                    status += f"\n- Sample Data: {'ON' if sample_data else 'OFF'}"
                                 return status
                             except Exception as e:
                                 return f"❌ Error: {str(e)}"
                         
+                        # Wire up Tier 2 toggle to enable/disable sub-features
+                        tier2_checkbox.change(
+                            toggle_tier2_features,
+                            inputs=[tier2_checkbox],
+                            outputs=[capture_llm_prompts, capture_sample_data]
+                        )
+                        
                         save_config_btn.click(
                             save_configuration,
-                            inputs=[tier2_checkbox, capture_llm_prompts, capture_reasoning, capture_sample_data],
+                            inputs=[tier2_checkbox, capture_llm_prompts, capture_sample_data],
                             outputs=[config_status]
                         )
                         

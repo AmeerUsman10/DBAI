@@ -132,12 +132,13 @@ class SessionTracker:
             if self.config.get("capture_llm_prompts", False) and llm_interaction:
                 query_data["llm_interaction"] = llm_interaction
             
-            if self.config.get("capture_reasoning_chain", True) and llm_interaction:
-                query_data["reasoning"] = {
-                    "learnings_found": llm_interaction.get("learnings_found"),
-                    "training_rules_applied": llm_interaction.get("training_rules_applied"),
-                    "corrections_applied": llm_interaction.get("corrections_applied")
-                }
+            # REMOVED - Reasoning chain not implemented yet (placeholder feature)
+            # if self.config.get("capture_reasoning_chain", True) and llm_interaction:
+            #     query_data["reasoning"] = {
+            #         "learnings_found": llm_interaction.get("learnings_found"),
+            #         "training_rules_applied": llm_interaction.get("training_rules_applied"),
+            #         "corrections_applied": llm_interaction.get("corrections_applied")
+            #     }
             
             if execution:
                 query_data["execution"] = {
