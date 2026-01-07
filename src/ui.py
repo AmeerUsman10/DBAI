@@ -28,6 +28,9 @@ from src.session_tracker import get_session_tracker, reset_session_tracker
 from src.query_classifier import classify_query, needs_movement_clarification, get_clarification_for_classification
 from src.query_templates import generate_sql_from_template
 from src.feedback import save_feedback, get_feedback_statistics, format_feedback_for_display, get_recent_feedback, format_recent_feedback, get_rule_suggestions
+
+# Version tracking - increment by 5 for each significant update
+UI_BUILD_VERSION = 5
 from src.dev_notes import load_notes, save_notes, add_quick_note, get_notes_preview
 from src.query_optimizer import (
     cache_query_result, get_cached_result, cache_sql_generation, get_cached_sql,
@@ -1457,7 +1460,7 @@ def build_ui():
     """Build and return the Gradio interface."""
     
     with gr.Blocks(title="DBAI - Database AI Assistant") as demo:
-        gr.Markdown("# 🤖 DBAI - Database AI Assistant")
+        gr.Markdown(f"# 🤖 DBAI - Database AI Assistant  `Build {UI_BUILD_VERSION}`")
         gr.Markdown("Ask questions about your database in natural language!")
         
         with gr.Tabs():
