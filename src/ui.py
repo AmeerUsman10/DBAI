@@ -30,7 +30,7 @@ from src.query_templates import generate_sql_from_template
 from src.feedback import save_feedback, get_feedback_statistics, format_feedback_for_display, get_recent_feedback, format_recent_feedback, get_rule_suggestions
 
 # Version tracking - increment by 5 for each significant update
-UI_BUILD_VERSION = 5
+UI_BUILD_VERSION = 10
 from src.dev_notes import load_notes, save_notes, add_quick_note, get_notes_preview
 from src.query_optimizer import (
     cache_query_result, get_cached_result, cache_sql_generation, get_cached_sql,
@@ -2811,27 +2811,29 @@ Generate the examples now:"""
 
                     # Custom Personas moved to Developer Settings
             
-            # Developer Tools Tab (UPDATED)
-            with gr.Tab("🔬 Developer Tools"):
-                gr.Markdown("## Developer Insights")
-                gr.Markdown("Session summaries, cache stats, feedback analytics, and export.")
+            # Developer Tab (merged from Developer Tools + Developer Settings)
+            with gr.Tab("🛠️ Developer"):
+                gr.Markdown("## Developer Tools & Configuration")
+                gr.Markdown("Session monitoring, diagnostics, and observability settings.")
                 
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        gr.Markdown("### Session Summary")
-                        
-                        session_summary = gr.Markdown("Loading session data...")
-                        refresh_summary_btn = gr.Button("🔄 Refresh Summary", size="sm")
-                        
-                        def get_current_session_summary():
-                            """Get current session summary."""
-                            try:
-                                summary = session_tracker.get_session_summary()
-                                
-                                avg_time = summary.get('avg_response_time', 0)
-                                avg_time_str = f"{avg_time:.0f}ms" if avg_time else 'N/A'
-                                
-                                output = f"""
+                # Sub-tab 1: Session & Cache
+                with gr.Tab("📊 Session & Cache"):
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            gr.Markdown("### Session Summary")
+                            
+                            session_summary = gr.Markdown("Loading session data...")
+                            refresh_summary_btn = gr.Button("🔄 Refresh Summary", size="sm")
+                            
+                            def get_current_session_summary():
+                                """Get current session summary."""
+                                try:
+                                    summary = session_tracker.get_session_summary()
+                                    
+                                    avg_time = summary.get('avg_response_time', 0)
+                                    avg_time_str = f"{avg_time:.0f}ms" if avg_time else 'N/A'
+                                    
+                                    output = f"""
 **Session ID:** `{summary['session_id']}`  
 **Duration:** {summary['duration_minutes']:.1f} minutes  
 **Total Queries:** {summary['total_queries']}  
@@ -2842,345 +2844,275 @@ Generate the examples now:"""
 **Training Events:** {summary['training_events']}  
 **Errors:** {summary['errors']}  
 """
-                                
-                                recommendations = session_tracker._generate_recommendations()
-                                if recommendations:
-                                    output += "\n### 💡 Recommendations\n"
-                                    for rec in recommendations:
-                                        output += f"- {rec}\n"
-                                
-                                return output
-                            except Exception as e:
-                                return f"❌ Error: {str(e)}"
-                        
-                        refresh_summary_btn.click(get_current_session_summary, outputs=[session_summary])
-                        
-                        # Cache Statistics Section
-                        gr.Markdown("---")
-                        gr.Markdown("### Cache Performance")
-                        cache_stats_display = gr.Markdown("Loading cache stats...")
-                        refresh_cache_btn = gr.Button("🔄 Refresh Cache Stats", size="sm")
-                        clear_cache_btn = gr.Button("🗑️ Clear All Cache", size="sm", variant="stop")
-                        cache_action_status = gr.Markdown("")
-                        
-                        def show_cache_stats():
-                            """Display cache performance statistics."""
-                            try:
-                                stats = get_cache_stats()
-                                
-                                result_cache = stats.get('result_cache', {})
-                                sql_cache = stats.get('sql_cache', {})
-                                cache_size = stats.get('cache_size_mb', 0)
-                                
-                                output = "#### 💾 Result Cache\n"
-                                output += f"**Cached Queries:** {result_cache.get('total_entries', 0)}\n\n"
-                                output += f"**Cache Hits:** {result_cache.get('total_hits', 0)}\n\n"
-                                
-                                if result_cache.get('most_popular'):
-                                    output += f"**Most Popular:** {result_cache['most_popular'][:50]}... ({result_cache.get('most_popular_hits', 0)} hits)\n\n"
-                                
-                                output += "\n#### 🔤 SQL Cache\n"
-                                output += f"**Cached SQL Queries:** {sql_cache.get('total_entries', 0)}\n\n"
-                                output += f"**Reuse Count:** {sql_cache.get('total_reuses', 0)}\n\n"
-                                
-                                if sql_cache.get('most_reused'):
-                                    output += f"**Most Reused:** {sql_cache['most_reused'][:50]}... ({sql_cache.get('most_reused_count', 0)} reuses)\n\n"
-                                
-                                output += f"\n**Total Cache Size:** {cache_size:.2f} MB\n"
-                                
-                                # Calculate token savings estimate
-                                total_hits = result_cache.get('total_hits', 0) + sql_cache.get('total_reuses', 0)
-                                tokens_saved = total_hits * 50  # Estimate 50 tokens saved per hit
-                                cost_saved = (tokens_saved / 1000) * 0.002  # $0.002 per 1K tokens
-                                
-                                output += f"\n#### 💰 Savings\n"
-                                output += f"**Est. Tokens Saved:** ~{tokens_saved:,}\n\n"
-                                output += f"**Est. Cost Saved:** ${cost_saved:.4f}\n"
-                                
-                                return output
-                            except Exception as e:
-                                logger.error(f"Cache stats error: {e}")
-                                return f"❌ Error: {str(e)}"
-                        
-                        def clear_cache_action():
-                            """Clear all cached data."""
-                            try:
-                                success = clear_all_cache()
-                                if success:
-                                    return "✅ Cache cleared successfully!"
-                                return "❌ Failed to clear cache"
-                            except Exception as e:
-                                return f"❌ Error: {str(e)}"
-                        
-                        refresh_cache_btn.click(show_cache_stats, outputs=[cache_stats_display])
-                        clear_cache_btn.click(clear_cache_action, outputs=[cache_action_status])
-                        
-                        # Feedback Analytics Section
-                        gr.Markdown("---")
-                        gr.Markdown("### Feedback Analytics")
-                        
-                        feedback_stats_display = gr.Markdown("No feedback data yet.")
-                        recent_feedback_display = gr.Markdown("")
-                        refresh_feedback_btn = gr.Button("🔄 Refresh Feedback Stats", size="sm")
-                        
-                        def show_feedback_analytics():
-                            """Display feedback analytics."""
-                            try:
-                                stats = get_feedback_statistics()
-                                recent = get_recent_feedback(limit=5)
-                                
-                                stats_md = format_feedback_for_display(stats)
-                                recent_md = format_recent_feedback(recent)
-                                
-                                return stats_md, recent_md
-                            except Exception as e:
-                                logger.error(f"Feedback analytics error: {e}")
-                                return f"❌ Error: {str(e)}", ""
-                        
-                        refresh_feedback_btn.click(
-                            show_feedback_analytics,
-                            outputs=[feedback_stats_display, recent_feedback_display]
-                        )
-                        
-                        # Export button
-                        gr.Markdown("---")
-                        export_btn = gr.Button("📤 Export Session for Copilot", variant="primary", size="lg")
-                        export_status = gr.Markdown("")
-                        export_file_download = gr.File(label="Download Report", visible=False)
-                        
-                        def export_session_report():
-                            """Export complete session for Copilot analysis."""
-                            try:
-                                report_path = session_tracker.export_for_copilot()
-                                
-                                if report_path:
-                                    # Extract just the relative path for git
-                                    relative_path = str(Path(report_path).relative_to(Path.cwd()))
-                                    git_path = relative_path.replace("\\", "/")  # Windows to Unix path
                                     
-                                    instructions = f"""✅ **Report Exported Successfully!**
-
-File: `{report_path}`
-
-### 📤 To Share with Copilot:
-
-**Copy and run these commands:**
-
-```bash
-git add {git_path}
-git commit -m "Add session report for analysis"
-git push
-```
-
-Then tell me it's pushed and I'll analyze it!
-"""
-                                    return (
-                                        instructions,
-                                        report_path,
-                                        gr.update(visible=True)
-                                    )
-                                else:
-                                    return "❌ Export failed", None, gr.update(visible=False)
-                            except Exception as e:
-                                return f"❌ Error: {str(e)}", None, gr.update(visible=False)
-                        
-                        export_btn.click(export_session_report, outputs=[export_status, export_file_download, export_file_download])
-                    
-                    with gr.Column(scale=1):
-                        gr.Markdown("### Controls")
-                        gr.Markdown("Observability and diagnostics moved to 🛠️ Developer Settings.")
-                
-                # Load session summary on page load
-                demo.load(
-                    get_current_session_summary,
-                    outputs=[session_summary]
-                )
-
-            # Developer Settings Tab (NEW)
-            with gr.Tab("🛠️ Developer Settings"):
-                gr.Markdown("## Observability & Diagnostics")
-                gr.Markdown("Configure developer mode features and collect diagnostics for troubleshooting.")
-
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        gr.Markdown("### Observability Settings")
-                        gr.Markdown("**Tier 1** (Always On): Essential metrics  \n**Tier 2** (Developer Mode): Detailed debugging")
-
-                        # Configuration controls
-                        tier1_checkbox = gr.Checkbox(label="✅ Tier 1: Essential Metrics", value=True, interactive=False)
-
-                        gr.Markdown("---")
-                        tier2_checkbox = gr.Checkbox(label="🔧 Tier 2: Developer Mode", value=False, info="Enable detailed debugging")
-
-                        # Sub-features (dependent on Tier 2)
-                        gr.Markdown("**⚙️ Tier 2 Features** (only work when Developer Mode is ON):")
-                        capture_llm_prompts = gr.Checkbox(label="📝 Capture Full LLM Prompts", value=False, info="⚠️ Very detailed", interactive=False)
-                        capture_sample_data = gr.Checkbox(label="📊 Capture Sample Data", value=False, info="⚠️ Privacy concern", interactive=False)
-
-                        gr.Markdown("---")
-                        save_config_btn = gr.Button("💾 Save Configuration", variant="secondary")
-                        config_status = gr.Markdown("")
-
-                        def toggle_tier2_features(tier2_enabled):
-                            """Enable/disable sub-features based on Tier 2 state."""
-                            return (
-                                gr.update(interactive=tier2_enabled),  # capture_llm_prompts
-                                gr.update(interactive=tier2_enabled),  # capture_sample_data
+                                    recommendations = session_tracker._generate_recommendations()
+                                    if recommendations:
+                                        output += "\n### 💡 Recommendations\n"
+                                        for rec in recommendations:
+                                            output += f"- {rec}\n"
+                                    
+                                    return output
+                                except Exception as e:
+                                    return f"❌ Error: {str(e)}"
+                            
+                            refresh_summary_btn.click(get_current_session_summary, outputs=[session_summary])
+                            
+                            # Cache Statistics Section
+                            gr.Markdown("---")
+                            gr.Markdown("### Cache Performance")
+                            cache_stats_display = gr.Markdown("Loading cache stats...")
+                            refresh_cache_btn = gr.Button("🔄 Refresh Cache Stats", size="sm")
+                            clear_cache_btn = gr.Button("🗑️ Clear All Cache", size="sm", variant="stop")
+                            cache_action_status = gr.Markdown("")
+                            
+                            def show_cache_stats():
+                                """Display cache performance statistics."""
+                                try:
+                                    stats = get_cache_stats()
+                                    
+                                    result_cache = stats.get('result_cache', {})
+                                    sql_cache = stats.get('sql_cache', {})
+                                    cache_size = stats.get('cache_size_mb', 0)
+                                    
+                                    output = "#### 💾 Result Cache\n"
+                                    output += f"**Cached Queries:** {result_cache.get('total_entries', 0)}\n\n"
+                                    output += f"**Cache Hits:** {result_cache.get('total_hits', 0)}\n\n"
+                                    
+                                    if result_cache.get('most_popular'):
+                                        output += f"**Most Popular:** {result_cache['most_popular'][:50]}... ({result_cache.get('most_popular_hits', 0)} hits)\n\n"
+                                    
+                                    output += "\n#### 🔤 SQL Cache\n"
+                                    output += f"**Cached SQL Queries:** {sql_cache.get('total_entries', 0)}\n\n"
+                                    output += f"**Reuse Count:** {sql_cache.get('total_reuses', 0)}\n\n"
+                                    
+                                    if sql_cache.get('most_reused'):
+                                        output += f"**Most Reused:** {sql_cache['most_reused'][:50]}... ({sql_cache.get('most_reused_count', 0)} reuses)\n\n"
+                                    
+                                    output += f"\n**Total Cache Size:** {cache_size:.2f} MB\n"
+                                    
+                                    # Calculate token savings estimate
+                                    total_hits = result_cache.get('total_hits', 0) + sql_cache.get('total_reuses', 0)
+                                    tokens_saved = total_hits * 50  # Estimate 50 tokens saved per hit
+                                    cost_saved = (tokens_saved / 1000) * 0.002  # $0.002 per 1K tokens
+                                    
+                                    output += f"\n#### 💰 Savings\n"
+                                    output += f"**Est. Tokens Saved:** ~{tokens_saved:,}\n\n"
+                                    output += f"**Est. Cost Saved:** ${cost_saved:.4f}\n"
+                                    
+                                    return output
+                                except Exception as e:
+                                    logger.error(f"Cache stats error: {e}")
+                                    return f"❌ Error: {str(e)}"
+                            
+                            def clear_cache_action():
+                                """Clear all cached data."""
+                                try:
+                                    success = clear_all_cache()
+                                    if success:
+                                        return "✅ Cache cleared successfully!"
+                                    return "❌ Failed to clear cache"
+                                except Exception as e:
+                                    return f"❌ Error: {str(e)}"
+                            
+                            refresh_cache_btn.click(show_cache_stats, outputs=[cache_stats_display])
+                            clear_cache_btn.click(clear_cache_action, outputs=[cache_action_status])
+                            
+                            # Feedback Analytics Section
+                            gr.Markdown("---")
+                            gr.Markdown("### Feedback Analytics")
+                            
+                            feedback_stats_display = gr.Markdown("No feedback data yet.")
+                            recent_feedback_display = gr.Markdown("")
+                            refresh_feedback_btn = gr.Button("🔄 Refresh Feedback Stats", size="sm")
+                            
+                            def show_feedback_analytics():
+                                """Display feedback analytics."""
+                                try:
+                                    stats = get_feedback_statistics()
+                                    recent = get_recent_feedback(limit=5)
+                                    
+                                    stats_md = format_feedback_for_display(stats)
+                                    recent_md = format_recent_feedback(recent)
+                                    
+                                    return stats_md, recent_md
+                                except Exception as e:
+                                    logger.error(f"Feedback analytics error: {e}")
+                                    return f"❌ Error: {str(e)}", ""
+                            
+                            refresh_feedback_btn.click(
+                                show_feedback_analytics,
+                                outputs=[feedback_stats_display, recent_feedback_display]
                             )
+                            
+                            # Load session summary on page load
+                            demo.load(get_current_session_summary, outputs=[session_summary])
+                
+                # Sub-tab 2: Diagnostics & Export
+                with gr.Tab("📦 Diagnostics & Export"):
+                    gr.Markdown("### Export Options")
+                    gr.Markdown("Choose the right export for your needs: Quick session report or comprehensive diagnostic bundle.")
+                    
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            gr.Markdown("#### 📤 Session Report")
+                            gr.Markdown("Export current session for Copilot analysis (queries, errors, recommendations).")
+                            export_session_btn = gr.Button("📤 Export Session", variant="secondary", size="lg")
+                            export_status = gr.Markdown("")
+                            export_file_download = gr.File(label="Download Session Report", visible=False)
+                    
+                            def export_session_report():
+                                """Export session report for quick Copilot sharing."""
+                                try:
+                                    report_path = session_tracker.export_for_copilot()
+                                    if report_path:
+                                        return (
+                                            f"✅ **Session Report Exported**\n\nFile: `{report_path}`\n\nDownload below and share with Copilot for analysis.",
+                                            report_path,
+                                            gr.update(visible=True)
+                                        )
+                                    else:
+                                        return "❌ Export failed", None, gr.update(visible=False)
+                                except Exception as e:
+                                    return f"❌ Error: {str(e)}", None, gr.update(visible=False)
+                            
+                            export_session_btn.click(export_session_report, outputs=[export_status, export_file_download, export_file_download])
+                        
+                        with gr.Column(scale=1):
+                            gr.Markdown("#### 🔍 Full Diagnostic Bundle")
+                            gr.Markdown("Complete package: session + config + logs + training data + environment snapshot.")
+                            diagnostics_btn = gr.Button("🔍 Collect Full Diagnostics", variant="primary", size="lg")
+                            diagnostics_status = gr.Markdown("")
+                            diagnostics_download = gr.File(label="Download Diagnostics Bundle", visible=False)
+                            
+                            def collect_full_diagnostics():
+                                """Collect comprehensive diagnostic bundle."""
+                                try:
+                                    bundle_path = collect_full_session_bundle(include_sensitive=True)
+                                    if bundle_path:
+                                        return (
+                                            f"✅ **Diagnostic Bundle Created**\n\nBundle: `{bundle_path}`\n\nIncludes: session data, logs, config, training rules, DB snapshot, environment info.",
+                                            bundle_path,
+                                            gr.update(visible=True)
+                                        )
+                                    else:
+                                        # Fallback to basic diagnostics
+                                        basic_path = collect_diagnostics()
+                                        return (
+                                            f"⚠️ **Basic Diagnostics Collected**\n\nFile: `{basic_path}`\n\n(Full bundle unavailable, using text report)",
+                                            basic_path,
+                                            gr.update(visible=True)
+                                        )
+                                except Exception as e:
+                                    return f"❌ Error: {str(e)}", None, gr.update(visible=False)
+                            
+                            diagnostics_btn.click(collect_full_diagnostics, outputs=[diagnostics_status, diagnostics_download, diagnostics_download])
+                    
+                    gr.Markdown("---")
+                    gr.Markdown("### 💡 Usage Guide")
+                    gr.Markdown("""
+**When to use Session Report:**
+- Quick bug reports to Copilot
+- Sharing recent query issues
+- Performance questions
 
-                        def save_configuration(tier2, llm_prompts, sample_data):
-                            """Save observability configuration."""
-                            try:
-                                new_config = session_tracker.config.copy()
-                                new_config.update({
-                                    "tier2_enabled": tier2,
-                                    "capture_llm_prompts": llm_prompts if tier2 else False,
-                                    "capture_sample_data": sample_data if tier2 else False,
-                                })
-                                session_tracker.save_config(new_config)
-
-                                status = "✅ **Configuration Saved!**\n\n"
-                                status += "🔧 Developer Mode ENABLED" if tier2 else "📊 Essential mode only"
-                                if tier2:
-                                    status += f"\n- LLM Prompts: {'ON' if llm_prompts else 'OFF'}"
-                                    status += f"\n- Sample Data: {'ON' if sample_data else 'OFF'}"
-                                return status
-                            except Exception as e:
-                                return f"❌ Error: {str(e)}"
-
-                        # Wire up Tier 2 toggle to enable/disable sub-features
-                        tier2_checkbox.change(
-                            toggle_tier2_features,
-                            inputs=[tier2_checkbox],
-                            outputs=[capture_llm_prompts, capture_sample_data]
-                        )
-
-                        save_config_btn.click(
-                            save_configuration,
-                            inputs=[tier2_checkbox, capture_llm_prompts, capture_sample_data],
-                            outputs=[config_status]
-                        )
-
-                        # Guidance
-                        gr.Markdown("---")
-                        gr.Markdown("""
-**Enable Developer Mode when:**
-- ❌ Wrong results  
-- 🐌 Slow performance  
-- 🤔 Need to see AI reasoning  
-
-**Export for Copilot when:**
-- 💬 Asking for help  
-- 🐛 Complex bugs  
+**When to use Full Diagnostics:**
+- Connection/configuration problems
+- Training/learning issues  
+- System-wide debugging
+- Comprehensive troubleshooting
 """)
 
-                    with gr.Column(scale=1):
-                        gr.Markdown("### Diagnostics")
-                        gr.Markdown("Collect system information, configuration, and logs for troubleshooting.")
-                        dev_collect_btn = gr.Button("🔍 Collect Diagnostics", variant="primary")
-                        dev_download_file = gr.File(label="Download Diagnostics File")
-                        dev_collect_btn.click(
-                            collect_and_download_diagnostics,
-                            outputs=[dev_download_file]
-                        )
+                # Sub-tab 3: Observability Config
+                with gr.Tab("⚙️ Observability Config"):
+                    gr.Markdown("### Configure Monitoring & Telemetry")
+                    
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            gr.Markdown("#### Observability Tiers")
+                            gr.Markdown("**Tier 1** (Always On): Essential metrics  \n**Tier 2** (Developer Mode): Detailed debugging")
 
-                gr.Markdown("---")
-                gr.Markdown("## 🎭 Personas")
-                gr.Markdown("**Coming Soon** — Design specialized assistants with unique characteristics and domain expertise.")
-                
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        gr.Markdown("### ➕ Create New Persona")
-                        persona_id_input = gr.Textbox(label="Persona ID", placeholder="e.g., logistics_expert", info="Unique identifier (no spaces)", interactive=False)
-                        persona_name_input = gr.Textbox(label="Display Name", placeholder="e.g., Logistics Expert", interactive=False)
-                        persona_desc_input = gr.Textbox(label="Description", placeholder="What makes this persona unique?", lines=2, interactive=False)
-                        persona_tone = gr.Dropdown(choices=["friendly", "professional", "technical"], value="professional", label="Communication Tone", interactive=False)
-                        persona_complexity = gr.Dropdown(choices=["simple", "balanced", "detailed"], value="balanced", label="Response Complexity", interactive=False)
-                        persona_domain = gr.Dropdown(choices=["general", "finance", "logistics", "retail", "manufacturing"], value="general", label="Domain Expertise", interactive=False)
-                        persona_instructions = gr.Textbox(label="Custom Instructions", placeholder="Additional guidance for this persona...", lines=4, interactive=False)
-                        save_persona_btn = gr.Button("💾 Save Persona (Coming Soon)", variant="secondary", interactive=False)
-                        persona_status = gr.Markdown("*This feature is coming in the next release.*")
-                        gr.Markdown("### 📊 Persona Performance")
-                        persona_list_display = gr.Markdown("Loading personas...")
-                        refresh_personas_btn = gr.Button("🔄 Refresh List", size="sm")
-                        gr.Markdown("---")
-                        gr.Markdown("### 🏆 Effectiveness Ranking")
-                        persona_ranking = gr.Markdown()
+                            # Configuration controls
+                            tier1_checkbox = gr.Checkbox(label="✅ Tier 1: Essential Metrics", value=True, interactive=False)
 
-                def save_new_persona(pid, name, desc, tone, complexity, domain, instructions):
-                    try:
-                        if not pid or not name:
-                            return "❌ Persona ID and Name are required"
-                        if ' ' in pid:
-                            return "❌ Persona ID cannot contain spaces"
-                        success = save_custom_persona(
-                            persona_id=pid,
-                            name=name,
-                            description=desc,
-                            tone=tone,
-                            complexity=complexity,
-                            domain_expertise=domain,
-                            custom_instructions=instructions
-                        )
-                        if success:
-                            return f"✅ Persona '{name}' saved successfully!\n\nSelect it from the persona dropdown in the Chat tab."
-                        else:
-                            return "❌ Failed to save persona"
-                    except Exception as e:
-                        logger.error(f"Persona save error: {e}")
-                        return f"❌ Error: {str(e)}"
+                            gr.Markdown("---")
+                            tier2_checkbox = gr.Checkbox(label="🔧 Tier 2: Developer Mode", value=False, info="Enable detailed debugging")
 
-                def list_personas_display():
-                    try:
-                        personas = list_custom_personas()
-                        if not personas:
-                            return "No custom personas created yet.\n\nCreate your first persona using the form on the left!"
-                        output = f"### 📋 Custom Personas ({len(personas)})\n\n"
-                        for p in personas:
-                            stats = p.get('stats', {})
-                            total_queries = stats.get('total_queries', 0)
-                            success_rate = (stats.get('successful_queries', 0) / total_queries) * 100 if total_queries else 0
-                            output += f"#### {p['name']}\n"
-                            output += f"**ID:** `{p['id']}`\n\n"
-                            output += f"**Tone:** {p['tone']} | **Complexity:** {p['complexity']} | **Domain:** {p['domain_expertise']}\n\n"
-                            output += f"**Usage:** {total_queries} queries | **Success Rate:** {success_rate:.1f}%\n\n"
-                            output += f"---\n\n"
-                        return output
-                    except Exception as e:
-                        logger.error(f"Persona list error: {e}")
-                        return f"❌ Error: {str(e)}"
+                            # Sub-features (dependent on Tier 2)
+                            gr.Markdown("**⚙️ Tier 2 Features** (only work when Developer Mode is ON):")
+                            capture_llm_prompts = gr.Checkbox(label="📝 Capture Full LLM Prompts", value=False, info="⚠️ Very detailed", interactive=False)
+                            capture_sample_data = gr.Checkbox(label="📊 Capture Sample Data", value=False, info="⚠️ Privacy concern", interactive=False)
 
-                def show_persona_ranking():
-                    try:
-                        ranking = get_persona_effectiveness_ranking()
-                        if not ranking:
-                            return "No usage data yet for custom personas."
-                        output = "### 🏆 Top Performing Personas\n\n"
-                        for i, p in enumerate(ranking[:5], 1):
-                            output += f"**{i}. {p['name']}**\n"
-                            output += f"   Success Rate: {p['success_rate']:.1f}% | Queries: {p['total_queries']} | Avg Tokens: {p['avg_tokens']:.0f}\n\n"
-                        return output
-                    except Exception as e:
-                        logger.error(f"Ranking error: {e}")
-                        return f"❌ Error: {str(e)}"
+                            gr.Markdown("---")
+                            save_config_btn = gr.Button("💾 Save Configuration", variant="secondary")
+                            config_status = gr.Markdown("")
 
-                save_persona_btn.click(
-                    save_new_persona,
-                    inputs=[persona_id_input, persona_name_input, persona_desc_input, persona_tone, persona_complexity, persona_domain, persona_instructions],
-                    outputs=[persona_status]
-                ).then(
-                    lambda: gr.update(choices=get_all_personas()),
-                    outputs=[persona_selector]
-                )
+                            def toggle_tier2_features(tier2_enabled):
+                                """Enable/disable sub-features based on Tier 2 state."""
+                                return (
+                                    gr.update(interactive=tier2_enabled),  # capture_llm_prompts
+                                    gr.update(interactive=tier2_enabled),  # capture_sample_data
+                                )
 
-                refresh_personas_btn.click(list_personas_display, outputs=[persona_list_display])
-                demo.load(list_personas_display, outputs=[persona_list_display])
-                demo.load(show_persona_ranking, outputs=[persona_ranking])
+                            def save_configuration(tier2, llm_prompts, sample_data):
+                                """Save observability configuration."""
+                                try:
+                                    new_config = session_tracker.config.copy()
+                                    new_config.update({
+                                        "tier2_enabled": tier2,
+                                        "capture_llm_prompts": llm_prompts if tier2 else False,
+                                        "capture_sample_data": sample_data if tier2 else False,
+                                    })
+                                    session_tracker.save_config(new_config)
 
-            
-        
-        gr.Markdown("---")
-        gr.Markdown("💡 **Tip:** Diagnostics are available under 🛠️ Developer Settings.")
+                                    status = "✅ **Configuration Saved!**\n\n"
+                                    status += "🔧 Developer Mode ENABLED" if tier2 else "📊 Essential mode only"
+                                    if tier2:
+                                        status += f"\n- LLM Prompts: {'ON' if llm_prompts else 'OFF'}"
+                                        status += f"\n- Sample Data: {'ON' if sample_data else 'OFF'}"
+                                    return status
+                                except Exception as e:
+                                    return f"❌ Error: {str(e)}"
+
+                            # Wire up Tier 2 toggle to enable/disable sub-features
+                            tier2_checkbox.change(
+                                toggle_tier2_features,
+                                inputs=[tier2_checkbox],
+                                outputs=[capture_llm_prompts, capture_sample_data]
+                            )
+
+                            save_config_btn.click(
+                                save_configuration,
+                                inputs=[tier2_checkbox, capture_llm_prompts, capture_sample_data],
+                                outputs=[config_status]
+                            )
+
+                            # Guidance
+                            gr.Markdown("---")
+                            gr.Markdown("""
+**💡 Enable Developer Mode when:**
+- ❌ Wrong results or unexpected behavior
+- 🐌 Slow performance issues
+- 🤔 Need to see AI reasoning and prompts
+- 🐛 Debugging complex problems
+""")
+                        
+                        with gr.Column(scale=1):
+                            gr.Markdown("#### Quick Actions")
+                            gr.Markdown("Common developer workflows and shortcuts.")
+                            
+                            clear_session_btn = gr.Button("🔄 Reset Current Session", size="sm")
+                            session_reset_status = gr.Markdown("")
+                            
+                            def reset_current_session():
+                                try:
+                                    reset_session_tracker()
+                                    return "✅ Session reset successfully! New session ID assigned."
+                                except Exception as e:
+                                    return f"❌ Error: {str(e)}"
+                            
+                            clear_session_btn.click(reset_current_session, outputs=[session_reset_status])
+
+
     
     return demo
 
