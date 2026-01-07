@@ -2535,6 +2535,14 @@ Generate the examples now:"""
                         analytics_display = gr.Markdown("Loading analytics...")
                         refresh_analytics_btn = gr.Button("🔄 Refresh Analytics", variant="primary")
                         consolidate_btn = gr.Button("🧹 Run Consolidation", variant="secondary")
+
+                        gr.Markdown("---")
+                        gr.Markdown("### 📦 Training Versioning")
+                        export_btn2 = gr.Button("📤 Export Training Snapshot", variant="secondary")
+                        export_path_md = gr.Markdown()
+                        import_file = gr.File(label="Import Training Snapshot", file_types=[".json"], type="filepath")
+                        import_btn = gr.Button("📥 Import", variant="secondary")
+                        import_status_md = gr.Markdown()
                         
                         gr.Markdown("---")
                         gr.Markdown("### 💰 Token Cost Savings")
@@ -2658,6 +2666,27 @@ Generate the examples now:"""
                         
                         # Load on tab open
                         demo.load(show_training_analytics, outputs=[analytics_display, cost_savings, rule_ranking])
+
+                        def _export_training():
+                            try:
+                                from src.training_io import export_training
+                                ok, path = export_training()
+                                return f"{'✅ Exported:' if ok else '❌ Failed:'} {path}"
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+
+                        def _import_training(fp: str):
+                            if not fp:
+                                return "⚠️ Please select a file"
+                            try:
+                                from src.training_io import import_training
+                                ok, msg = import_training(fp)
+                                return f"{'✅' if ok else '❌'} {msg}"
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+
+                        export_btn2.click(_export_training, outputs=[export_path_md])
+                        import_btn.click(_import_training, inputs=[import_file], outputs=[import_status_md])
                     
                     # Rule Suggestions Sub-tab (from feedback)
                     with gr.Tab("🧩 Rule Suggestions"):
