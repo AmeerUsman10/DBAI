@@ -139,3 +139,5 @@ logs/**/*.db
 logs/diagnostics/*.zip
 logs/runtime.log
 logs/diagnostics.log
+logs/observability_config.json
+logs/sessions/copilot_report_*.json
