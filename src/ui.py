@@ -2725,6 +2725,13 @@ Generate the examples now:"""
                             refresh_gov_btn = gr.Button("🔄 Refresh")
                         gov_msg = gr.Markdown()
 
+                        gr.Markdown("---")
+                        gr.Markdown("### 🔎 Conflict Detection")
+                        conflict_md = gr.Markdown()
+                        detect_conflicts_btn = gr.Button("🔍 Detect Conflicts", variant="secondary")
+                        deprecate_conflict_in = gr.Textbox(label="Deprecate Rule #", placeholder="Enter rule number to deprecate")
+                        deprecate_conflict_btn = gr.Button("🚫 Deprecate Selected", variant="stop")
+
                         def _load_governance_rules():
                             data = load_training_rules()
                             rules = data.get("rules", [])
@@ -2789,6 +2796,35 @@ Generate the examples now:"""
                         approve_btn2.click(_approve_rule, inputs=[gov_select], outputs=[gov_msg, gov_select])
                         update_btn.click(_update_rule, inputs=[gov_select, owner_in, priority_in, status_in], outputs=[gov_msg, gov_select])
                         delete_btn.click(_delete_rule, inputs=[gov_select], outputs=[gov_msg, gov_select])
+
+                        def _detect_conflicts():
+                            try:
+                                from src.quick_training import detect_rule_conflicts
+                                pairs = detect_rule_conflicts()
+                                if not pairs:
+                                    return "No potential conflicts detected."
+                                md = "### Potential Conflicts\n\n"
+                                for (i,j,score) in pairs[:10]:
+                                    md += f"- Rules #{i} and #{j} (similarity {score})\n"
+                                return md
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+
+                        def _deprecate_rule(rule_no: str):
+                            try:
+                                idx = int(rule_no)
+                            except Exception as e:
+                                return f"❌ Invalid rule #: {e}", deprecate_conflict_in
+                            try:
+                                from src.quick_training import update_rule
+                                ok, msg = update_rule(idx, status="deprecated")
+                                md, choices = _load_governance_rules()
+                                return (f"{'✅ Deprecated' if ok else '❌ ' + msg}", gr.Textbox(value=""))
+                            except Exception as e:
+                                return f"❌ Error: {e}", deprecate_conflict_in
+
+                        detect_conflicts_btn.click(_detect_conflicts, outputs=[conflict_md])
+                        deprecate_conflict_btn.click(_deprecate_rule, inputs=[deprecate_conflict_in], outputs=[gov_msg, deprecate_conflict_in])
 
                         # Initial load
                         demo.load(_load_governance_rules, outputs=[gov_rules_md, gov_select])

@@ -243,3 +243,38 @@ def update_rule(rule_index: int, owner: str = None, priority: int = None, status
     except Exception as e:
         logger.error(f"Error updating rule: {e}", exc_info=True)
         return False, f"Error: {str(e)}"
+
+def _tokenize(text: str) -> List[str]:
+    """Simple tokenizer for conflict detection."""
+    if not text:
+        return []
+    import re
+    tokens = re.findall(r"[a-zA-Z0-9]+", text.lower())
+    stop = {"the","and","of","to","in","for","by","with","a","an","on","as","is","are","be"}
+    return [t for t in tokens if t not in stop]
+
+def detect_rule_conflicts(threshold: float = 0.6) -> List[Tuple[int,int,float]]:
+    """Detect potentially overlapping/duplicate rules via Jaccard similarity.
+    Returns list of (rule_index1, rule_index2, score) with 1-based indices.
+    """
+    try:
+        data = load_training_rules()
+        rules = data.get("rules", [])
+        pairs: List[Tuple[int,int,float]] = []
+        for i in range(len(rules)):
+            t1 = set(_tokenize(rules[i].get("instruction","")))
+            if not t1:
+                continue
+            for j in range(i+1, len(rules)):
+                t2 = set(_tokenize(rules[j].get("instruction","")))
+                if not t2:
+                    continue
+                inter = len(t1 & t2)
+                union = len(t1 | t2)
+                score = (inter / union) if union else 0.0
+                if score >= threshold:
+                    pairs.append((i+1, j+1, round(score, 2)))
+        return pairs
+    except Exception as e:
+        logger.error(f"Error detecting rule conflicts: {e}")
+        return []
