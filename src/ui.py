@@ -27,6 +27,7 @@ from src.session_tracker import get_session_tracker, reset_session_tracker
 from src.query_classifier import classify_query, needs_movement_clarification, get_clarification_for_classification
 from src.query_templates import generate_sql_from_template
 from src.feedback import save_feedback, get_feedback_statistics, format_feedback_for_display, get_recent_feedback, format_recent_feedback
+from src.dev_notes import load_notes, save_notes, add_quick_note, get_notes_preview
 from src.query_optimizer import (
     cache_query_result, get_cached_result, cache_sql_generation, get_cached_sql,
     get_cache_stats, clear_expired_cache, clear_all_cache
@@ -2856,6 +2857,117 @@ Then tell me it's pushed and I'll analyze it!
                     outputs=[session_summary]
                 )
 
+            # Developer Notes Tab (NEW)
+            with gr.Tab("📝 Developer Notes"):
+                gr.Markdown("## 📝 Development Change Log & Notes")
+                gr.Markdown("**Keep track of planned changes, work in progress, completed tasks, bugs, and ideas.**")
+                gr.Markdown("*This helps maintain context across long development sessions and prevents forgetting planned changes.*")
+                
+                with gr.Row():
+                    save_notes_btn = gr.Button("💾 Save Notes", variant="primary", size="sm", scale=1)
+                    refresh_notes_btn = gr.Button("🔄 Refresh", variant="secondary", size="sm", scale=1)
+                
+                notes_status = gr.Markdown("")
+                
+                notes_editor = gr.Textbox(
+                    label="Notes (Markdown supported)",
+                    placeholder="Loading notes...",
+                    lines=30,
+                    max_lines=50,
+                    show_label=False
+                )
+                
+                gr.Markdown("---")
+                gr.Markdown("### Quick Add")
+                gr.Markdown("Add a timestamped note to a specific section:")
+                
+                with gr.Row():
+                    quick_note_input = gr.Textbox(
+                        placeholder="Enter a quick note...",
+                        label="Quick Note",
+                        scale=3
+                    )
+                    quick_section_dropdown = gr.Dropdown(
+                        choices=[
+                            "🎯 Planned Changes (Not Started)",
+                            "🚧 In Progress",
+                            "✅ Completed",
+                            "🐛 Known Bugs",
+                            "💡 Ideas & Future Enhancements",
+                            "📝 Session Notes",
+                            "🔧 Configuration Changes",
+                            "📚 Technical Decisions"
+                        ],
+                        value="📝 Session Notes",
+                        label="Section",
+                        scale=2
+                    )
+                    add_note_btn = gr.Button("➕ Add", variant="secondary", size="sm", scale=1)
+                
+                quick_note_status = gr.Markdown("")
+                
+                # Event handlers
+                def handle_save_notes(content):
+                    """Save notes to file."""
+                    success, message = save_notes(content)
+                    return message
+                
+                def handle_refresh_notes():
+                    """Reload notes from file."""
+                    content = load_notes()
+                    return content, "🔄 Notes refreshed from disk"
+                
+                def handle_add_quick_note(note, section):
+                    """Add a quick timestamped note."""
+                    if not note or not note.strip():
+                        return gr.update(), "⚠️ Please enter a note"
+                    
+                    # Remove emoji prefix from section for function call
+                    section_clean = section.split(' ', 1)[1] if ' ' in section else section
+                    
+                    success, message = add_quick_note(note, section_clean)
+                    
+                    if success:
+                        # Reload notes to show the update
+                        updated_content = load_notes()
+                        return updated_content, message, ""
+                    else:
+                        return gr.update(), message, gr.update()
+                
+                # Wire up event handlers
+                save_notes_btn.click(
+                    handle_save_notes,
+                    inputs=[notes_editor],
+                    outputs=[notes_status]
+                )
+                
+                refresh_notes_btn.click(
+                    handle_refresh_notes,
+                    outputs=[notes_editor, notes_status]
+                )
+                
+                add_note_btn.click(
+                    handle_add_quick_note,
+                    inputs=[quick_note_input, quick_section_dropdown],
+                    outputs=[notes_editor, quick_note_status, quick_note_input]
+                )
+                
+                # Load notes on page load
+                demo.load(
+                    load_notes,
+                    outputs=[notes_editor]
+                )
+                
+                gr.Markdown("---")
+                gr.Markdown("""
+### 💡 Tips
+- **Markdown supported**: Use `#` for headings, `-` for lists, `**bold**`, `*italic*`, etc.
+- **Checkbox format**: Use `- [ ]` for unchecked, `- [x]` for checked tasks
+- **Auto-timestamp**: Quick Add automatically adds timestamp to your notes
+- **Persistent**: Notes are saved to `logs/dev_notes.md` and persist across sessions
+- **Version control**: This file is tracked in git, so you can see change history
+                """)
+            
             # Diagnostics Tab
             with gr.Tab("🔍 Diagnostics"):
                 gr.Markdown("## System Diagnostics")
@@ -2870,7 +2982,7 @@ Then tell me it's pushed and I'll analyze it!
                 )
         
         gr.Markdown("---")
-        gr.Markdown("💡 **Tip:** Use the Diagnostics tab to collect logs if you encounter any issues.")
+        gr.Markdown("💡 **Tip:** Use Developer Notes to track planned changes and prevent forgetting tasks. Use Diagnostics to collect logs for troubleshooting.")
     
     return demo
 
