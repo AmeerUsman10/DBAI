@@ -319,7 +319,7 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
     Returns:
         Tuple of (response, updated_history)
     """
-    global current_llm, current_provider, session_tokens, pending_clarification, session_tracker
+    global current_llm, current_provider, session_tokens, pending_clarification, session_tracker, last_query_info, last_query_result_data
     
     if not question.strip():
         return "", history
@@ -775,7 +775,6 @@ Keep it concise and factual."""
         logger.debug(f"RESPONSE PREVIEW: {response[:200]}")
         
         # Save last query info for live training mode corrections
-        global last_query_info, last_query_result_data
         last_query_info = {
             "question": question,
             "sql": sql_query,
