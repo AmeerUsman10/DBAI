@@ -134,3 +134,8 @@ diagnostics.log*
 config.yaml
 *.xlsx
 *.xls
+logs/*.db
+logs/**/*.db
+logs/diagnostics/*.zip
+logs/runtime.log
+logs/diagnostics.log
