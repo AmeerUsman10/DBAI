@@ -27,6 +27,50 @@ This file tracks planned changes, work in progress, and completed tasks to maint
 
 **Next:** Open http://localhost:7861 in browser to test
 
+---
+
+### FEATURE PARITY ASSESSMENT: Chainlit vs Final Gradio
+
+**ALREADY IN CHAINLIT ✅:**
+- Chat interface with SQL generation
+- Per-message feedback (thumbs up/down IN bubbles)
+- Settings sidebar (provider, model, temperature, persona, database)
+- Message streaming
+- Session state management
+- Feedback tracking backend integration
+
+**MISSING FROM CHAINLIT ❌ (Need to add):**
+
+**High Priority - Core Chat Features:**
+- [ ] Query classification/templates integration (backend exists in src/query_classifier.py)
+- [ ] Query caching integration (backend exists in src/query_optimizer.py)
+- [ ] Clarity checking (backend exists in src/clarity.py)
+- [ ] Conversational query detection (backend exists in src/ui.py)
+- [ ] Learning system integration (src/learnings.py)
+- [ ] Better error handling and database fallback
+
+**Medium Priority - Additional Features:**
+- [ ] Export to CSV button
+- [ ] Training rules display/management
+- [ ] Cache statistics display
+- [ ] Feedback analytics display
+- [ ] Session export for Copilot
+- [ ] Custom personas management UI
+
+**Low Priority - Nice to Have:**
+- [ ] Auto-charts toggle
+- [ ] Diagnostics collection
+- [ ] Multiple tabs (or keep single-page design)
+
+**EFFORT ESTIMATE:**
+- **Phase 1** (Core chat parity): 2-3 hours - Port full chat_query logic from Gradio
+- **Phase 2** (Additional UI): 1-2 hours - Add training/stats displays  
+- **Phase 3** (Polish): 1 hour - Testing and refinement
+
+**TOTAL: 4-6 hours** (Most can be done now since backend logic exists)
+
+**STRATEGY:** Copy the proven chat_query logic from src/ui.py and adapt it for Chainlit's async/await pattern
+
 **Phase 2: Settings & Configuration (Today/Tomorrow)**
 - [ ] Add ChatSettings for LLM provider, model, temperature
 - [ ] Add ChatSettings for database connection
