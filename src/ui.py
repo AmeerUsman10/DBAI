@@ -2541,27 +2541,38 @@ Generate the examples now:"""
                                 from src.quick_training import get_training_stats
                                 import json
                                 from pathlib import Path
+                                # Prefer SQLite audit stats if available
+                                blocked_count = 0
+                                cache_count = 0
+                                total_events = 0
+                                try:
+                                    from src.knowledge_store import get_audit_stats, init_store
+                                    init_store()
+                                    s = get_audit_stats()
+                                    blocked_count = s.get("blocked_count", 0)
+                                    cache_count = s.get("cache_count", 0)
+                                    total_events = s.get("total_events", 0)
+                                except Exception:
+                                    pass
                                 
                                 learning_stats = get_learning_stats()
                                 training_stats = get_training_stats()
 
-                                # Load audit events for safety/cache metrics (if available)
-                                audit_path = Path(__file__).parent.parent / "logs" / "audit_events.json"
-                                blocked_count = 0
-                                cache_count = 0
-                                total_events = 0
-                                if audit_path.exists():
-                                    try:
-                                        with open(audit_path, 'r', encoding='utf-8') as f:
-                                            events = json.load(f)
-                                        total_events = len(events)
-                                        for ev in events:
-                                            if ev.get("safety_blocked"):
-                                                blocked_count += 1
-                                            if ev.get("cache_hit"):
-                                                cache_count += 1
-                                    except Exception:
-                                        pass
+                                # Fallback to JSON if SQLite has no events
+                                if total_events == 0:
+                                    audit_path = Path(__file__).parent.parent / "logs" / "audit_events.json"
+                                    if audit_path.exists():
+                                        try:
+                                            with open(audit_path, 'r', encoding='utf-8') as f:
+                                                events = json.load(f)
+                                            total_events = len(events)
+                                            for ev in events:
+                                                if ev.get("safety_blocked"):
+                                                    blocked_count += 1
+                                                if ev.get("cache_hit"):
+                                                    cache_count += 1
+                                        except Exception:
+                                            pass
                                 
                                 # Build analytics dashboard
                                 output = "## 📊 Learning System Performance\n\n"

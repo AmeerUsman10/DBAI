@@ -10,6 +10,7 @@ from datetime import datetime
 
 from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
@@ -163,3 +164,23 @@ def insert_learning(entry: Dict[str, Any]) -> None:
         sess.close()
     except Exception as e:
         logger.debug(f"Insert learning failed: {e}")
+
+
+def get_audit_stats() -> Dict[str, int]:
+    """Return aggregate counts from audit_events in SQLite."""
+    try:
+        if _Session is None:
+            init_store()
+        sess = _Session()
+        total = sess.query(func.count(AuditEvent.id)).scalar() or 0
+        blocked = sess.query(func.count(AuditEvent.id)).filter(AuditEvent.safety_blocked == True).scalar() or 0
+        cache_hits = sess.query(func.count(AuditEvent.id)).filter(AuditEvent.cache_hit == True).scalar() or 0
+        sess.close()
+        return {
+            "total_events": int(total),
+            "blocked_count": int(blocked),
+            "cache_count": int(cache_hits),
+        }
+    except Exception as e:
+        logger.debug(f"Read audit stats failed: {e}")
+        return {"total_events": 0, "blocked_count": 0, "cache_count": 0}
