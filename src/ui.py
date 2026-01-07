@@ -2732,6 +2732,11 @@ Generate the examples now:"""
                         deprecate_conflict_in = gr.Textbox(label="Deprecate Rule #", placeholder="Enter rule number to deprecate")
                         deprecate_conflict_btn = gr.Button("🚫 Deprecate Selected", variant="stop")
 
+                        gr.Markdown("---")
+                        gr.Markdown("### 🧾 Audit Trail")
+                        audit_md = gr.Markdown()
+                        refresh_audit_btn = gr.Button("🔄 Refresh Audit Trail")
+
                         def _load_governance_rules():
                             data = load_training_rules()
                             rules = data.get("rules", [])
@@ -2825,6 +2830,28 @@ Generate the examples now:"""
 
                         detect_conflicts_btn.click(_detect_conflicts, outputs=[conflict_md])
                         deprecate_conflict_btn.click(_deprecate_rule, inputs=[deprecate_conflict_in], outputs=[gov_msg, deprecate_conflict_in])
+
+                        def _load_rule_audit():
+                            try:
+                                from pathlib import Path
+                                import json
+                                audit_path = Path(__file__).parent.parent / "logs" / "training_rule_audit.json"
+                                if not audit_path.exists():
+                                    return "No audit entries yet."
+                                with open(audit_path, 'r', encoding='utf-8') as f:
+                                    events = json.load(f)
+                                last = events[-10:]
+                                md = "### Recent Rule Changes\n\n"
+                                for ev in last:
+                                    ts = ev.get("timestamp","")[:19]
+                                    act = ev.get("action","")
+                                    idx = ev.get("rule_index",0)
+                                    md += f"- [{ts}] {act.upper()} rule #{idx}\n"
+                                return md
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+
+                        refresh_audit_btn.click(_load_rule_audit, outputs=[audit_md])
 
                         # Initial load
                         demo.load(_load_governance_rules, outputs=[gov_rules_md, gov_select])

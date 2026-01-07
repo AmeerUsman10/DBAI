@@ -11,6 +11,7 @@ from typing import Dict, List, Tuple
 logger = logging.getLogger(__name__)
 
 TRAINING_FILE = Path(__file__).parent.parent / "quick_training_rules.json"
+AUDIT_FILE = Path(__file__).parent.parent / "logs" / "training_rule_audit.json"
 
 def load_training_rules() -> Dict:
     """Load quick training rules."""
@@ -39,6 +40,29 @@ def save_training_rules(rules_data: Dict) -> bool:
     except Exception as e:
         logger.error(f"Error saving training rules: {e}")
         return False
+
+def _append_rule_audit(action: str, rule_index: int, details: Dict):
+    """Append a rule audit event to JSON log."""
+    try:
+        AUDIT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        event = {
+            "timestamp": datetime.now().isoformat(),
+            "action": action,
+            "rule_index": rule_index,
+            "details": details or {}
+        }
+        data = []
+        if AUDIT_FILE.exists():
+            try:
+                with open(AUDIT_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception:
+                data = []
+        data.append(event)
+        with open(AUDIT_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
 
 def add_training_rule(instruction: str, owner: str = "", priority: int = 5, status: str = "draft") -> Tuple[bool, str]:
     """
@@ -80,6 +104,10 @@ def add_training_rule(instruction: str, owner: str = "", priority: int = 5, stat
         
         # Save
         if save_training_rules(rules_data):
+            try:
+                _append_rule_audit("add", len(rules_data["rules"]), {"instruction": instruction.strip(), "owner": owner, "priority": prio, "status": status_norm})
+            except Exception:
+                pass
             return True, f"✅ Training rule added! Total rules: {rules_data['metadata']['total_rules']}"
         else:
             return False, "Failed to save training rule"
@@ -207,6 +235,10 @@ def delete_rule(rule_index: int) -> Tuple[bool, str]:
         
         # Save
         if save_training_rules(rules_data):
+            try:
+                _append_rule_audit("delete", rule_index, {"instruction": deleted_rule.get("instruction",""), "owner": deleted_rule.get("owner",""), "priority": deleted_rule.get("priority",5), "status": deleted_rule.get("status","draft")})
+            except Exception:
+                pass
             return True, f"✅ Deleted rule: \"{deleted_rule['instruction'][:50]}...\""
         else:
             return False, "Failed to save changes"
@@ -237,6 +269,10 @@ def update_rule(rule_index: int, owner: str = None, priority: int = None, status
 
         rules_data["metadata"]["last_updated"] = datetime.now().isoformat()
         if save_training_rules(rules_data):
+            try:
+                _append_rule_audit("update", rule_index, {"owner": owner, "priority": priority, "status": status})
+            except Exception:
+                pass
             return True, "✅ Rule updated"
         else:
             return False, "Failed to save changes"
