@@ -57,6 +57,7 @@ def main():
     
     try:
         from src.ui import build_ui
+        import gradio as gr
         
         # Build and launch the Gradio interface
         demo = build_ui()
@@ -64,7 +65,8 @@ def main():
             server_name="127.0.0.1",
             server_port=7860,
             share=False,
-            show_error=True
+            show_error=True,
+            theme=gr.themes.Default()
         )
     except Exception as e:
         logging.error(f"Failed to start application: {e}", exc_info=True)

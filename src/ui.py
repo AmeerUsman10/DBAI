@@ -1299,7 +1299,7 @@ def collect_and_download_diagnostics() -> Optional[str]:
 def build_ui():
     """Build and return the Gradio interface."""
     
-    with gr.Blocks(title="DBAI - Database AI Assistant", theme=gr.themes.Default()) as demo:
+    with gr.Blocks(title="DBAI - Database AI Assistant") as demo:
         gr.Markdown("# 🤖 DBAI - Database AI Assistant")
         gr.Markdown("Ask questions about your database in natural language!")
         
@@ -1334,9 +1334,7 @@ def build_ui():
                     height=500,
                     label="",
                     show_label=False,
-                    avatar_images=(None, "🤖"),
-                    bubble_full_width=False,
-                    show_copy_button=True
+                    avatar_images=(None, "🤖")
                 )
                 
                 # Input area with send button
@@ -2709,4 +2707,4 @@ Then tell me it's pushed and I'll analyze it!
 
 if __name__ == "__main__":
     demo = build_ui()
-    demo.launch()
+    demo.launch(theme=gr.themes.Default())
