@@ -1,0 +1,38 @@
+{
+  "session_summary": {
+    "session_id": "20260106_173403",
+    "duration_minutes": 2.202214216666667,
+    "total_queries": 0,
+    "successful_queries": 0,
+    "failed_queries": 0,
+    "success_rate": 0.0,
+    "avg_response_time": null,
+    "training_events": 0,
+    "errors": 0
+  },
+  "configuration": {
+    "tier1_enabled": true,
+    "tier2_enabled": true,
+    "capture_llm_prompts": true,
+    "capture_sample_data": true,
+    "capture_reasoning_chain": true,
+    "max_queries_in_memory": 50,
+    "auto_save_interval": 10
+  },
+  "full_state": {
+    "session_id": "20260106_173403",
+    "started_at": "2026-01-06T17:34:03.254335",
+    "total_queries": 0,
+    "total_errors": 0,
+    "total_successes": 0,
+    "current_state": {},
+    "last_query": null,
+    "session_timeline": []
+  },
+  "all_queries": [],
+  "all_errors": [],
+  "training_events": [],
+  "recommendations": [
+    "\u26a0\ufe0f Low success rate - consider reviewing common error patterns"
+  ]
+}
