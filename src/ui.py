@@ -8,6 +8,7 @@ import json
 import io
 import csv
 from typing import List, Optional, Tuple
+from datetime import datetime
 import gradio as gr
 import yaml
 from pathlib import Path
@@ -51,6 +52,7 @@ pending_clarification = {"question": None, "options": [], "original_query": None
 last_query_info = {"question": None, "sql": None, "result": None}  # For corrections
 last_query_result_data = None  # Store result data for CSV export
 training_mode_enabled = False  # Live training mode toggle
+auto_chart_enabled = False  # Auto-chart visualization toggle
 
 # Persona definitions
 PERSONAS = {
@@ -355,6 +357,71 @@ def format_result_as_table(rows, columns):
         table += f"\n*Showing first 100 of {len(rows)} results*"
     
     return table
+
+
+def create_simple_chart(rows, columns):
+    """
+    Create a simple text-based chart for numeric data.
+    Detects numeric columns and creates a basic bar chart visualization.
+    """
+    try:
+        if not rows or len(rows) > 50:  # Only chart small datasets
+            return None
+        
+        # Find numeric columns
+        numeric_cols = []
+        for i, col in enumerate(columns):
+            try:
+                # Check if column has numeric values
+                sample_values = [row[i] for row in rows[:5] if row[i] is not None]
+                if sample_values and all(isinstance(v, (int, float)) or str(v).replace('.','').replace('-','').isdigit() for v in sample_values):
+                    numeric_cols.append(i)
+            except:
+                continue
+        
+        if not numeric_cols or len(numeric_cols) == 0:
+            return None
+        
+        # Simple text-based bar chart
+        label_col = 0  # First column as label
+        value_col = numeric_cols[0]  # First numeric column as value
+        
+        chart = "\n### 📊 Quick Visualization\n\n"
+        chart += f"**{columns[label_col]}** vs **{columns[value_col]}**\n\n"
+        
+        # Get data
+        data_points = []
+        for row in rows[:10]:  # Max 10 bars
+            label = str(row[label_col])[:20] if row[label_col] else "Unknown"
+            try:
+                value = float(row[value_col]) if row[value_col] else 0
+                data_points.append((label, value))
+            except:
+                continue
+        
+        if not data_points:
+            return None
+        
+        # Find max value for scaling
+        max_val = max(v for _, v in data_points)
+        if max_val == 0:
+            return None
+        
+        # Create horizontal bar chart
+        chart += "```\n"
+        for label, value in data_points:
+            bar_length = int((value / max_val) * 40)  # Scale to 40 chars max
+            bar = "█" * bar_length
+            chart += f"{label:20} {bar} {value:,.0f}\n"
+        chart += "```\n"
+        
+        chart += "\n*Auto-generated chart (first 10 rows)*\n"
+        
+        return chart
+        
+    except Exception as e:
+        logger.debug(f"Chart generation skipped: {e}")
+        return None
 
 
 def chat_query(question: str, history: List, persona: str = "default") -> Tuple[str, List]:
@@ -812,6 +879,13 @@ Keep it concise and factual."""
                             row_cells = [str(v).ljust(col_widths[i]) for i, v in enumerate(row)]
                             response += "| " + " | ".join(row_cells) + " |\n"
                         
+                        # Add auto-chart if enabled and data is suitable
+                        global auto_chart_enabled
+                        if auto_chart_enabled and len(result['rows']) <= 50:
+                            chart = create_simple_chart(result['rows'], result['columns'])
+                            if chart:
+                                response += f"\n{chart}\n"
+                        
                         if len(result['rows']) > 20:
                             response += f"\n*Showing 20 of {len(result['rows'])} rows*"
                 else:
@@ -1230,6 +1304,41 @@ def build_ui():
                         label="🎭 Persona",
                         scale=1
                     )
+                    
+                    # Query Templates - Quick access to common queries
+                    query_template_selector = gr.Dropdown(
+                        choices=[
+                            "Custom Query",
+                            "Top 10 Suppliers by Total Received",
+                            "Total Yarn Stock (Current)",
+                            "Monthly Yarn Arrivals",
+                            "Supplier Performance (Last 30 Days)",
+                            "Stock Levels by Department",
+                            "Recent Greige Production",
+                            "Year-over-Year Comparison"
+                        ],
+                        value="Custom Query",
+                        label="📋 Quick Templates",
+                        scale=2,
+                        info="Select a common query template"
+                    )
+                
+                # Bookmarks Panel - Expandable
+                with gr.Accordion("⭐ Saved Bookmarks", open=False):
+                    with gr.Row():
+                        bookmark_current_btn = gr.Button("💾 Bookmark Current Query", size="sm", variant="secondary")
+                        refresh_bookmarks_btn = gr.Button("🔄 Refresh", size="sm")
+                    
+                    bookmarks_display = gr.Markdown("No bookmarks yet. Run a query and click 'Bookmark Current Query' to save it!")
+                    bookmark_status = gr.Markdown("")
+                
+                # Auto-Charts Toggle
+                with gr.Row():
+                    auto_chart_checkbox = gr.Checkbox(
+                        label="📊 Auto-generate charts for numeric results",
+                        value=False,
+                        info="Automatically create visualizations when results contain numbers"
+                    )
                 
                 chatbot = gr.Chatbot(height=400, label="Conversation")
                 
@@ -1345,6 +1454,103 @@ def build_ui():
                 export_csv_btn.click(
                     fn=export_to_csv,
                     outputs=export_csv_btn
+                )
+                
+                # Query Template Selection - Load template into input
+                def load_query_template(template_name):
+                    """Load a query template into the input field."""
+                    templates = {
+                        "Top 10 Suppliers by Total Received": "Show me the top 10 suppliers by total amount received",
+                        "Total Yarn Stock (Current)": "What is the current total yarn stock in LBS?",
+                        "Monthly Yarn Arrivals": "Show monthly breakdown of yarn arrivals this year",
+                        "Supplier Performance (Last 30 Days)": "Supplier performance analysis for the last 30 days",
+                        "Stock Levels by Department": "Show stock levels grouped by department",
+                        "Recent Greige Production": "Show greige production from the last 7 days",
+                        "Year-over-Year Comparison": "Compare this year's yarn arrivals vs last year"
+                    }
+                    
+                    if template_name == "Custom Query":
+                        return ""
+                    
+                    return templates.get(template_name, "")
+                
+                query_template_selector.change(
+                    load_query_template,
+                    inputs=[query_template_selector],
+                    outputs=[question_input]
+                )
+                
+                # Auto-chart Toggle
+                def toggle_auto_chart(enabled):
+                    """Toggle auto-chart generation."""
+                    global auto_chart_enabled
+                    auto_chart_enabled = enabled
+                    return None
+                
+                auto_chart_checkbox.change(
+                    toggle_auto_chart,
+                    inputs=[auto_chart_checkbox],
+                    outputs=[]
+                )
+                
+                # Bookmark Current Query
+                def bookmark_current_query():
+                    """Save the last successful query as a bookmark."""
+                    try:
+                        if not last_query_info.get("question") or not last_query_info.get("success"):
+                            return "❌ No successful query to bookmark. Run a query first!"
+                        
+                        success = save_bookmark(
+                            question=last_query_info["question"],
+                            sql=last_query_info.get("sql", ""),
+                            folder="custom",
+                            name=last_query_info["question"][:50],
+                            description=f"Query from {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                        )
+                        
+                        if success:
+                            return f"✅ Bookmarked: {last_query_info['question'][:50]}..."
+                        return "❌ Failed to save bookmark"
+                        
+                    except Exception as e:
+                        logger.error(f"Bookmark error: {e}")
+                        return f"❌ Error: {str(e)}"
+                
+                def display_bookmarks():
+                    """Display all saved bookmarks."""
+                    try:
+                        bookmarks = get_bookmarks_by_folder()
+                        
+                        if not bookmarks:
+                            return "No bookmarks yet. Run a query and click 'Bookmark Current Query' to save it!"
+                        
+                        output = f"### 📚 Your Bookmarks ({len(bookmarks)})\n\n"
+                        
+                        # Show most recent 10
+                        for bm in bookmarks[:10]:
+                            output += f"**{bm['name']}**\n"
+                            output += f"*{bm['description']}*\n"
+                            output += f"```\n{bm['question']}\n```\n"
+                            output += f"Used {bm.get('use_count', 0)} times\n\n"
+                            output += "---\n\n"
+                        
+                        if len(bookmarks) > 10:
+                            output += f"\n*Showing 10 of {len(bookmarks)} bookmarks*"
+                        
+                        return output
+                        
+                    except Exception as e:
+                        logger.error(f"Display bookmarks error: {e}")
+                        return f"❌ Error: {str(e)}"
+                
+                bookmark_current_btn.click(
+                    bookmark_current_query,
+                    outputs=[bookmark_status]
+                )
+                
+                refresh_bookmarks_btn.click(
+                    display_bookmarks,
+                    outputs=[bookmarks_display]
                 )
             
             # Settings Tab
