@@ -462,11 +462,12 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
             pending_clarification["options"] = []
             # Keep original_query for learning after successful execution
     
+    # CLASSIFY FIRST to detect breakdown/template potential (always needed)
+    classification = classify_query(question)
+    logger.info(f"Query classified as: {classification['type']} (confidence: {classification['confidence']}%)")
+    
     # Analyze query clarity (skip if already clarified above)
     if not pending_clarification.get("original_query"):
-        # CLASSIFY FIRST to detect breakdown/template potential
-        classification = classify_query(question)
-        logger.info(f"Query classified as: {classification['type']} (confidence: {classification['confidence']}%)")
         
         # Check if this is a conversational query (not a data request)
         is_conversation = is_conversational_query(question, last_query_info.get("question"))
@@ -1303,103 +1304,56 @@ def build_ui():
         gr.Markdown("Ask questions about your database in natural language!")
         
         with gr.Tabs():
-            # Chat Tab
+            # Chat Tab - Premium Design
             with gr.Tab("💬 Chat"):
-                with gr.Row():
-                    persona_selector = gr.Dropdown(
-                        choices=get_all_personas(),
-                        value="default",
-                        label="🎭 Persona",
-                        info="Select AI personality or create custom personas in Train tab"
-                    )
-                
-                # Auto-Charts Toggle - Keep this, it's useful
-                with gr.Row():
-                    auto_chart_checkbox = gr.Checkbox(
-                        label="📊 Auto-generate charts for numeric results",
-                        value=False,
-                        info="Automatically create visualizations when results contain numbers"
-                    )
-                
-                chatbot = gr.Chatbot(height=400, label="Conversation")
-                
-                with gr.Row():
-                    question_input = gr.Textbox(
-                        placeholder="Ask a question about your database...",
-                        label="Your Question",
-                        scale=4
-                    )
-                    export_csv_btn = gr.DownloadButton(
-                        "📥 Export CSV",
-                        variant="secondary",
-                        scale=1,
-                        size="sm"
-                    )
-                
-                with gr.Row():
-                    send_stop_btn = gr.Button("▶ Send", variant="primary", scale=2)
-                    clear_btn = gr.Button("Clear Chat", size="sm", variant="secondary", scale=1)
-                
-                # Live Training Mode Controls
+                # Premium controls bar
                 with gr.Row():
                     with gr.Column(scale=2):
-                        training_mode_toggle = gr.Checkbox(
-                            label="🎓 Live Training Mode",
+                        persona_selector = gr.Dropdown(
+                            choices=get_all_personas(),
+                            value="default",
+                            label="🎭 AI Persona",
+                            info="Select response style",
+                            container=True
+                        )
+                    with gr.Column(scale=2):
+                        auto_chart_checkbox = gr.Checkbox(
+                            label="📊 Auto-visualize numeric data",
                             value=False,
-                            info="Enable feedback controls to improve AI responses in real-time"
+                            container=True
                         )
-                        training_mode_status = gr.Markdown("💬 Chat Mode - Standard responses")
-                    
-                    with gr.Column(scale=3, visible=False) as feedback_panel:
-                        gr.Markdown("### Provide Feedback on Last Response")
-                        with gr.Row():
-                            thumbs_up_btn = gr.Button("👍 Good Response", size="sm", scale=1)
-                            thumbs_down_btn = gr.Button("👎 Needs Improvement", size="sm", scale=1)
-                        
-                        correction_input = gr.Textbox(
-                            placeholder="Explain what was wrong and how it should be...",
-                            label="Correction / Feedback",
-                            lines=2,
-                            visible=False
+                    with gr.Column(scale=1):
+                        export_csv_btn = gr.DownloadButton(
+                            "📥 Export",
+                            variant="secondary",
+                            size="lg"
                         )
-                        submit_correction_btn = gr.Button("Submit Correction", visible=False, variant="primary")
-                        correction_status = gr.Markdown("")
                 
-                # Toggle training mode visibility
-                training_mode_toggle.change(
-                    lambda enabled: (
-                        gr.update(visible=enabled),
-                        "🎓 **Live Training Mode ACTIVE** - Feedback controls enabled" if enabled else "💬 Chat Mode - Standard responses"
-                    ),
-                    inputs=[training_mode_toggle],
-                    outputs=[feedback_panel, training_mode_status]
-                ).then(
-                    toggle_training_mode,
-                    inputs=[training_mode_toggle],
-                    outputs=[]
+                # Main chat area
+                chatbot = gr.Chatbot(
+                    height=500,
+                    label="",
+                    show_label=False,
+                    avatar_images=(None, "🤖"),
+                    bubble_full_width=False,
+                    show_copy_button=True
                 )
                 
-                # Thumbs up feedback
-                thumbs_up_btn.click(
-                    lambda: submit_correction("thumbs_up", ""),
-                    outputs=[correction_status]
-                )
+                # Input area with send button
+                with gr.Row():
+                    question_input = gr.Textbox(
+                        placeholder="Ask anything about your database... (e.g., 'Show top 10 suppliers by revenue')",
+                        label="",
+                        show_label=False,
+                        scale=5,
+                        container=False,
+                        lines=1
+                    )
+                    send_stop_btn = gr.Button("Send ▶", variant="primary", scale=1, size="lg")
                 
-                # Thumbs down - show correction input
-                thumbs_down_btn.click(
-                    lambda: (gr.update(visible=True), gr.update(visible=True), "👎 Please explain what was wrong..."),
-                    outputs=[correction_input, submit_correction_btn, correction_status]
-                )
-                
-                # Submit correction
-                submit_correction_btn.click(
-                    lambda text: submit_correction("thumbs_down", text),
-                    inputs=[correction_input],
-                    outputs=[correction_status]
-                ).then(
-                    lambda: (gr.update(value="", visible=False), gr.update(visible=False)),
-                    outputs=[correction_input, submit_correction_btn]
-                )
+                # Secondary controls
+                with gr.Row():
+                    clear_btn = gr.Button("🗑️ Clear Chat", size="sm", variant="secondary", scale=1)
                 
                 # Query event tracking
                 is_running = gr.State(False)
