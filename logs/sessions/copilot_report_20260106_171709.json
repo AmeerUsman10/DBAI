@@ -1,0 +1,329 @@
+{
+  "session_summary": {
+    "session_id": "20260106_171709",
+    "duration_minutes": 5.8572008,
+    "total_queries": 4,
+    "successful_queries": 4,
+    "failed_queries": 0,
+    "success_rate": 100.0,
+    "avg_response_time": 47.25,
+    "training_events": 0,
+    "errors": 0
+  },
+  "configuration": {
+    "tier1_enabled": true,
+    "tier2_enabled": true,
+    "capture_llm_prompts": true,
+    "capture_sample_data": true,
+    "capture_reasoning_chain": true,
+    "max_queries_in_memory": 50,
+    "auto_save_interval": 10
+  },
+  "full_state": {
+    "session_id": "20260106_171709",
+    "started_at": "2026-01-06T17:17:09.964210",
+    "total_queries": 4,
+    "total_errors": 0,
+    "total_successes": 4,
+    "current_state": {},
+    "last_query": {
+      "timestamp": "2026-01-06T17:22:49.790061",
+      "user_question": "What is the above data about? why is it different than your ealier reposne?",
+      "success": true,
+      "execution_time_ms": 38,
+      "error": null,
+      "rows_returned": 146,
+      "clarity_analysis": {
+        "score": 100,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT \n    SUPP_NAME as 'Supplier',\n    SUM(METER) as 'Greige Total Meters',\n    SUM(AMOUNT) as 'Greige Total PKR',\n    COUNT(*) as 'Greige Count'\nFROM GreigeData\nGROUP BY SUPP_NAME\nUNION ALL\nSELECT \n    SUPPLIER as 'Supplier',\n    SUM(LBS) as 'Yarn Total LBS',\n    SUM(AMOUNT) as 'Yarn Total PKR',\n    COUNT(*) as 'Yarn Count'\nFROM YarnData\nGROUP BY SUPPLIER",
+        "tokens": {
+          "prompt_tokens": 3320,
+          "completion_tokens": 168,
+          "total_tokens": 3488
+        },
+        "generation_method": "llm",
+        "raw_response": "{'result': \"```sql\\nSELECT \\n    SUPP_NAME as 'Supplier',\\n    SUM(METER) as 'Greige Total Meters',\\n    SUM(AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count'\\nFROM GreigeData\\nGROUP BY SUPP_NAME\\n\\nUNION ALL\\n\\nSELECT \\n    SUPPLIER as 'Supplier',\\n    SUM(LBS) as 'Yarn Total LBS',\\n    SUM(AMOUNT) as 'Yarn Total PKR',\\n    COUNT(*) as 'Yarn Count'\\nFROM YarnData\\nGROUP BY SUPPLIER\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT \\n    SUPP_NAME as 'Supplier',\\n    SUM(METER) as 'Greige Total Meters',\\n    SUM(AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count'\\nFROM GreigeData\\nGROUP BY SUPP_NAME\\n\\nUNION ALL\\n\\nSELECT \\n    SUPPLIER as 'Supplier',\\n    SUM(LBS) as 'Yarn Total LBS',\\n    SUM(AMOUNT) as 'Yarn Total PKR',\\n    COUNT(*) as 'Yarn Count'\\nFROM YarnData\\nGROUP BY SUPPLIER\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 121, 'prompt_tokens': 3018, 'total_tokens': 3139, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CvCY3UDpkAIugWcv2KaXoitcr31Wn', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b960c-949f-7163-a80d-0d1bfd4d3958-0', usage_metadata={'input_tokens': 3018, 'output_tokens': 121, 'total_tokens': 3139, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 146,
+        "execution_time_ms": 38,
+        "sample_data": []
+      },
+      "response": {
+        "type": "data",
+        "text": "The dataset contains 146 records detailing supplier metrics, with a total of 3,466,595 greige meters valued at 1,131,045,736.82 PKR and an average greige count of 453.\n\n---\n\n**Query Results** (146 rows)\n\n| Supplier                                    | Greige Total Meters | Greige Total PKR | Greige Count |\n| ------------------------------------------- | ------------------- | ---------------- | ------------ |\n| FLORENT                                     | 19745               | 0.00             | 8            |\n| AYESHA TEX                                  | 3463378             | 859681262.61     | 1202         |\n| TEX HUB INDUSTRIES                          | 887472              | 272064474.21     | 368          |\n| M.A. INDUSTRIES                             | 247358              | 93997271.00      | 58           |\n| AHMED SILK FABRIC                           | 172764              | 39944950.00      | 47           |\n| SARDAR TEX                                  | 52775               | 57257394.50      | 96           |\n| PARDESI INDUSTRIES (PRIVATE) LIMITED        | 59221               | 20198792.56      | 39           |\n| BISMILLAH TRADERS                           | 3314527             | 858082035.70     | 765          |\n| HUZHOU XINHOUNG IMPORT AND EXPORT CO ., LTD | 447755              | 73505055.96      | 54           |\n| DIAMOND TRADERS                             | 102858              | 0.00             | 59           |\n| ROWASKI MILL (PRIVATE) LIMITED              | 745435              | 0.00             | 237          |\n| KAM INTERNATIONAL                           | 4887490             | 1622961906.98    | 2540         |\n| QASIM WEAVING                               | 78722               | 29207346.00      | 39           |\n| BILAL BROTHER INDUSTRIES                    | 576348              | 179556776.57     | 216          |\n| ZAMAN TEXTILE                               | 43496               | 0.00             | 1            |\n| ORIENT TEXTILE PVT LTD                      | 2269310             | 1011068983.00    | 645          |\n| M/S HASSAN FABRICS                          | 981237              | 273137392.95     | 334          |\n| HAMEEDA AND RASHEEDA BANO                   | 1155053             | 395217602.01     | 441          |\n| DALAL INDUSTRIES                            | 401184              | 0.00             | 195          |\n| TAABEER INDUSTRIES                          | 31950               | 12396528.00      | 19           |\n\n*Showing 20 of 146 rows*\n\n<sub>\ud83e\udde0 Knowledge: 18 learned patterns \u00b7 10 training rules \u00b7 \ud83e\udd16 LLM</sub>\n\n<sub>\ud83d\udd39 Tokens: 3488 \u00b7 Session: 7,025</sub>",
+        "length_chars": 2634
+      },
+      "performance": {
+        "total_time_ms": 4267,
+        "query_time_ms": 38,
+        "tokens": {
+          "prompt_tokens": 3320,
+          "completion_tokens": 168,
+          "total_tokens": 3488
+        }
+      }
+    },
+    "session_timeline": [
+      {
+        "type": "query",
+        "timestamp": "2026-01-06T17:21:15.883161",
+        "question": "Supplier summary top 10",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-06T17:21:42.906334",
+        "question": "Greige and yarn total summary",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-06T17:21:59.280423",
+        "question": "what does the data mean?",
+        "success": true
+      },
+      {
+        "type": "query",
+        "timestamp": "2026-01-06T17:22:49.790061",
+        "question": "What is the above data about? why is it different than your ealier reposne?",
+        "success": true
+      }
+    ]
+  },
+  "all_queries": [
+    {
+      "timestamp": "2026-01-06T17:21:15.883161",
+      "user_question": "Supplier summary top 10",
+      "success": true,
+      "execution_time_ms": 67,
+      "error": null,
+      "rows_returned": 10,
+      "llm_interaction": {
+        "provider": "template",
+        "model": "rule-based",
+        "temperature": 0.1,
+        "sql_generated": "SELECT TOP 10 Supplier, SUM(TotalAmount) as 'Total PKR', SUM(TotalQty) as 'Total Quantity', SUM(RecordCount) as 'Record Count'\nFROM (\n    SELECT SUPPLIER as Supplier, SUM(AMOUNT) as TotalAmount, SUM(LBS) as TotalQty, COUNT(*) as RecordCount\n    FROM YarnData\n    \n    GROUP BY SUPPLIER\n    \n    UNION ALL\n    \n    SELECT SUPP_NAME as Supplier, SUM(AMOUNT) as TotalAmount, SUM(METER) as TotalQty, COUNT(*) as RecordCount\n    FROM GreigeData\n    \n    GROUP BY SUPP_NAME\n) AS CombinedSuppliers\nGROUP BY Supplier\nORDER BY SUM(TotalAmount) DESC",
+        "tokens": {
+          "prompt_tokens": 302,
+          "completion_tokens": 80,
+          "total_tokens": 382
+        },
+        "generation_method": "template"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 10,
+        "execution_time_ms": 67,
+        "sample_data": []
+      },
+      "response": {
+        "type": "data",
+        "text": "The top 10 suppliers account for a total procurement value of 11,031,000,000 PKR, with a combined quantity of 33,000,000 units across 11,000 records. The leading supplier, MEKO TEX (PVT.) LTD (GREIGE), contributes 3,195,950,470.78 PKR and 6,683,762 units.\n\n---\n\n**Query Results** (10 rows)\n\n| Supplier                               | Total PKR     | Total Quantity | Record Count |\n| -------------------------------------- | ------------- | -------------- | ------------ |\n| MEKO TEX (PVT.) LTD (GREIGE)           | 3195950470.78 | 6683762        | 5252         |\n| XIAMEN MC GROUP CORP.LTD               | 2184678762.58 | 6671664        | 1576         |\n| KAM INTERNATIONAL                      | 2173197946.60 | 6474573        | 2865         |\n| GUL AHMED TEXTILE                      | 1544883800.00 | 5340500        | 686          |\n| ORIENT TEXTILE PVT LTD                 | 1011068983.00 | 2269310        | 645          |\n| AYESHA TEX                             | 859681262.61  | 3463378        | 1202         |\n| BISMILLAH TRADERS                      | 858082035.70  | 3314527        | 765          |\n| N.PCOTTON MILLS LTD                    | 840598000.00  | 2361800        | 276          |\n| AL-KARAM TEXTILE MILLS ( PRIVATE ) LTD | 468026071.50  | 1573284        | 476          |\n| HAMEEDA AND RASHEEDA BANO              | 395217602.01  | 1155053        | 441          |\n\n\n<sub>\ud83e\udde0 Knowledge: 18 learned patterns \u00b7 10 training rules \u00b7 \u26a1 Template</sub>\n\n<sub>\u26a1 Zero tokens used (template-based)</sub>",
+        "length_chars": 1509
+      },
+      "performance": {
+        "total_time_ms": 3209,
+        "query_time_ms": 67,
+        "tokens": {
+          "prompt_tokens": 302,
+          "completion_tokens": 80,
+          "total_tokens": 382
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-06T17:21:42.906334",
+      "user_question": "Greige and yarn total summary",
+      "success": true,
+      "execution_time_ms": 54,
+      "error": null,
+      "rows_returned": 1,
+      "llm_interaction": {
+        "provider": "template",
+        "model": "rule-based",
+        "temperature": 0.1,
+        "sql_generated": "SELECT \n    (SELECT SUM(LBS) FROM YarnData ) as 'Yarn Total LBS',\n    (SELECT SUM(AMOUNT) FROM YarnData ) as 'Yarn Total PKR',\n    (SELECT SUM(BAGS) FROM YarnData ) as 'Yarn Total Bags',\n    (SELECT COUNT(*) FROM YarnData ) as 'Yarn Count',\n    (SELECT SUM(METER) FROM GreigeData ) as 'Greige Total Meters',\n    (SELECT SUM(AMOUNT) FROM GreigeData ) as 'Greige Total PKR',\n    (SELECT COUNT(*) FROM GreigeData ) as 'Greige Count'",
+        "tokens": {
+          "prompt_tokens": 281,
+          "completion_tokens": 73,
+          "total_tokens": 354
+        },
+        "generation_method": "template"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 54,
+        "sample_data": []
+      },
+      "response": {
+        "type": "data",
+        "text": "The total yarn inventory stands at 22,371,100 LBS, valued at 7,312,972,939.85 PKR across 250,473 bags, while the greige production measures 71,894,186 meters with a total value of 16,566,905,527.20 PKR across 29,622 records.\n\n---\n\n**Query Results** (1 rows)\n\n| Yarn Total LBS | Yarn Total PKR | Yarn Total Bags | Yarn Count | Greige Total Meters | Greige Total PKR | Greige Count |\n| -------------- | -------------- | --------------- | ---------- | ------------------- | ---------------- | ------------ |\n| 22371100       | 7312972939.85  | 250473          | 2784       | 71894186            | 16566905527.20   | 29622        |\n\n\n<sub>\ud83e\udde0 Knowledge: 18 learned patterns \u00b7 10 training rules \u00b7 \u26a1 Template</sub>\n\n<sub>\u26a1 Zero tokens used (template-based)</sub>",
+        "length_chars": 754
+      },
+      "performance": {
+        "total_time_ms": 2440,
+        "query_time_ms": 54,
+        "tokens": {
+          "prompt_tokens": 281,
+          "completion_tokens": 73,
+          "total_tokens": 354
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-06T17:21:59.280423",
+      "user_question": "what does the data mean?",
+      "success": true,
+      "execution_time_ms": 30,
+      "error": null,
+      "rows_returned": 1,
+      "clarity_analysis": {
+        "score": 100,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT \n    (SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Total LBS',\n    (SELECT SUM(AMOUNT) as 'Yarn Total PKR' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Total PKR',\n    (SELECT SUM(BAGS) as 'Yarn Total Bags' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Total Bags',\n    (SELECT COUNT(*) as 'Yarn Count' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Count',\n    (SELECT SUM(METER) as 'Greige Total Meters' FROM GreigeData WHERE ENTRY_TYPE = 'Griege Arrival') AS 'Greige Total Meters',\n    (SELECT SUM(AMOUNT) as 'Greige Total PKR' FROM GreigeData WHERE ENTRY_TYPE = 'Griege Arrival') AS 'Greige Total PKR',\n    (SELECT COUNT(*) as 'Greige Count' FROM GreigeData WHERE ENTRY_TYPE = 'Griege Arrival') AS 'Greige Count';",
+        "tokens": {
+          "prompt_tokens": 3216,
+          "completion_tokens": 321,
+          "total_tokens": 3537
+        },
+        "generation_method": "llm",
+        "raw_response": "{'result': \"```sql\\nSELECT \\n    (SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Total LBS',\\n    (SELECT SUM(AMOUNT) as 'Yarn Total PKR' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Total PKR',\\n    (SELECT SUM(BAGS) as 'Yarn Total Bags' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Total Bags',\\n    (SELECT COUNT(*) as 'Yarn Count' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Count',\\n    (SELECT SUM(METER) as 'Greige Total Meters' FROM GreigeData WHERE ENTRY_TYPE = 'Griege Arrival') AS 'Greige Total Meters',\\n    (SELECT SUM(AMOUNT) as 'Greige Total PKR' FROM GreigeData WHERE ENTRY_TYPE = 'Griege Arrival') AS 'Greige Total PKR',\\n    (SELECT COUNT(*) as 'Greige Count' FROM GreigeData WHERE ENTRY_TYPE = 'Griege Arrival') AS 'Greige Count';\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT \\n    (SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Total LBS',\\n    (SELECT SUM(AMOUNT) as 'Yarn Total PKR' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Total PKR',\\n    (SELECT SUM(BAGS) as 'Yarn Total Bags' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Total Bags',\\n    (SELECT COUNT(*) as 'Yarn Count' FROM YarnData WHERE ENTRY_TYPE = 'Yarn Arrival') AS 'Yarn Count',\\n    (SELECT SUM(METER) as 'Greige Total Meters' FROM GreigeData WHERE ENTRY_TYPE = 'Griege Arrival') AS 'Greige Total Meters',\\n    (SELECT SUM(AMOUNT) as 'Greige Total PKR' FROM GreigeData WHERE ENTRY_TYPE = 'Griege Arrival') AS 'Greige Total PKR',\\n    (SELECT COUNT(*) as 'Greige Count' FROM GreigeData WHERE ENTRY_TYPE = 'Griege Arrival') AS 'Greige Count';\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 242, 'prompt_tokens': 2937, 'total_tokens': 3179, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 0}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CvCXBsi91fhkK1IvkokIEfpbORCnD', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b960b-c182-7fc1-b732-ac412855c777-0', usage_metadata={'input_tokens': 2937, 'output_tokens': 242, 'total_tokens': 3179, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 1,
+        "execution_time_ms": 30,
+        "sample_data": []
+      },
+      "response": {
+        "type": "data",
+        "text": "The yarn inventory totals 11,465,476 LBS valued at 3,741,658,975.08 PKR, with 128,787 bags and a count of 880. The greige fabric production measures 33,844,844 meters, valued at 8,401,695,779.40 PKR, with a total count of 10,748.\n\n---\n\n**Query Results** (1 rows)\n\n| Yarn Total LBS | Yarn Total PKR | Yarn Total Bags | Yarn Count | Greige Total Meters | Greige Total PKR | Greige Count |\n| -------------- | -------------- | --------------- | ---------- | ------------------- | ---------------- | ------------ |\n| 11465476       | 3741658975.08  | 128787          | 880        | 33844844            | 8401695779.40    | 10748        |\n\n\n<sub>\ud83e\udde0 Knowledge: 18 learned patterns \u00b7 10 training rules \u00b7 \ud83e\udd16 LLM</sub>\n\n<sub>\ud83d\udd39 Tokens: 3537 \u00b7 Session: 3,537</sub>",
+        "length_chars": 750
+      },
+      "performance": {
+        "total_time_ms": 7809,
+        "query_time_ms": 30,
+        "tokens": {
+          "prompt_tokens": 3216,
+          "completion_tokens": 321,
+          "total_tokens": 3537
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-06T17:22:49.790061",
+      "user_question": "What is the above data about? why is it different than your ealier reposne?",
+      "success": true,
+      "execution_time_ms": 38,
+      "error": null,
+      "rows_returned": 146,
+      "clarity_analysis": {
+        "score": 100,
+        "needs_clarification": false,
+        "reason": "Query is clear and specific",
+        "clarifications_offered": [
+          "Show all matching records",
+          "Show summary totals",
+          "Show top results ranked by value",
+          "Show detailed breakdown"
+        ]
+      },
+      "llm_interaction": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "sql_generated": "SELECT \n    SUPP_NAME as 'Supplier',\n    SUM(METER) as 'Greige Total Meters',\n    SUM(AMOUNT) as 'Greige Total PKR',\n    COUNT(*) as 'Greige Count'\nFROM GreigeData\nGROUP BY SUPP_NAME\nUNION ALL\nSELECT \n    SUPPLIER as 'Supplier',\n    SUM(LBS) as 'Yarn Total LBS',\n    SUM(AMOUNT) as 'Yarn Total PKR',\n    COUNT(*) as 'Yarn Count'\nFROM YarnData\nGROUP BY SUPPLIER",
+        "tokens": {
+          "prompt_tokens": 3320,
+          "completion_tokens": 168,
+          "total_tokens": 3488
+        },
+        "generation_method": "llm",
+        "raw_response": "{'result': \"```sql\\nSELECT \\n    SUPP_NAME as 'Supplier',\\n    SUM(METER) as 'Greige Total Meters',\\n    SUM(AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count'\\nFROM GreigeData\\nGROUP BY SUPP_NAME\\n\\nUNION ALL\\n\\nSELECT \\n    SUPPLIER as 'Supplier',\\n    SUM(LBS) as 'Yarn Total LBS',\\n    SUM(AMOUNT) as 'Yarn Total PKR',\\n    COUNT(*) as 'Yarn Count'\\nFROM YarnData\\nGROUP BY SUPPLIER\\n```\", 'response': AIMessage(content=\"```sql\\nSELECT \\n    SUPP_NAME as 'Supplier',\\n    SUM(METER) as 'Greige Total Meters',\\n    SUM(AMOUNT) as 'Greige Total PKR',\\n    COUNT(*) as 'Greige Count'\\nFROM GreigeData\\nGROUP BY SUPP_NAME\\n\\nUNION ALL\\n\\nSELECT \\n    SUPPLIER as 'Supplier',\\n    SUM(LBS) as 'Yarn Total LBS',\\n    SUM(AMOUNT) as 'Yarn Total PKR',\\n    COUNT(*) as 'Yarn Count'\\nFROM YarnData\\nGROUP BY SUPPLIER\\n```\", additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 121, 'prompt_tokens': 3018, 'total_tokens': 3139, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 1024}}, 'model_provider': 'openai', 'model_name': 'gpt-4o-mini-2024-07-18', 'system_fingerprint': 'fp_29330a9688', 'id': 'chatcmpl-CvCY3UDpkAIugWcv2KaXoitcr31Wn', 'service_tier': 'default', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019b960c-949f-7163-a80d-0d1bfd4d3958-0', usage_metadata={'input_tokens': 3018, 'output_tokens': 121, 'total_tokens': 3139, 'input_token_details': {'audio': 0, 'cache_read': 1024}, 'output_token_details': {'audio': 0, 'reasoning': 0}})}"
+      },
+      "reasoning": {
+        "learnings_found": null,
+        "training_rules_applied": null,
+        "corrections_applied": null
+      },
+      "execution": {
+        "sql": null,
+        "success": true,
+        "rows_returned": 146,
+        "execution_time_ms": 38,
+        "sample_data": []
+      },
+      "response": {
+        "type": "data",
+        "text": "The dataset contains 146 records detailing supplier metrics, with a total of 3,466,595 greige meters valued at 1,131,045,736.82 PKR and an average greige count of 453.\n\n---\n\n**Query Results** (146 rows)\n\n| Supplier                                    | Greige Total Meters | Greige Total PKR | Greige Count |\n| ------------------------------------------- | ------------------- | ---------------- | ------------ |\n| FLORENT                                     | 19745               | 0.00             | 8            |\n| AYESHA TEX                                  | 3463378             | 859681262.61     | 1202         |\n| TEX HUB INDUSTRIES                          | 887472              | 272064474.21     | 368          |\n| M.A. INDUSTRIES                             | 247358              | 93997271.00      | 58           |\n| AHMED SILK FABRIC                           | 172764              | 39944950.00      | 47           |\n| SARDAR TEX                                  | 52775               | 57257394.50      | 96           |\n| PARDESI INDUSTRIES (PRIVATE) LIMITED        | 59221               | 20198792.56      | 39           |\n| BISMILLAH TRADERS                           | 3314527             | 858082035.70     | 765          |\n| HUZHOU XINHOUNG IMPORT AND EXPORT CO ., LTD | 447755              | 73505055.96      | 54           |\n| DIAMOND TRADERS                             | 102858              | 0.00             | 59           |\n| ROWASKI MILL (PRIVATE) LIMITED              | 745435              | 0.00             | 237          |\n| KAM INTERNATIONAL                           | 4887490             | 1622961906.98    | 2540         |\n| QASIM WEAVING                               | 78722               | 29207346.00      | 39           |\n| BILAL BROTHER INDUSTRIES                    | 576348              | 179556776.57     | 216          |\n| ZAMAN TEXTILE                               | 43496               | 0.00             | 1            |\n| ORIENT TEXTILE PVT LTD                      | 2269310             | 1011068983.00    | 645          |\n| M/S HASSAN FABRICS                          | 981237              | 273137392.95     | 334          |\n| HAMEEDA AND RASHEEDA BANO                   | 1155053             | 395217602.01     | 441          |\n| DALAL INDUSTRIES                            | 401184              | 0.00             | 195          |\n| TAABEER INDUSTRIES                          | 31950               | 12396528.00      | 19           |\n\n*Showing 20 of 146 rows*\n\n<sub>\ud83e\udde0 Knowledge: 18 learned patterns \u00b7 10 training rules \u00b7 \ud83e\udd16 LLM</sub>\n\n<sub>\ud83d\udd39 Tokens: 3488 \u00b7 Session: 7,025</sub>",
+        "length_chars": 2634
+      },
+      "performance": {
+        "total_time_ms": 4267,
+        "query_time_ms": 38,
+        "tokens": {
+          "prompt_tokens": 3320,
+          "completion_tokens": 168,
+          "total_tokens": 3488
+        }
+      }
+    }
+  ],
+  "all_errors": [],
+  "training_events": [],
+  "recommendations": [
+    "\ud83d\udca1 No training events - consider adding training rules for better accuracy"
+  ]
+}
