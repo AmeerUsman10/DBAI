@@ -97,7 +97,6 @@ class PartitionManager:
                     check=True
                 )
                 
-                import json
                 partition_data = json.loads(result.stdout)
                 
                 # Handle single partition (not a list)
