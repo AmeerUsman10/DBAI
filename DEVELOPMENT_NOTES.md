@@ -7,6 +7,54 @@ This file tracks planned changes, work in progress, and completed tasks to maint
 
 ## 🎯 PLANNED CHANGES (Priority Order)
 
+### CHAINLIT MIGRATION - In Progress
+**Phase 1: Core Chat (Today)** ← CURRENT
+- [x] Install Chainlit package
+- [x] Create chainlit_app.py with basic structure
+- [x] Integrate chat_query() function from src/ui.py
+- [x] Add per-message feedback actions (thumbs up/down) using cl.Action
+- [x] Implement message streaming
+- [x] Test basic chat functionality ← **READY FOR TESTING**
+
+**Status:** ✅ Initial Chainlit app created and running on http://localhost:7861
+**What works:**
+- Chat interface with streaming responses
+- SQL generation and execution
+- Per-message thumbs up/down buttons (IN the message, not below!)
+- Settings sidebar (provider, model, temperature, persona, database)
+- Session state management
+- Feedback tracking integration
+
+**Next:** Open http://localhost:7861 in browser to test
+
+**Phase 2: Settings & Configuration (Today/Tomorrow)**
+- [ ] Add ChatSettings for LLM provider, model, temperature
+- [ ] Add ChatSettings for database connection
+- [ ] Implement on_settings_update handler
+- [ ] Test settings persistence
+
+**Phase 3: Additional Features (Tomorrow)**
+- [ ] Add chat profiles for personas
+- [ ] Implement file download for diagnostics
+- [ ] Add session tracking integration
+- [ ] Migrate training rules display
+- [ ] Add cache statistics display
+
+**Phase 4: Testing & Refinement**
+- [ ] Compare side-by-side with Gradio version
+- [ ] Test all features
+- [ ] Fix any bugs
+- [ ] Get user approval
+- [ ] Remove Gradio code if approved
+
+### Post-Migration (If Approved)
+- [ ] Remove src/ui.py and src/dev_notes.py (Gradio-specific)
+- [ ] Update README with Chainlit setup
+- [ ] Update app.py to use Chainlit
+- [ ] Test on Windows laptop
+
+### Original Planned Changes (On Hold During Migration)
+
 ### High Priority
 - [ ] **Test feedback system on Windows laptop**
   - Verify thumbs up/down buttons work
