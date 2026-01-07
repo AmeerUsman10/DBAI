@@ -1939,15 +1939,15 @@ def build_ui():
                     ]
                 )
             
-            # Train Tab - Quick Setup
+            # Train Tab - Premium UX
             with gr.Tab("🎓 Train"):
-                gr.Markdown("## AI Training & Configuration")
-                gr.Markdown("Configure how the AI understands and interacts with your database.")
+                gr.Markdown("## Training & Knowledge System")
+                gr.Markdown("Shape how the AI interprets your data. Approve rules, add context, and monitor impact — a premium, governance-ready experience.")
                 
                 with gr.Tabs():
                     # Quick Training Tab (FREE-FORM INSTRUCTIONS)
-                    with gr.Tab("⚡ Quick Training"):
-                        gr.Markdown("""### Write Training Instructions in Plain English
+                    with gr.Tab("⚡ Quick Rules"):
+                        gr.Markdown("""### Add Rules in Plain English
 Tell the AI exactly how to interpret your queries. These rules apply immediately!
 
 **Examples:**
@@ -1963,7 +1963,7 @@ Tell the AI exactly how to interpret your queries. These rules apply immediately
                         )
                         
                         with gr.Row():
-                            add_training_btn = gr.Button("💾 Add Training Rule", variant="primary", size="lg")
+                            add_training_btn = gr.Button("✅ Add Rule", variant="primary", size="lg")
                             clear_training_input_btn = gr.Button("🔄 Clear", variant="secondary")
                         
                         training_status = gr.Markdown("")
@@ -1971,6 +1971,11 @@ Tell the AI exactly how to interpret your queries. These rules apply immediately
                         gr.Markdown("---")
                         gr.Markdown("### Active Training Rules")
                         training_rules_display = gr.Markdown("")
+
+                        gr.Markdown("---")
+                        gr.Markdown("### 🔎 Preview Effective Prompt")
+                        preview_prompt_btn = gr.Button("👀 Preview Rules Injection", variant="secondary")
+                        preview_prompt_md = gr.Markdown("")
                         
                         def add_training(instruction):
                             """Add a quick training rule."""
@@ -2027,10 +2032,22 @@ Tell the AI exactly how to interpret your queries. These rules apply immediately
                             format_rules_display,
                             outputs=[training_rules_display]
                         )
+
+                        def _preview_rules_injection():
+                            try:
+                                from src.quick_training import get_training_rules_for_prompt
+                                text = get_training_rules_for_prompt()
+                                if not text:
+                                    return "No approved rules yet. Approve rules in Governance to inject into prompts."
+                                return f"### Effective Prompt Injection\n\n{text}"
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+
+                        preview_prompt_btn.click(_preview_rules_injection, outputs=[preview_prompt_md])
                     
                     # System Instructions Tab
-                    with gr.Tab("📝 System Instructions"):
-                        gr.Markdown("""### Database Context
+                    with gr.Tab("🏢 Domain Instructions"):
+                        gr.Markdown("""### Business & Data Context
 Provide information about your database to help the AI understand your data better.""")
                         
                         instructions_input = gr.Textbox(
@@ -2401,7 +2418,7 @@ These descriptions help the AI understand your data better.""")
                         )
                     
                     # Schema Analysis Tab
-                    with gr.Tab("🔍 Auto-Analyze Schema"):
+                    with gr.Tab("🤖 AI Schema Analysis"):
                         gr.Markdown("""### Automatic Schema Analysis
 Let the AI analyze your database schema and generate training data automatically.""")
                         
@@ -2457,7 +2474,7 @@ Provide a comprehensive analysis:"""
                         )
                     
                     # Example Queries Tab
-                    with gr.Tab("📚 Auto-Generate Examples"):
+                    with gr.Tab("🤖 AI Examples"):
                         gr.Markdown("""### Intelligent Query Generator
 Automatically generate relevant example queries by analyzing your database schema.""")
                         
