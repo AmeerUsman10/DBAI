@@ -30,7 +30,7 @@ from src.query_templates import generate_sql_from_template
 from src.feedback import save_feedback, get_feedback_statistics, format_feedback_for_display, get_recent_feedback, format_recent_feedback, get_rule_suggestions
 
 # Version tracking - increment by 5 for each significant update
-UI_BUILD_VERSION = 20
+UI_BUILD_VERSION = 25
 from src.dev_notes import load_notes, save_notes, add_quick_note, get_notes_preview
 from src.query_optimizer import (
     cache_query_result, get_cached_result, cache_sql_generation, get_cached_sql,
@@ -1519,9 +1519,15 @@ def build_ui():
                     thumbs_up_btn = gr.Button("👍 Helpful", size="sm", variant="secondary", scale=1)
                     thumbs_down_btn = gr.Button("👎 Not helpful", size="sm", variant="secondary", scale=1)
                 
+                # Graduated feedback flow
+                feedback_category = gr.Radio(
+                    choices=["❌ Wrong Data", "📊 Wrong Format", "❓ Needs Clarification", "💬 Other Issue"],
+                    label="What was the issue?",
+                    visible=False
+                )
                 feedback_comment = gr.Textbox(
-                    placeholder="What could be improved? (optional)",
-                    label="Additional Feedback",
+                    placeholder="Please describe the issue (optional for most categories, required for 'Other Issue')",
+                    label="Additional Details",
                     lines=2,
                     visible=False
                 )
@@ -1615,16 +1621,35 @@ def build_ui():
                         return f"❌ Error saving feedback: {str(e)}"
                 
                 def handle_thumbs_down(msg_id):
-                    """Show feedback comment field on thumbs down."""
+                    """Show category selection on thumbs down."""
                     if not msg_id or msg_id == "":
-                        return "⚠️ Please send a query first.", gr.update(visible=False), gr.update(visible=False)
+                        return "⚠️ Please send a query first.", gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
                     
-                    return "👎 Please tell us what was wrong so we can improve:", gr.update(visible=True), gr.update(visible=True)
+                    return "What was the issue?", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)
                 
-                def submit_detailed_feedback(msg_id, feedback_text):
-                    """Submit detailed negative feedback."""
+                def handle_category_selection(category):
+                    """Show comment field based on category selection."""
+                    if not category:
+                        return gr.update(visible=False), gr.update(visible=False)
+                    
+                    # For "Other Issue", require comment
+                    if category == "💬 Other Issue":
+                        return gr.update(visible=True, placeholder="Please describe the issue..."), gr.update(visible=True)
+                    else:
+                        # For predefined categories, comment is optional
+                        return gr.update(visible=True, placeholder="Additional details (optional)..."), gr.update(visible=True)
+                
+                def submit_detailed_feedback(msg_id, category, feedback_text):
+                    """Submit categorized feedback and create appropriate training rule."""
                     if not msg_id or msg_id == "":
                         return "⚠️ Please send a query first before providing feedback."
+                    
+                    if not category:
+                        return "⚠️ Please select an issue category."
+                    
+                    # For "Other Issue", require description
+                    if category == "💬 Other Issue" and not feedback_text.strip():
+                        return "⚠️ Please describe the issue for 'Other Issue' category."
                     
                     try:
                         # Get query info
@@ -1633,6 +1658,11 @@ def build_ui():
                         response = last_query_info.get("result", "")
                         session_id = session_tracker.session_id if session_tracker else None
                         
+                        # Combine category and comment for feedback text
+                        full_feedback = category
+                        if feedback_text and feedback_text.strip():
+                            full_feedback += f": {feedback_text}"
+                        
                         # Save feedback
                         save_feedback(
                             message_id=msg_id,
@@ -1640,7 +1670,7 @@ def build_ui():
                             question=question,
                             sql_query=sql,
                             response=response,
-                            feedback_text=feedback_text,
+                            feedback_text=full_feedback,
                             session_id=session_id
                         )
                         
@@ -1648,12 +1678,30 @@ def build_ui():
                         if session_tracker:
                             session_tracker.track_training_event(
                                 event_type="negative_feedback",
-                                details={"message_id": msg_id, "feedback": feedback_text}
+                                details={"message_id": msg_id, "category": category, "feedback": feedback_text}
                             )
                         
-                        # If feedback provided, create training rule
-                        if feedback_text and feedback_text.strip():
+                        # Create training rule based on category
+                        rule = None
+                        if category == "❌ Wrong Data":
+                            if feedback_text.strip():
+                                rule = f"When asked '{question}', ensure data accuracy: {feedback_text}"
+                            else:
+                                rule = f"Review data accuracy for queries like: '{question}'"
+                        elif category == "📊 Wrong Format":
+                            if feedback_text.strip():
+                                rule = f"For '{question}', format results as: {feedback_text}"
+                            else:
+                                rule = f"Improve result formatting for: '{question}'"
+                        elif category == "❓ Needs Clarification":
+                            if feedback_text.strip():
+                                rule = f"When query is ambiguous like '{question}', clarify: {feedback_text}"
+                            else:
+                                rule = f"Request clarification for ambiguous queries like: '{question}'"
+                        elif category == "💬 Other Issue" and feedback_text.strip():
                             rule = f"CORRECTION for '{question}': {feedback_text}"
+                        
+                        if rule:
                             add_training_rule(rule)
                             return "✅ Feedback submitted and training rule created! This will help improve similar queries."
                         else:
@@ -1673,16 +1721,22 @@ def build_ui():
                 thumbs_down_btn.click(
                     handle_thumbs_down,
                     inputs=[current_message_id],
-                    outputs=[feedback_status, feedback_comment, submit_feedback_btn]
+                    outputs=[feedback_status, feedback_category, feedback_comment, submit_feedback_btn]
+                )
+                
+                feedback_category.change(
+                    handle_category_selection,
+                    inputs=[feedback_category],
+                    outputs=[feedback_comment, submit_feedback_btn]
                 )
                 
                 submit_feedback_btn.click(
                     submit_detailed_feedback,
-                    inputs=[current_message_id, feedback_comment],
+                    inputs=[current_message_id, feedback_category, feedback_comment],
                     outputs=[feedback_status]
                 ).then(
-                    lambda: (gr.update(value="", visible=False), gr.update(visible=False)),
-                    outputs=[feedback_comment, submit_feedback_btn]
+                    lambda: (gr.update(value=None, visible=False), gr.update(value="", visible=False), gr.update(visible=False)),
+                    outputs=[feedback_category, feedback_comment, submit_feedback_btn]
                 )
             
             # Settings Tab
