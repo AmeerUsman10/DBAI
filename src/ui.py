@@ -2543,6 +2543,375 @@ See which rules have the most impact on your queries. Ranked by real usage.
                                         return f"❌ Error: {e}"
                                 
                                 examples_btn.click(generate_examples_auto, outputs=[examples_result])
+                    
+                    # =========================================================================
+                    # Phase 1: New Training Sub-Tabs
+                    # =========================================================================
+                    
+                    # Sub-tab 4: Report Library (Template Management)
+                    with gr.Tab("📚 Report Library"):
+                        gr.Markdown("### Pre-defined Report Templates")
+                        gr.Markdown("Browse, create, and manage SQL templates for common queries.")
+                        
+                        template_list_md = gr.Markdown("Loading templates...")
+                        
+                        with gr.Row():
+                            template_category_filter = gr.Dropdown(
+                                label="Filter by Category",
+                                choices=["All", "Sales", "Inventory", "Finance", "Reports", "General"],
+                                value="All"
+                            )
+                            template_refresh_btn = gr.Button("🔄 Refresh", size="sm")
+                        
+                        gr.Markdown("---")
+                        gr.Markdown("### Add New Template")
+                        
+                        with gr.Row():
+                            with gr.Column():
+                                new_template_name = gr.Textbox(label="Template Name", placeholder="e.g., Top Sales Report")
+                                new_template_desc = gr.Textbox(label="Description", placeholder="What this template does...")
+                                new_template_category = gr.Dropdown(
+                                    label="Category",
+                                    choices=["Sales", "Inventory", "Finance", "Reports", "General"],
+                                    value="General"
+                                )
+                            with gr.Column():
+                                new_template_sql = gr.Textbox(
+                                    label="SQL Template",
+                                    placeholder="SELECT TOP {top_n} * FROM Sales ORDER BY Amount DESC",
+                                    lines=5
+                                )
+                                new_template_samples = gr.Textbox(
+                                    label="Sample Questions (one per line)",
+                                    placeholder="show top 10 sales\ntop sales by amount",
+                                    lines=3
+                                )
+                        
+                        add_template_btn = gr.Button("➕ Add Template", variant="primary")
+                        template_action_msg = gr.Markdown("")
+                        
+                        def _load_template_list(category: str = "All"):
+                            try:
+                                from src.report_templates import get_template_manager
+                                manager = get_template_manager()
+                                
+                                templates = manager.get_all_templates(
+                                    category=category if category != "All" else None
+                                )
+                                
+                                if not templates:
+                                    return "No templates yet. Add one below!"
+                                
+                                output = "| Name | Category | Usage | Sample Question |\n"
+                                output += "|------|----------|-------|----------------|\n"
+                                
+                                for t in templates[:20]:  # Limit display
+                                    sample = t.sample_questions[0] if t.sample_questions else "-"
+                                    output += f"| {t.name} | {t.category} | {t.use_count}x | {sample[:40]} |\n"
+                                
+                                stats = manager.get_statistics()
+                                output += f"\n\n**Total:** {stats['total']} templates | **Total Uses:** {stats['total_uses']}"
+                                
+                                return output
+                            except Exception as e:
+                                logger.error(f"Template list error: {e}", exc_info=True)
+                                return f"❌ Error loading templates: {e}"
+                        
+                        def _add_template(name, desc, category, sql, samples):
+                            if not name or not sql:
+                                return "❌ Name and SQL are required"
+                            
+                            try:
+                                from src.report_templates import get_template_manager, ReportTemplate
+                                manager = get_template_manager()
+                                
+                                sample_list = [s.strip() for s in samples.split("\n") if s.strip()] if samples else []
+                                
+                                template = ReportTemplate(
+                                    name=name,
+                                    description=desc,
+                                    sql_template=sql,
+                                    sample_questions=sample_list,
+                                    category=category
+                                )
+                                
+                                success, msg = manager.add_template(template)
+                                return f"✅ {msg}" if success else f"❌ {msg}"
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+                        
+                        template_category_filter.change(_load_template_list, inputs=[template_category_filter], outputs=[template_list_md])
+                        template_refresh_btn.click(_load_template_list, inputs=[template_category_filter], outputs=[template_list_md])
+                        add_template_btn.click(
+                            _add_template,
+                            inputs=[new_template_name, new_template_desc, new_template_category, new_template_sql, new_template_samples],
+                            outputs=[template_action_msg]
+                        )
+                        demo.load(_load_template_list, outputs=[template_list_md])
+                    
+                    # Sub-tab 5: Correction Queue (IT Approval Workflow)
+                    with gr.Tab("🔧 Correction Queue"):
+                        gr.Markdown("### SQL Correction Requests")
+                        gr.Markdown("Review and approve user-submitted SQL corrections. Approved corrections become training rules.")
+                        
+                        correction_stats_md = gr.Markdown("")
+                        correction_list_md = gr.Markdown("Loading corrections...")
+                        
+                        with gr.Row():
+                            correction_status_filter = gr.Dropdown(
+                                label="Filter by Status",
+                                choices=["All", "Pending", "Approved", "Rejected"],
+                                value="Pending"
+                            )
+                            correction_refresh_btn = gr.Button("🔄 Refresh", size="sm")
+                        
+                        gr.Markdown("---")
+                        gr.Markdown("### Review Correction")
+                        
+                        correction_select = gr.Dropdown(label="Select Correction ID", choices=[], interactive=True)
+                        
+                        with gr.Row():
+                            with gr.Column():
+                                corr_original_q = gr.Textbox(label="Original Question", interactive=False)
+                                corr_original_sql = gr.Textbox(label="Original SQL", lines=3, interactive=False)
+                            with gr.Column():
+                                corr_suggested_sql = gr.Textbox(label="Suggested SQL", lines=3, interactive=False)
+                                corr_user_notes = gr.Textbox(label="User Notes", interactive=False)
+                        
+                        corr_reviewer_notes = gr.Textbox(label="Reviewer Notes", placeholder="Add notes for approval/rejection...")
+                        corr_create_rule = gr.Checkbox(label="Create training rule from this correction", value=True)
+                        
+                        with gr.Row():
+                            corr_approve_btn = gr.Button("✅ Approve", variant="primary")
+                            corr_reject_btn = gr.Button("❌ Reject", variant="stop")
+                        
+                        correction_action_msg = gr.Markdown("")
+                        
+                        def _load_correction_stats():
+                            try:
+                                from src.correction_workflow import get_correction_workflow
+                                workflow = get_correction_workflow()
+                                stats = workflow.get_statistics()
+                                
+                                return (
+                                    f"📊 **Stats:** {stats['pending']} pending | "
+                                    f"{stats['approved']} approved | {stats['rejected']} rejected | "
+                                    f"{stats['approval_rate']}% approval rate"
+                                )
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+                        
+                        def _load_corrections(status_filter: str = "Pending"):
+                            try:
+                                from src.correction_workflow import get_correction_workflow, CorrectionStatus
+                                workflow = get_correction_workflow()
+                                
+                                status_map = {
+                                    "Pending": CorrectionStatus.PENDING,
+                                    "Approved": CorrectionStatus.APPROVED,
+                                    "Rejected": CorrectionStatus.REJECTED,
+                                    "All": None
+                                }
+                                
+                                requests = workflow.get_all_requests(
+                                    status_filter=status_map.get(status_filter)
+                                )
+                                
+                                if not requests:
+                                    return "No corrections found.", []
+                                
+                                output = "| ID | Question | Status | Date |\n"
+                                output += "|------|----------|--------|------|\n"
+                                
+                                choices = []
+                                for r in requests[:20]:
+                                    q_short = r.original_question[:40] + "..." if len(r.original_question) > 40 else r.original_question
+                                    date_short = r.created_at[:10] if r.created_at else "-"
+                                    output += f"| {r.request_id} | {q_short} | {r.status.value} | {date_short} |\n"
+                                    choices.append(r.request_id)
+                                
+                                return output, choices
+                            except Exception as e:
+                                logger.error(f"Correction list error: {e}", exc_info=True)
+                                return f"❌ Error: {e}", []
+                        
+                        def _populate_correction(req_id: str):
+                            if not req_id:
+                                return "", "", "", ""
+                            try:
+                                from src.correction_workflow import get_correction_workflow
+                                workflow = get_correction_workflow()
+                                req = workflow.get_request(req_id)
+                                
+                                if not req:
+                                    return "", "", "", ""
+                                
+                                return req.original_question, req.original_sql, req.suggested_sql, req.user_notes
+                            except:
+                                return "", "", "", ""
+                        
+                        def _approve_correction(req_id: str, notes: str, create_rule: bool):
+                            if not req_id:
+                                return "❌ Select a correction first"
+                            try:
+                                from src.correction_workflow import get_correction_workflow
+                                workflow = get_correction_workflow()
+                                success, msg = workflow.approve_request(req_id, notes, create_training_rule=create_rule)
+                                return f"✅ {msg}" if success else f"❌ {msg}"
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+                        
+                        def _reject_correction(req_id: str, notes: str):
+                            if not req_id:
+                                return "❌ Select a correction first"
+                            try:
+                                from src.correction_workflow import get_correction_workflow
+                                workflow = get_correction_workflow()
+                                success, msg = workflow.reject_request(req_id, notes)
+                                return f"✅ {msg}" if success else f"❌ {msg}"
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+                        
+                        correction_status_filter.change(
+                            _load_corrections,
+                            inputs=[correction_status_filter],
+                            outputs=[correction_list_md, correction_select]
+                        )
+                        correction_refresh_btn.click(
+                            _load_corrections,
+                            inputs=[correction_status_filter],
+                            outputs=[correction_list_md, correction_select]
+                        )
+                        correction_select.change(
+                            _populate_correction,
+                            inputs=[correction_select],
+                            outputs=[corr_original_q, corr_original_sql, corr_suggested_sql, corr_user_notes]
+                        )
+                        corr_approve_btn.click(
+                            _approve_correction,
+                            inputs=[correction_select, corr_reviewer_notes, corr_create_rule],
+                            outputs=[correction_action_msg]
+                        )
+                        corr_reject_btn.click(
+                            _reject_correction,
+                            inputs=[correction_select, corr_reviewer_notes],
+                            outputs=[correction_action_msg]
+                        )
+                        demo.load(_load_correction_stats, outputs=[correction_stats_md])
+                        demo.load(lambda: _load_corrections("Pending"), outputs=[correction_list_md, correction_select])
+                    
+                    # Sub-tab 6: Domain Knowledge (Entity Management)
+                    with gr.Tab("🧠 Domain Knowledge"):
+                        gr.Markdown("### Learned Entities & Aliases")
+                        gr.Markdown("Manage domain-specific terminology, aliases, and business entities.")
+                        
+                        domain_stats_md = gr.Markdown("")
+                        entity_list_md = gr.Markdown("Loading entities...")
+                        
+                        with gr.Row():
+                            entity_type_filter = gr.Dropdown(
+                                label="Filter by Type",
+                                choices=["All", "customer", "product", "location", "category", "other"],
+                                value="All"
+                            )
+                            entity_refresh_btn = gr.Button("🔄 Refresh", size="sm")
+                        
+                        gr.Markdown("---")
+                        gr.Markdown("### Add New Entity")
+                        
+                        with gr.Row():
+                            with gr.Column():
+                                new_entity_name = gr.Textbox(label="Canonical Name", placeholder="e.g., Acme Corp")
+                                new_entity_type = gr.Dropdown(
+                                    label="Entity Type",
+                                    choices=["customer", "product", "location", "category", "other"],
+                                    value="other"
+                                )
+                                new_entity_sql_value = gr.Textbox(label="SQL Value", placeholder="Value to use in queries")
+                            with gr.Column():
+                                new_entity_aliases = gr.Textbox(
+                                    label="Aliases (one per line)",
+                                    placeholder="ACME\nacme corporation\nacme inc",
+                                    lines=3
+                                )
+                                new_entity_desc = gr.Textbox(label="Description", placeholder="Optional description...")
+                        
+                        add_entity_btn = gr.Button("➕ Add Entity", variant="primary")
+                        entity_action_msg = gr.Markdown("")
+                        
+                        def _load_domain_stats():
+                            try:
+                                from src.domain_knowledge import get_domain_manager
+                                manager = get_domain_manager()
+                                stats = manager.get_statistics()
+                                
+                                type_counts = " | ".join([f"{k}: {v}" for k, v in stats.get('by_type', {}).items()])
+                                
+                                return (
+                                    f"📊 **{stats['total_entities']} entities** | "
+                                    f"{stats['total_aliases']} aliases | "
+                                    f"{stats['total_matches']} matches\n\n"
+                                    f"**By Type:** {type_counts or 'None'}"
+                                )
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+                        
+                        def _load_entities(type_filter: str = "All"):
+                            try:
+                                from src.domain_knowledge import get_domain_manager
+                                manager = get_domain_manager()
+                                
+                                entities = manager.get_all_entities(
+                                    entity_type=type_filter if type_filter != "All" else None
+                                )
+                                
+                                if not entities:
+                                    return "No entities yet. Add one below!"
+                                
+                                output = "| Name | Type | Aliases | Matches |\n"
+                                output += "|------|------|---------|--------|\n"
+                                
+                                for e in entities[:20]:
+                                    aliases_str = ", ".join(e.aliases[:3]) + ("..." if len(e.aliases) > 3 else "")
+                                    output += f"| {e.canonical_name} | {e.entity_type} | {aliases_str} | {e.match_count}x |\n"
+                                
+                                return output
+                            except Exception as e:
+                                logger.error(f"Entity list error: {e}", exc_info=True)
+                                return f"❌ Error: {e}"
+                        
+                        def _add_entity(name, etype, sql_val, aliases, desc):
+                            if not name:
+                                return "❌ Name is required"
+                            
+                            try:
+                                from src.domain_knowledge import get_domain_manager, DomainEntity
+                                manager = get_domain_manager()
+                                
+                                alias_list = [a.strip() for a in aliases.split("\n") if a.strip()] if aliases else []
+                                
+                                entity = DomainEntity(
+                                    canonical_name=name,
+                                    entity_type=etype,
+                                    sql_value=sql_val or name,
+                                    aliases=alias_list,
+                                    description=desc
+                                )
+                                
+                                success, msg = manager.add_entity(entity)
+                                return f"✅ {msg}" if success else f"❌ {msg}"
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+                        
+                        entity_type_filter.change(_load_entities, inputs=[entity_type_filter], outputs=[entity_list_md])
+                        entity_refresh_btn.click(_load_entities, inputs=[entity_type_filter], outputs=[entity_list_md])
+                        add_entity_btn.click(
+                            _add_entity,
+                            inputs=[new_entity_name, new_entity_type, new_entity_sql_value, new_entity_aliases, new_entity_desc],
+                            outputs=[entity_action_msg]
+                        )
+                        demo.load(_load_domain_stats, outputs=[domain_stats_md])
+                        demo.load(_load_entities, outputs=[entity_list_md])
             
             # Developer Tab (merged from Developer Tools + Developer Settings)
             with gr.Tab("🛠️ Developer"):

@@ -1,15 +1,65 @@
 # DBAI Configuration Template
 # Copy this file to config.yaml and update with your settings
 
-database:
-  server: localhost\\SQLEXPRESS
-  database: your_database_name
-  driver: ODBC Driver 18 for SQL Server
-  username: your_username
-  password: your_password
+# =============================================================================
+# DATABASE SETTINGS
+# =============================================================================
+# Active database: "mssql" or "oracle"
+active_database: mssql
 
+databases:
+  mssql:
+    enabled: true
+    server: localhost\\SQLEXPRESS
+    database: your_database_name
+    driver: ODBC Driver 18 for SQL Server
+    username: your_username
+    password: your_password
+    timeout_seconds: 30
+    max_rows: 10000
+
+  oracle:
+    enabled: false
+    host: your_oracle_host
+    port: 1521
+    service_name: your_service
+    username: your_username
+    password: your_password
+    pool_min: 2
+    pool_max: 10
+    pool_increment: 1
+    timeout_seconds: 30
+    max_rows: 10000
+
+# Query safety settings
+query:
+  default_limit: 100
+  max_limit: 10000
+  timeout_seconds: 60
+  cache_enabled: true
+  cache_ttl_hours: 24
+
+# =============================================================================
+# LLM SETTINGS
+# =============================================================================
 llm:
-  provider: openai  # groq or openai
+  provider: openai
   model: gpt-4o-mini
   temperature: 0.1
   max_tokens: 2000
+
+# =============================================================================
+# TEMPLATE MATCHING SETTINGS
+# =============================================================================
+templates:
+  match_threshold: 90
+  auto_suggest_threshold: 70
+  flag_rejection_rate: 20
+
+# =============================================================================
+# SECURITY NOTE
+# =============================================================================
+# Passwords are stored in plain text. For production:
+# - Use environment variables
+# - Or use a secrets manager
+# - Never commit this file with real credentials

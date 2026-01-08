@@ -1,6 +1,8 @@
 """
 Database Management
 Centralized SQLAlchemy engine creation and query execution.
+Supports both legacy single-database and new multi-database config formats.
+Build 30 - Phase 1: Multi-Database Support
 """
 import logging
 import json
@@ -18,6 +20,31 @@ logger = logging.getLogger(__name__)
 # Global engine and database instances
 _engine: Optional[Engine] = None
 _sql_database: Optional[SQLDatabase] = None
+
+# Multi-database manager (lazy-loaded)
+_db_manager = None
+
+def _use_multi_db_config() -> bool:
+    """Check if config uses new multi-database format."""
+    config_path = Path(__file__).parent.parent / "config.yaml"
+    if not config_path.exists():
+        return False
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f) or {}
+        return "active_database" in config or "databases" in config
+    except:
+        return False
+
+def _get_db_manager():
+    """Get or create DatabaseManager instance."""
+    global _db_manager
+    if _db_manager is None:
+        from src.db_manager import DatabaseManager
+        _db_manager = DatabaseManager()
+        config_path = str(Path(__file__).parent.parent / "config.yaml")
+        _db_manager.load_config(config_path)
+    return _db_manager
 
 def load_config() -> dict:
     """Load configuration from config.yaml."""
@@ -81,12 +108,21 @@ def create_connection_string(config: dict) -> str:
 def get_engine() -> Optional[Engine]:
     """
     Get or create SQLAlchemy engine.
+    Uses multi-DB manager if available, otherwise falls back to legacy.
     
     Returns:
         SQLAlchemy engine instance or None if creation fails
     """
     global _engine
     
+    # Check for multi-database config
+    if _use_multi_db_config():
+        manager = _get_db_manager()
+        if manager.engine is None:
+            manager.initialize()
+        return manager.engine
+    
+    # Legacy single-database behavior
     if _engine is None:
         try:
             config = load_config()
@@ -128,10 +164,20 @@ def reload_engine() -> Tuple[bool, str]:
     Returns:
         Tuple of (success: bool, message: str)
     """
-    global _engine, _sql_database
+    global _engine, _sql_database, _db_manager
     
     logger.info("Reloading database engine...")
     
+    # Check for multi-database config
+    if _use_multi_db_config():
+        _db_manager = None  # Force reload
+        manager = _get_db_manager()
+        success, message = manager.initialize()
+        if success:
+            _sql_database = None  # Reset SQLDatabase
+        return success, message
+    
+    # Legacy single-database behavior
     # Close existing engine
     if _engine:
         try:
@@ -210,6 +256,14 @@ def test_connection() -> Tuple[bool, str]:
     Returns:
         Tuple of (success: bool, message: str)
     """
+    # Check for multi-database config
+    if _use_multi_db_config():
+        manager = _get_db_manager()
+        if manager.engine is None:
+            manager.initialize()
+        return manager.test_connection()
+    
+    # Legacy single-database behavior
     try:
         engine = get_engine()
         if not engine:
@@ -224,6 +278,65 @@ def test_connection() -> Tuple[bool, str]:
         error_msg = f"Connection test failed: {str(e)}"
         logger.error(error_msg)
         return False, error_msg
+
+
+def get_active_database_type() -> Optional[str]:
+    """
+    Get the type of the currently active database.
+    
+    Returns:
+        "mssql", "oracle", or None if not using multi-db config
+    """
+    if _use_multi_db_config():
+        manager = _get_db_manager()
+        return manager.active_database
+    return "mssql"  # Legacy config is always MSSQL
+
+
+def get_database_info() -> dict:
+    """
+    Get information about current database connection.
+    
+    Returns:
+        Dictionary with connection details
+    """
+    if _use_multi_db_config():
+        manager = _get_db_manager()
+        return manager.get_database_info()
+    
+    # Legacy format info
+    config = load_config()
+    db_config = config.get('database', {})
+    return {
+        "status": "connected" if _engine else "disconnected",
+        "type": "mssql",
+        "server": db_config.get('server', ''),
+        "database": db_config.get('database', '')
+    }
+
+
+def switch_database(db_name: str) -> Tuple[bool, str]:
+    """
+    Switch to a different database (multi-db config only).
+    
+    Args:
+        db_name: Name of database to switch to ("mssql" or "oracle")
+        
+    Returns:
+        Tuple of (success, message)
+    """
+    global _sql_database
+    
+    if not _use_multi_db_config():
+        return False, "Multi-database config not enabled"
+    
+    manager = _get_db_manager()
+    success, message = manager.switch_database(db_name)
+    
+    if success:
+        _sql_database = None  # Reset SQLDatabase so it's recreated
+    
+    return success, message
 
 
 def load_metadata() -> dict:
