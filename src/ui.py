@@ -4,9 +4,7 @@ Provides a multi-tab interface for chat, settings, training, data import, and di
 """
 import logging
 import os
-import json
 import io
-import csv
 from typing import List, Optional, Tuple
 from datetime import datetime
 import gradio as gr
@@ -15,11 +13,10 @@ from pathlib import Path
 from dotenv import load_dotenv, set_key
 
 from src.providers import create_provider
-from src.database import reload_engine, test_connection, get_engine, run_query, get_sql_database, load_metadata, save_metadata
-from src.llm import make_sql_chain, make_presentation_chain, make_describe_chain, extract_sql_from_response, validate_sql
+from src.database import reload_engine, get_engine, run_query, get_sql_database, load_metadata, save_metadata
+from src.llm import make_sql_chain, make_describe_chain, extract_sql_from_response, validate_sql
 from src.telemetry import TelemetryLogger
 from src.uploader import process_excel_files, check_table_exists, import_dataframe_to_db
-from src.trainer import save_training_example
 from src.diagnostics import collect_diagnostics, collect_full_session_bundle
 from src.clarity import analyze_query_clarity, needs_clarification
 from src.learnings import save_learning, get_learning_stats
@@ -761,38 +758,6 @@ Your response:"""
                 history.append({"role": "assistant", "content": response})
                 
                 return "", history, message_id, response
-            # Use classification-based clarification
-            clarifications = get_clarification_for_classification(classification)
-            
-            # Store clarification state
-            pending_clarification["question"] = question
-            pending_clarification["options"] = clarifications
-            pending_clarification["original_query"] = question
-            
-            # Generate clarification message
-            response = f"I'd like to better understand your query: **\"{question}\"**\n\n"
-            response += f"Could you clarify which of these you're looking for?\n\n"
-            
-            for i, option in enumerate(clarifications, 1):
-                response += f"**{i}.** {option}\n"
-            
-            response += "\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
-            
-            # Track clarification request
-            session_tracker.track_query(
-                user_question=question,
-                clarity_analysis={"score": classification['confidence'], "needs_clarification": True, "reason": "Movement type required for supplier ranking"},
-                llm_interaction=None,
-                execution=None,
-                response={"type": "clarification_request", "text": response},
-                performance={"total_time_ms": int((time.time() - start_time) * 1000)},
-                error=None
-            )
-            
-            history.append({"role": "user", "content": question})
-            history.append({"role": "assistant", "content": response})
-            
-            return "", history, message_id, response
         
         # Try template generation for high-confidence classifications
         if classification['confidence'] >= 80:
@@ -2548,8 +2513,8 @@ See which rules have the most impact on your queries. Ranked by real usage.
                     # Phase 1: New Training Sub-Tabs
                     # =========================================================================
                     
-                    # Sub-tab 4: Import Report (CSV Upload & Analysis)
-                    with gr.Tab("📤 Import Report"):
+                    # Import Report (CSV Upload & Analysis)
+                    with gr.Tab("📥 Import Report"):
                         gr.Markdown("### Import Report from CSV")
                         gr.Markdown("Upload a CSV report file and let AI analyze it to create a reusable SQL template.")
                         
@@ -2759,7 +2724,7 @@ Return just the questions, one per line."""
                             outputs=[import_csv_file, import_report_name, import_report_desc, csv_analysis_md, suggested_sql_box, import_category, csv_analysis_state, import_status_md]
                         )
                     
-                    # Sub-tab 5: Report Library (Template Management)
+                    # Report Library (Template Management)
                     with gr.Tab("📚 Report Library"):
                         gr.Markdown("### Pre-defined Report Templates")
                         gr.Markdown("Browse, create, and manage SQL templates for common queries.")
@@ -2860,7 +2825,7 @@ Return just the questions, one per line."""
                         )
                         demo.load(_load_template_list, outputs=[template_list_md])
                     
-                    # Sub-tab 5: Correction Queue (IT Approval Workflow)
+                    # Correction Queue (IT Approval Workflow)
                     with gr.Tab("🔧 Correction Queue"):
                         gr.Markdown("### SQL Correction Requests")
                         gr.Markdown("Review and approve user-submitted SQL corrections. Approved corrections become training rules.")
@@ -3011,7 +2976,7 @@ Return just the questions, one per line."""
                         demo.load(_load_correction_stats, outputs=[correction_stats_md])
                         demo.load(lambda: _load_corrections("Pending"), outputs=[correction_list_md, correction_select])
                     
-                    # Sub-tab 6: Domain Knowledge (Entity Management)
+                    # Domain Knowledge (Entity Management)
                     with gr.Tab("🧠 Domain Knowledge"):
                         gr.Markdown("### Learned Entities & Aliases")
                         gr.Markdown("Manage domain-specific terminology, aliases, and business entities.")
