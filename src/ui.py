@@ -471,6 +471,11 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
             pending_clarification["question"] = None
             pending_clarification["options"] = []
             # Keep original_query for learning after successful execution
+            try:
+                # Memoize this clarification choice for the session
+                session_tracker.remember_clarification(original_query, question)
+            except Exception:
+                pass
     
     # Resolve persona overlay for prompt shaping
     persona_overlay = ""
@@ -485,7 +490,17 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         persona_overlay = ""
 
     # CLASSIFY FIRST to detect breakdown/template potential (always needed)
-    classification = classify_query(question)
+    try:
+        classification = classify_query(question)
+        # Basic safety: ensure expected keys exist
+        if not isinstance(classification, dict):
+            raise ValueError("Classification returned non-dict")
+        classification.setdefault('type', 'unknown')
+        classification.setdefault('confidence', 0)
+        classification.setdefault('params', {})
+    except Exception as e:
+        logger.error(f"Classification error: {e}")
+        classification = {'type': 'unknown', 'confidence': 0, 'params': {}}
     logger.info(f"Query classified as: {classification['type']} (confidence: {classification['confidence']}%)")
     
     # Analyze query clarity (skip if already clarified above)
@@ -546,6 +561,23 @@ Your response:"""
         )
         
         if not skip_clarity:
+            # If we've previously clarified this exact query in this session, reuse the choice
+            try:
+                remembered = session_tracker.get_clarification(question)
+            except Exception:
+                remembered = None
+            if remembered:
+                # Re-run classification with the remembered clarified intent
+                question = remembered
+                try:
+                    classification = classify_query(question)
+                    classification.setdefault('type', 'unknown')
+                    classification.setdefault('confidence', 0)
+                    classification.setdefault('params', {})
+                except Exception as e:
+                    logger.error(f"Re-classification error after memoized clarification: {e}")
+                    classification = {'type': 'unknown', 'confidence': 0, 'params': {}}
+            
             clarity_score, reason, clarifications = analyze_query_clarity(question)
             
             # Track clarity analysis
@@ -686,6 +718,49 @@ Your response:"""
         
         # Check if needs movement type clarification (via classification, not clarity system)
         if needs_movement_clarification(classification):
+            # If we have a remembered choice for this query, skip asking and apply it
+            try:
+                remembered = session_tracker.get_clarification(question)
+            except Exception:
+                remembered = None
+            if remembered:
+                # Apply remembered clarified intent
+                question = remembered
+                logger.info(f"Applied memoized clarification: '{remembered}'")
+                # Continue without prompting for clarification
+            else:
+                # Use classification-based clarification
+                clarifications = get_clarification_for_classification(classification)
+                
+                # Store clarification state
+                pending_clarification["question"] = question
+                pending_clarification["options"] = clarifications
+                pending_clarification["original_query"] = question
+                
+                # Generate clarification message
+                response = f"I'd like to better understand your query: **\"{question}\"**\n\n"
+                response += f"Could you clarify which of these you're looking for?\n\n"
+                
+                for i, option in enumerate(clarifications, 1):
+                    response += f"**{i}.** {option}\n"
+                
+                response += "\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
+                
+                # Track clarification request
+                session_tracker.track_query(
+                    user_question=question,
+                    clarity_analysis={"score": classification['confidence'], "needs_clarification": True, "reason": "Movement type required for supplier ranking"},
+                    llm_interaction=None,
+                    execution=None,
+                    response={"type": "clarification_request", "text": response},
+                    performance={"total_time_ms": int((time.time() - start_time) * 1000)},
+                    error=None
+                )
+                
+                history.append({"role": "user", "content": question})
+                history.append({"role": "assistant", "content": response})
+                
+                return "", history, message_id, response
             # Use classification-based clarification
             clarifications = get_clarification_for_classification(classification)
             

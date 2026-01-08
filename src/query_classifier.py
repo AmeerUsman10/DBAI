@@ -282,17 +282,5 @@ def get_clarification_for_classification(classification: Dict) -> List[str]:
         "Top suppliers by REJECTION (returned stock)",
         "Top suppliers across ALL movement types"
     ]
-    # Adaptive bias: reorder based on observed clarified queries in learnings
-    try:
-        from src.learnings import load_learnings
-        data = load_learnings()
-        counts = {opt: 0 for opt in options}
-        for l in data.get("learnings", []):
-            cq = (l.get("clarified_query", "") or "").lower()
-            for opt in options:
-                if opt.lower() in cq:
-                    counts[opt] += 1
-        options.sort(key=lambda o: counts.get(o, 0), reverse=True)
-    except Exception:
-        pass
+    # Keep a stable option order to avoid user confusion
     return options

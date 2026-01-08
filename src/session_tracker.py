@@ -31,6 +31,8 @@ class SessionTracker:
         self.queries: List[Dict] = []
         self.errors: List[Dict] = []
         self.training_events: List[Dict] = []
+        # Memoized user clarifications within this session
+        self._clarifications: Dict[str, str] = {}
         
         # Configuration (loaded from settings)
         self.config = self.load_config()
@@ -44,7 +46,9 @@ class SessionTracker:
             "total_successes": 0,
             "current_state": {},
             "last_query": None,
-            "session_timeline": []
+            "session_timeline": [],
+            # Expose memoized clarifications for diagnostics export
+            "clarifications": self._clarifications
         }
         
         logger.info(f"Session tracker initialized: {self.session_id}")
@@ -224,6 +228,26 @@ class SessionTracker:
     def update_app_state(self, state: Dict):
         """Update current application state (provider, model, db connection, etc.)"""
         self.state["current_state"] = state
+
+    def remember_clarification(self, original_query: str, selected_option: str):
+        """Memoize a clarification selection for the given original query in this session."""
+        try:
+            key = (original_query or "").strip().lower()
+            if key:
+                self._clarifications[key] = selected_option
+                # Keep state in sync for exports
+                self.state["clarifications"] = self._clarifications
+                logger.info(f"Memoized clarification for '{original_query[:50]}...': '{selected_option}'")
+        except Exception as e:
+            logger.warning(f"Failed to memoize clarification: {e}")
+
+    def get_clarification(self, original_query: str) -> Optional[str]:
+        """Retrieve a previously selected clarification for a query if available."""
+        try:
+            key = (original_query or "").strip().lower()
+            return self._clarifications.get(key)
+        except Exception:
+            return None
     
     def save_session(self):
         """Save current session state to file."""
