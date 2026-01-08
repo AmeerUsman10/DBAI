@@ -283,4 +283,8 @@ def get_clarification_for_classification(classification: Dict) -> List[str]:
         "Top suppliers across ALL movement types"
     ]
     # Keep a stable option order to avoid user confusion
+    try:
+        logger.info("Clarification options presented (stable order): " + ", ".join(f"{i+1}:{opt}" for i, opt in enumerate(options)))
+    except Exception:
+        pass
     return options
