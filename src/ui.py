@@ -2548,7 +2548,218 @@ See which rules have the most impact on your queries. Ranked by real usage.
                     # Phase 1: New Training Sub-Tabs
                     # =========================================================================
                     
-                    # Sub-tab 4: Report Library (Template Management)
+                    # Sub-tab 4: Import Report (CSV Upload & Analysis)
+                    with gr.Tab("📤 Import Report"):
+                        gr.Markdown("### Import Report from CSV")
+                        gr.Markdown("Upload a CSV report file and let AI analyze it to create a reusable SQL template.")
+                        
+                        with gr.Row():
+                            with gr.Column(scale=2):
+                                import_csv_file = gr.File(
+                                    label="Upload CSV Report",
+                                    file_types=[".csv"],
+                                    file_count="single"
+                                )
+                                import_report_name = gr.Textbox(
+                                    label="Report Name",
+                                    placeholder="e.g., Monthly Sales Summary"
+                                )
+                                import_report_desc = gr.Textbox(
+                                    label="Description",
+                                    placeholder="What does this report show?",
+                                    lines=2
+                                )
+                            with gr.Column(scale=1):
+                                gr.Markdown("**Instructions:**")
+                                gr.Markdown("""
+1. Upload a CSV file containing sample report data
+2. AI will analyze columns and suggest SQL
+3. Review and edit the suggested SQL
+4. Save as a reusable template
+""")
+                        
+                        analyze_csv_btn = gr.Button("🔍 Analyze CSV", variant="primary", size="lg")
+                        
+                        gr.Markdown("---")
+                        gr.Markdown("### Analysis Results")
+                        
+                        csv_analysis_md = gr.Markdown("")
+                        suggested_sql_box = gr.Textbox(
+                            label="Suggested SQL Template",
+                            placeholder="AI will generate SQL based on your CSV...",
+                            lines=8,
+                            interactive=True
+                        )
+                        sample_questions_box = gr.Textbox(
+                            label="Sample Questions (one per line)",
+                            placeholder="Questions that would trigger this report...",
+                            lines=3
+                        )
+                        import_category = gr.Dropdown(
+                            label="Category",
+                            choices=["Sales", "Inventory", "Finance", "Reports", "General"],
+                            value="Reports"
+                        )
+                        
+                        with gr.Row():
+                            save_as_template_btn = gr.Button("💾 Save as Template", variant="primary")
+                            clear_import_btn = gr.Button("🔄 Clear", variant="secondary")
+                        
+                        import_status_md = gr.Markdown("")
+                        
+                        # Hidden state to store analysis result
+                        csv_analysis_state = gr.State({})
+                        
+                        def _analyze_csv_report(file, report_name):
+                            """Analyze uploaded CSV and suggest SQL."""
+                            if file is None:
+                                return "❌ Please upload a CSV file first", "", {}, ""
+                            
+                            try:
+                                import pandas as pd
+                                
+                                # Read CSV
+                                df = pd.read_csv(file.name)
+                                
+                                # Basic analysis
+                                columns = list(df.columns)
+                                row_count = len(df)
+                                dtypes = df.dtypes.to_dict()
+                                
+                                # Sample data
+                                sample_rows = df.head(5).to_dict('records')
+                                
+                                # Build analysis summary
+                                analysis_md = f"""### 📊 CSV Analysis
+
+**File:** {file.name.split('/')[-1]}  
+**Rows:** {row_count}  
+**Columns:** {len(columns)}
+
+| Column | Type | Sample Values |
+|--------|------|---------------|
+"""
+                                for col in columns[:15]:  # Limit to 15 columns
+                                    dtype = str(dtypes.get(col, 'unknown'))
+                                    samples = df[col].dropna().head(3).tolist()
+                                    sample_str = ", ".join(str(s)[:20] for s in samples)
+                                    analysis_md += f"| {col} | {dtype} | {sample_str} |\n"
+                                
+                                if len(columns) > 15:
+                                    analysis_md += f"\n*...and {len(columns) - 15} more columns*\n"
+                                
+                                # Use LLM to suggest SQL
+                                global current_llm, current_provider
+                                if current_llm is None:
+                                    config = load_config()
+                                    llm_config = config.get('llm', {})
+                                    provider_name = llm_config.get('provider', 'openai')
+                                    model = llm_config.get('model', 'gpt-4o-mini')
+                                    current_provider = create_provider(provider_name)
+                                    current_llm = current_provider.get_llm(model, 0.3, 2000)
+                                
+                                # Get database schema for context
+                                db = get_sql_database()
+                                schema = db.get_table_info() if db else "Schema unavailable"
+                                
+                                prompt = f"""Analyze this CSV report and suggest a SQL query that would generate similar data.
+
+CSV Columns: {columns}
+Sample Data: {sample_rows[:3]}
+Report Name: {report_name or 'Unnamed Report'}
+
+Database Schema:
+{schema[:3000]}
+
+Generate a SQL Server query that would produce data similar to this CSV.
+Consider:
+1. Which tables likely contain this data
+2. Any JOINs needed
+3. Appropriate WHERE clauses
+4. ORDER BY for sorting
+
+Return ONLY the SQL query, no explanation."""
+
+                                response = current_llm.invoke(prompt)
+                                suggested_sql = response.content if hasattr(response, 'content') else str(response)
+                                suggested_sql = suggested_sql.strip().replace("```sql", "").replace("```", "").strip()
+                                
+                                # Generate sample questions
+                                questions_prompt = f"""Based on this report structure, suggest 3 natural language questions a user might ask to get this data:
+
+Report: {report_name or 'Report'}
+Columns: {columns[:10]}
+
+Return just the questions, one per line."""
+
+                                q_response = current_llm.invoke(questions_prompt)
+                                sample_questions = q_response.content if hasattr(q_response, 'content') else ""
+                                
+                                state = {
+                                    "columns": columns,
+                                    "row_count": row_count,
+                                    "suggested_sql": suggested_sql,
+                                    "file_name": file.name
+                                }
+                                
+                                return analysis_md, suggested_sql, state, sample_questions.strip()
+                                
+                            except Exception as e:
+                                logger.error(f"CSV analysis error: {e}", exc_info=True)
+                                return f"❌ Error analyzing CSV: {e}", "", {}, ""
+                        
+                        def _save_csv_as_template(name, desc, sql, questions, category, state):
+                            """Save analyzed CSV as a report template."""
+                            if not name:
+                                return "❌ Please enter a report name"
+                            if not sql:
+                                return "❌ No SQL to save. Analyze a CSV first."
+                            
+                            try:
+                                from src.report_templates import get_template_manager, ReportTemplate
+                                manager = get_template_manager()
+                                
+                                question_list = [q.strip() for q in questions.split("\n") if q.strip()]
+                                
+                                template = ReportTemplate(
+                                    name=name,
+                                    description=desc,
+                                    sql_template=sql,
+                                    sample_questions=question_list,
+                                    category=category,
+                                    source="imported"
+                                )
+                                
+                                success, msg = manager.add_template(template)
+                                
+                                if success:
+                                    return f"✅ Template '{name}' saved successfully! Find it in the Report Library tab."
+                                else:
+                                    return f"❌ {msg}"
+                            except Exception as e:
+                                return f"❌ Error saving template: {e}"
+                        
+                        def _clear_import():
+                            return None, "", "", "", "", "Reports", {}, ""
+                        
+                        analyze_csv_btn.click(
+                            _analyze_csv_report,
+                            inputs=[import_csv_file, import_report_name],
+                            outputs=[csv_analysis_md, suggested_sql_box, csv_analysis_state, sample_questions_box]
+                        )
+                        
+                        save_as_template_btn.click(
+                            _save_csv_as_template,
+                            inputs=[import_report_name, import_report_desc, suggested_sql_box, sample_questions_box, import_category, csv_analysis_state],
+                            outputs=[import_status_md]
+                        )
+                        
+                        clear_import_btn.click(
+                            _clear_import,
+                            outputs=[import_csv_file, import_report_name, import_report_desc, csv_analysis_md, suggested_sql_box, import_category, csv_analysis_state, import_status_md]
+                        )
+                    
+                    # Sub-tab 5: Report Library (Template Management)
                     with gr.Tab("📚 Report Library"):
                         gr.Markdown("### Pre-defined Report Templates")
                         gr.Markdown("Browse, create, and manage SQL templates for common queries.")
