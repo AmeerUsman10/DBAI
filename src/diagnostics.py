@@ -419,8 +419,7 @@ def collect_full_session_bundle(include_sensitive: bool = False) -> str:
     }
 
     with zipfile.ZipFile(bundle_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-        # Manifest first
-        zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+        # Write environment snapshot early; manifest will be written once at the end
         zf.writestr("environment_snapshot.json", json.dumps(env_snapshot, indent=2))
 
         # Add copilot report if available
@@ -477,7 +476,7 @@ def collect_full_session_bundle(include_sensitive: bool = False) -> str:
             zf.writestr(".env", content)
             manifest["paths"].append(".env")
 
-    # Update manifest inside the zip with final paths
+    # Write manifest inside the zip with final paths (single write)
     try:
         with zipfile.ZipFile(bundle_path, mode="a", compression=zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("manifest.json", json.dumps(manifest, indent=2))
