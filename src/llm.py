@@ -115,7 +115,7 @@ def make_sql_chain(llm, db):
     try:
         from src.database import load_metadata
         from src.learnings import get_relevant_learnings, format_learnings_for_prompt
-        from src.quick_training import get_training_rules_for_prompt, get_approved_rules
+        from src.quick_training import get_training_rules_for_prompt, get_approved_rules, get_relevant_approved_rules
         
         # Get schema information
         schema = db.get_table_info()
@@ -131,14 +131,15 @@ def make_sql_chain(llm, db):
             
             # Get quick training rules
             # Build training rules section and track applied rule indices
-            approved_rules = get_approved_rules()
+            # Use a small, relevant subset of rules for this question
+            relevant_rules = get_relevant_approved_rules(question, max_rules=3)
             training_rules = ""
             applied_indices = []
-            if approved_rules:
+            if relevant_rules:
                 training_rules = "\n### User-Defined Training Rules (Approved):\nThe user has provided the following specific instructions on how to interpret queries:\n\n"
-                for i, rule in enumerate(approved_rules, 1):
-                    training_rules += f"{i}. {rule['instruction']}\n"
-                    applied_indices.append(i)
+                for global_idx, rule in relevant_rules:
+                    training_rules += f"{global_idx}. {rule['instruction']}\n"
+                    applied_indices.append(global_idx)
                 training_rules += "\nIMPORTANT: Follow these rules precisely when generating SQL queries.\n"
             
             # Build metadata context

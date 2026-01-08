@@ -164,14 +164,22 @@ ORDER BY (
             yarn_where_parts.append(date_filter_yarn.replace('WHERE ', ''))
         yarn_where = f"WHERE {' AND '.join(yarn_where_parts)}" if yarn_where_parts else ""
         
-        greige_where_parts = []
-        if movement_type:
-            greige_where_parts.append(f"ENTRY_TYPE = '{movement_type}'")
-        if date_filter_greige:
-            greige_where_parts.append(date_filter_greige.replace('WHERE ', ''))
-        greige_where = f"WHERE {' AND '.join(greige_where_parts)}" if greige_where_parts else ""
+        greige_where = ""
+        include_greige = True
+        # Optimization: If movement type is yarn-specific, skip GreigeData
+        if movement_type and movement_type.lower().startswith('yarn '):
+            include_greige = False
+        else:
+            greige_where_parts = []
+            if movement_type:
+                greige_where_parts.append(f"ENTRY_TYPE = '{movement_type}'")
+            if date_filter_greige:
+                greige_where_parts.append(date_filter_greige.replace('WHERE ', ''))
+            greige_where = f"WHERE {' AND '.join(greige_where_parts)}" if greige_where_parts else ""
         
-        sql = f"""SELECT TOP {limit} Supplier, SUM(TotalAmount) as 'Total PKR', SUM(TotalQty) as 'Total Quantity', SUM(RecordCount) as 'Record Count'
+        # Build combined or yarn-only depending on movement type
+        if include_greige:
+            sql = f"""SELECT TOP {limit} Supplier, SUM(TotalAmount) as 'Total PKR', SUM(TotalQty) as 'Total Quantity', SUM(RecordCount) as 'Record Count'
 FROM (
     SELECT SUPPLIER as Supplier, SUM(AMOUNT) as TotalAmount, SUM(LBS) as TotalQty, COUNT(*) as RecordCount
     FROM YarnData
@@ -187,6 +195,15 @@ FROM (
 ) AS CombinedSuppliers
 GROUP BY Supplier
 ORDER BY SUM(TotalAmount) DESC"""
+        else:
+            sql = f"""SELECT TOP {limit} SUPPLIER as Supplier,
+       SUM(AMOUNT) as 'Total PKR',
+       SUM(LBS) as 'Total Quantity',
+       COUNT(*) as 'Record Count'
+FROM YarnData
+{yarn_where}
+GROUP BY SUPPLIER
+ORDER BY SUM(AMOUNT) DESC"""
         
         logger.info(f"Generated aggregated multi-department supplier ranking SQL from template")
         return sql
@@ -247,6 +264,7 @@ def generate_aggregation_sql(params: Dict) -> str:
     """
     dept = params['department']
     movement_type = params['movement_type']
+    time_filter = params.get('time_filter')
     
     if dept == 'yarn':
         # Yarn only
@@ -275,10 +293,30 @@ FROM GreigeData
     
     else:  # both
         # Multi-department - use subqueries (Training Rule #2: NO JOIN)
-        where_yarn = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
-        where_greige = f"WHERE ENTRY_TYPE = '{movement_type}'" if movement_type else ""
-        
-        sql = f"""SELECT 
+        df_yarn = build_date_filter(time_filter)
+        df_greige = build_date_filter(time_filter)
+        where_yarn_parts = []
+        if movement_type:
+            where_yarn_parts.append(f"ENTRY_TYPE = '{movement_type}'")
+        if df_yarn:
+            where_yarn_parts.append(df_yarn.replace('WHERE ', ''))
+        where_yarn = f"WHERE {' AND '.join(where_yarn_parts)}" if where_yarn_parts else ""
+
+        include_greige = True
+        if movement_type and movement_type.lower().startswith('yarn '):
+            include_greige = False
+
+        where_greige = ""
+        if include_greige:
+            where_greige_parts = []
+            if movement_type:
+                where_greige_parts.append(f"ENTRY_TYPE = '{movement_type}'")
+            if df_greige:
+                where_greige_parts.append(df_greige.replace('WHERE ', ''))
+            where_greige = f"WHERE {' AND '.join(where_greige_parts)}" if where_greige_parts else ""
+
+        if include_greige:
+            sql = f"""SELECT 
     (SELECT SUM(LBS) FROM YarnData {where_yarn}) as 'Yarn Total LBS',
     (SELECT SUM(AMOUNT) FROM YarnData {where_yarn}) as 'Yarn Total PKR',
     (SELECT SUM(BAGS) FROM YarnData {where_yarn}) as 'Yarn Total Bags',
@@ -286,6 +324,12 @@ FROM GreigeData
     (SELECT SUM(METER) FROM GreigeData {where_greige}) as 'Greige Total Meters',
     (SELECT SUM(AMOUNT) FROM GreigeData {where_greige}) as 'Greige Total PKR',
     (SELECT COUNT(*) FROM GreigeData {where_greige}) as 'Greige Count'"""
+        else:
+            sql = f"""SELECT 
+    (SELECT SUM(LBS) FROM YarnData {where_yarn}) as 'Yarn Total LBS',
+    (SELECT SUM(AMOUNT) FROM YarnData {where_yarn}) as 'Yarn Total PKR',
+    (SELECT SUM(BAGS) FROM YarnData {where_yarn}) as 'Yarn Total Bags',
+    (SELECT COUNT(*) FROM YarnData {where_yarn}) as 'Yarn Count'"""
         logger.info(f"Generated multi-department aggregation SQL from template")
     
     return sql

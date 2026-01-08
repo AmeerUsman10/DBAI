@@ -148,6 +148,53 @@ def get_training_rules_for_prompt() -> str:
         logger.error(f"Error formatting training rules: {e}")
         return ""
 
+def get_relevant_approved_rules(question: str, max_rules: int = 3) -> List[Tuple[int, Dict]]:
+    """
+    Select a small set of approved rules relevant to the current question.
+    Returns list of tuples (global_index, rule_dict) ordered by relevance and priority.
+    """
+    try:
+        data = load_training_rules()
+        rules = data.get("rules", [])
+        if not rules:
+            return []
+
+        # Tokenize question
+        q_tokens = set(_tokenize(question))
+        if not q_tokens:
+            q_tokens = set()
+
+        # Common domain keywords to help matching
+        domain_keywords = {"supplier","arrival","issue","rejection","movement","yarn","greige","count","top","total","ranking","breakdown"}
+        q_tokens |= (domain_keywords & q_tokens)
+
+        # Score approved rules by token overlap + priority
+        scored: List[Tuple[int, Dict, float, int]] = []  # (index, rule, score, priority)
+        for i, r in enumerate(rules, 1):  # global 1-based index
+            if r.get("status","draft") != "approved":
+                continue
+            r_tokens = set(_tokenize(r.get("instruction","")))
+            if not r_tokens:
+                continue
+            inter = len(q_tokens & r_tokens)
+            union = len(q_tokens | r_tokens) or 1
+            overlap = inter / union
+            prio = int(r.get("priority",5))
+            # Combine: higher overlap, lower priority is better
+            score = overlap + (1.0 / (prio + 1))
+            scored.append((i, r, score, prio))
+
+        if not scored:
+            return []
+
+        # Sort by score desc, then priority asc
+        scored.sort(key=lambda t: (-t[2], t[3]))
+        top = scored[:max_rules]
+        return [(idx, rule) for idx, rule, _, _ in top]
+    except Exception as e:
+        logger.error(f"Error selecting relevant rules: {e}")
+        return []
+
 def get_approved_rules() -> List[Dict]:
     """Return approved training rules ordered by priority."""
     try:
