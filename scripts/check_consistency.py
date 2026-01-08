@@ -42,6 +42,27 @@ def check_greige_count_alias():
     assert "'Greige Count'" in sql, "Greige aggregation must include 'Greige Count' alias"
     print("✅ Greige aggregation includes 'Greige Count' alias")
 
+def check_both_departments_counts():
+    params = {
+        'department': 'both',
+        'movement_type': None,
+        'time_filter': None
+    }
+    sql = generate_aggregation_sql(params)
+    assert "'Yarn Count'" in sql and "'Greige Count'" in sql, "Combined totals must include both 'Yarn Count' and 'Greige Count'"
+    print("✅ Combined totals include both Yarn and Greige counts")
+
+def check_time_filter_propagation():
+    params = {
+        'department': 'both',
+        'movement_type': 'Yarn Arrival',
+        'time_filter': {'type': 'filter', 'raw': 'last 30 days', 'groups': ("30","days")}
+    }
+    sql = generate_aggregation_sql(params)
+    # Verify date filter fragments are present in at least one subquery
+    assert "DATEADD(day, -30" in sql, "Date filter (last 30 days) should be applied"
+    print("✅ Date filter applied in combined totals for last 30 days")
+
 
 if __name__ == "__main__":
     ok = True
@@ -49,6 +70,8 @@ if __name__ == "__main__":
         check_clarification_options()
         check_yarn_count_alias()
         check_greige_count_alias()
+        check_both_departments_counts()
+        check_time_filter_propagation()
     except AssertionError as e:
         print(f"❌ Test failed: {e}")
         ok = False
