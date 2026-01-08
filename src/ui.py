@@ -1814,6 +1814,77 @@ def build_ui():
                     outputs=[feedback_category, feedback_comment, submit_feedback_btn]
                 )
             
+            # Nexus Studio Tab - Premium feed with custom HTML layout
+            with gr.Tab("Nexus Studio"):
+                gr.Markdown("## Nexus Studio — Textile Intelligence")
+                # Feed area rendered as HTML (supports premium card layout)
+                nexus_feed = gr.HTML(value="<div id='nexus-feed'><p class='text-sm'>Start by entering a query below.</p></div>")
+                
+                # Hidden bridge components to support DOM-based submission from custom HTML
+                with gr.Row():
+                    hidden_input = gr.Textbox(label="", show_label=False, elem_id="hidden_input")
+                    hidden_button = gr.Button("Submit", elem_id="hidden_button", variant="secondary")
+                
+                # Visible input for Gradio-native submission (no DOM bridging required)
+                with gr.Row():
+                    nexus_question = gr.Textbox(
+                        placeholder="Query suppliers, quality logs, or production batches...",
+                        label="",
+                        show_label=False,
+                        lines=1,
+                        scale=5
+                    )
+                    nexus_send_btn = gr.Button("Ask", variant="primary")
+                
+                def render_nexus_response(user_q: str, response_html: str) -> str:
+                    """Wrap the core response HTML into Nexus card layout."""
+                    header = (
+                        "<header style=\"height:3rem;background:#fff;border-bottom:1px solid rgba(0,0,0,0.08);display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;\">"
+                        "<div style=\"font-size:11px;color:#86868b;font-weight:600;text-transform:uppercase;\">Current View:</div>"
+                        "<div style=\"font-size:11px;font-weight:700;\">Supplier Performance Index</div>"
+                        "</header>"
+                    )
+                    user_pill = f"<div style='display:flex;justify-content:flex-end;'><div style='background:#fff;border:1px solid rgba(0,0,0,0.08);padding:10px 16px;border-radius:24px;font-size:14px;font-weight:500;box-shadow:0 2px 10px rgba(0,0,0,0.03);'>{user_q}</div></div>"
+                    ai_card = (
+                        "<div style='background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:20px;padding:24px;box-shadow:0 4px 20px rgba(0,0,0,0.02);'>"
+                        "<div style='display:flex;align-items:center;gap:8px;margin-bottom:12px;'>"
+                        "<div style='width:24px;height:24px;background:#2563eb;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:10px;'>∗</div>"
+                        "<div><div style='font-size:16px;font-weight:600;'>Supplier Performance Matrix</div>"
+                        "<div style='font-size:12px;color:#86868b;'>Data synchronized across SSMS Production and ERP logs</div></div></div>"
+                        f"<div style='margin-top:8px'>{response_html}</div>"
+                        "</div>"
+                    )
+                    container = (
+                        "<div style='font-family:Inter,-apple-system,system-ui,sans-serif;background:#f5f5f7;color:#1d1d1f;min-height:60vh;padding:16px;border-radius:12px;'>"
+                        f"{header}<div style='padding:16px;display:flex;flex-direction:column;gap:16px;'>{user_pill}{ai_card}</div>"
+                        "</div>"
+                    )
+                    return container
+                
+                def nexus_query(user_q: str) -> str:
+                    """Route Nexus queries through the same pipeline and render in premium layout."""
+                    try:
+                        # Use a fresh history for Nexus (does not affect Chatbot messages)
+                        cleared, history, msg_id, response_html = chat_query(user_q, [], "default")
+                        # Render premium layout
+                        return render_nexus_response(user_q, response_html)
+                    except Exception as e:
+                        logger.error(f"Nexus query error: {e}", exc_info=True)
+                        return f"<div style='color:#b91c1c;'>❌ Error: {str(e)}</div>"
+                
+                # Wire visible Ask button
+                nexus_send_btn.click(
+                    nexus_query,
+                    inputs=[nexus_question],
+                    outputs=[nexus_feed]
+                )
+                # Wire hidden bridge button (DOM-based submission)
+                hidden_button.click(
+                    nexus_query,
+                    inputs=[hidden_input],
+                    outputs=[nexus_feed]
+                )
+            
             # Settings Tab
             with gr.Tab("⚙️ Settings"):
                 gr.Markdown("## LLM Provider Settings")
