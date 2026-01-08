@@ -216,7 +216,7 @@ ORDER BY SUM(AMOUNT) DESC"""
             f"SUM(AMOUNT) as 'Total PKR'",
             f"SUM(LBS) as 'Total LBS'",
             f"SUM(BAGS) as 'Total Bags'",
-            f"COUNT(*) as 'Record Count'"
+            f"COUNT(*) as 'Yarn Count'"
         ]
     elif dept == 'greige':
         table = 'GreigeData'
@@ -224,7 +224,7 @@ ORDER BY SUM(AMOUNT) DESC"""
         metric_cols = [
             f"SUM(AMOUNT) as 'Total PKR'",
             f"SUM(METER) as 'Total Meters'",
-            f"COUNT(*) as 'Record Count'"
+            f"COUNT(*) as 'Greige Count'"
         ]
     else:
         # Default to yarn for non-supplier entities
@@ -274,7 +274,7 @@ def generate_aggregation_sql(params: Dict) -> str:
     SUM(LBS) as 'Total LBS',
     SUM(AMOUNT) as 'Total PKR',
     SUM(BAGS) as 'Total Bags',
-    COUNT(*) as 'Record Count'
+    COUNT(*) as 'Yarn Count'
 FROM YarnData
 {where_clause}"""
         logger.info(f"Generated yarn-only aggregation SQL from template")
@@ -286,7 +286,7 @@ FROM YarnData
         sql = f"""SELECT 
     SUM(METER) as 'Total Meters',
     SUM(AMOUNT) as 'Total PKR',
-    COUNT(*) as 'Record Count'
+    COUNT(*) as 'Greige Count'
 FROM GreigeData
 {where_clause}"""
         logger.info(f"Generated greige-only aggregation SQL from template")
