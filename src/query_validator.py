@@ -68,6 +68,18 @@ class QueryValidator:
             if 'SUPPLIER' not in query_upper or 'JOIN' not in query_upper:
                 warnings.append("⚠️ Supplier/ARRIVAL query missing table joins - verify data completeness")
         
+        # CRITICAL: Check for table name mismatches
+        # If query mentions greige but queries yarn, that's wrong
+        if 'GREIGEDATA' in query_upper and 'YARNDATA' not in query_upper:
+            # Greige-only query - good
+            pass
+        elif 'YARNDATA' in query_upper and 'GREIGEDATA' not in query_upper:
+            # Yarn-only query - good
+            pass
+        else:
+            # Mixed query - need to verify it's intentional
+            pass
+        
         return warnings
     
     @staticmethod

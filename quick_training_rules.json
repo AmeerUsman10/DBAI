@@ -119,11 +119,51 @@
       "owner": "system",
       "priority": 1,
       "status": "approved"
+    },
+    {
+      "instruction": "SUMMARY TOTALS - AMBIGUOUS QUERY HANDLER: When user says 'show summary totals' or 'summary', this is ambiguous. ASK FOR CLARIFICATION: 'Do you want summary for (1) Yarn only, (2) Greige only, or (3) Both combined?' Then wait for their numbered response. NEVER assume - always ask. Once they choose, execute that option.",
+      "added_at": "2026-01-09T13:45:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "EXACT SQL PATTERNS - TOP SUPPLIERS BY ARRIVAL (USE THIS EXACTLY): User query: 'Top suppliers by ARRIVAL'. ALWAYS generate this SQL structure: SELECT TOP 10 supplier_name, SUM(AMOUNT) as 'Total PKR', SUM(LBS) as 'Total LBS from Yarn', (SELECT SUM(AMOUNT) FROM GreigeData WHERE supplier_name=s.supplier_name AND ENTRY_TYPE='Greige Arrival') as 'Total PKR from Greige' FROM YarnData s WHERE ENTRY_TYPE='Yarn Arrival' GROUP BY supplier_name ORDER BY SUM(AMOUNT) DESC. Then state: 'Top 10 suppliers by arrival (Yarn + Greige combined)'",
+      "added_at": "2026-01-09T13:45:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "EXACT SQL PATTERNS - GREIGE SUMMARY (USE THIS EXACTLY): User query: 'greige summary' or 'greige total'. ALWAYS generate: SELECT SUM(METER) as 'Greige Total Meters', SUM(AMOUNT) as 'Greige Total PKR', COUNT(*) as 'Greige Count' FROM GreigeData. Response must state: 'Greige Department Summary'. DO NOT multiply by AC_GWIDTH. DO NOT include Yarn data.",
+      "added_at": "2026-01-09T13:45:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "EXACT SQL PATTERNS - YARN SUMMARY (USE THIS EXACTLY): User query: 'yarn summary' or 'yarn total' or 'total yarn movement'. ALWAYS generate: SELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', COUNT(*) as 'Yarn Count', ENTRY_TYPE FROM YarnData GROUP BY ENTRY_TYPE. Response must state: 'Yarn Department Summary by Movement Type'. Always include ENTRY_TYPE to show Arrival, Issue, Rejection separately.",
+      "added_at": "2026-01-09T13:45:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "CRITICAL VALIDATION - TABLE NAME MATCHING: Before generating SQL, verify table name matches user's intent. If user says 'greige', table MUST be 'GreigeData' ONLY. If user says 'yarn', table MUST be 'YarnData' ONLY. If user says 'supplier' or 'top 5' or 'summary' without table specification, ASK for clarification. NEVER guess which table. EXAMPLES WRONG: User says 'greige total' but SQL queries YarnData - BLOCKED. User says 'greiege total' (typo) but returns Yarn - BLOCKED.",
+      "added_at": "2026-01-09T13:45:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
     }
   ],
   "metadata": {
-    "total_rules": 14,
-    "last_updated": "2026-01-09T21:00:00Z",
-    "version": "3.0-critical-fixes"
+    "total_rules": 20,
+    "last_updated": "2026-01-09T13:45:00Z",
+    "version": "3.2-exact-sql-patterns"
   }
 }
