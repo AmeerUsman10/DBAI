@@ -8,6 +8,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 import time
+from src.utils.atomic_write import atomic_write_json, atomic_read_json
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +80,7 @@ class SessionTracker:
         """Save observability configuration."""
         config_file = self.project_root / "logs" / "observability_config.json"
         try:
-            with open(config_file, 'w') as f:
-                json.dump(config, f, indent=2)
+            atomic_write_json(config_file, config)
             self.config = config
             logger.info("Observability config updated")
         except Exception as e:
@@ -254,14 +254,9 @@ class SessionTracker:
         session_file = self.session_dir / f"session_{self.session_id}.json"
         
         try:
-            with open(session_file, 'w') as f:
-                json.dump(self.state, f, indent=2)
-            
-            # Also save to latest_session.json for easy access
+            atomic_write_json(session_file, self.state)
             latest_file = self.project_root / "logs" / "latest_session.json"
-            with open(latest_file, 'w') as f:
-                json.dump(self.state, f, indent=2)
-            
+            atomic_write_json(latest_file, self.state)
             logger.debug(f"Session saved: {session_file}")
         except Exception as e:
             logger.error(f"Error saving session: {e}")

@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
+from src.utils.atomic_write import atomic_write_json, atomic_read_json
 
 logger = logging.getLogger(__name__)
 
@@ -163,21 +164,15 @@ class DomainKnowledgeManager:
             return
         
         try:
-            with open(self._storage_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
+            data = atomic_read_json(self._storage_path, default={"entities": {}}) or {"entities": {}}
             self._entities = {}
             self._alias_index = {}
-            
             for key, entity_data in data.get("entities", {}).items():
                 entity = DomainEntity.from_dict(entity_data)
                 self._entities[key] = entity
-                
-                # Build alias index
                 self._alias_index[entity.canonical_name.lower()] = entity.canonical_name
                 for alias in entity.aliases:
                     self._alias_index[alias.lower()] = entity.canonical_name
-            
             logger.info(f"Loaded {len(self._entities)} domain entities")
         except Exception as e:
             logger.error(f"Failed to load domain knowledge: {e}")
@@ -188,19 +183,12 @@ class DomainKnowledgeManager:
         """Save entities to storage"""
         try:
             self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-            
             data = {
                 "version": "1.0",
                 "updated_at": datetime.now().isoformat(),
-                "entities": {
-                    key: entity.to_dict()
-                    for key, entity in self._entities.items()
-                }
+                "entities": {key: entity.to_dict() for key, entity in self._entities.items()}
             }
-            
-            with open(self._storage_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            
+            atomic_write_json(self._storage_path, data)
             return True
         except Exception as e:
             logger.error(f"Failed to save domain knowledge: {e}")

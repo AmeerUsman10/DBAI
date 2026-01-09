@@ -8,6 +8,19 @@ from typing import Dict, Optional, List
 
 logger = logging.getLogger(__name__)
 
+# Common typos and corrections
+TYPO_CORRECTIONS = {
+    'greiege': 'greige',
+    'griege': 'greige',
+    'graige': 'greige',
+    'greieg': 'greige',
+    'yarnn': 'yarn',
+    'yran': 'yarn',
+    'suppiler': 'supplier',
+    'suplier': 'supplier',
+    'qualty': 'quality',
+}
+
 # Query type patterns
 RANKING_PATTERNS = [
     r'top\s+(\d+)\s+(\w+)',  # "top 10 suppliers"
@@ -82,6 +95,14 @@ ENTITIES = {
 }
 
 
+def normalize_typos(text: str) -> str:
+    """Correct common typos in query text."""
+    normalized = text.lower()
+    for typo, correction in TYPO_CORRECTIONS.items():
+        normalized = normalized.replace(typo, correction)
+    return normalized
+
+
 def classify_query(query: str) -> Dict:
     """
     Classify user query and extract parameters.
@@ -100,7 +121,8 @@ def classify_query(query: str) -> Dict:
             }
         }
     """
-    query_lower = query.lower().strip()
+    # Normalize typos first
+    query_lower = normalize_typos(query).strip()
     params = {
         'entity': None,
         'metric': 'AMOUNT',  # Default to amount
@@ -127,13 +149,19 @@ def classify_query(query: str) -> Dict:
         params['breakdown'] = ['department', 'movement_type']
         logger.info(f"Detected breakdown request in query: {query}")
     
-    # Detect department
-    if 'greige' in query_lower and 'yarn' in query_lower:
+    # Detect department (be explicit - don't default to 'both' unless both are mentioned)
+    has_greige = 'greige' in query_lower
+    has_yarn = 'yarn' in query_lower
+    
+    if has_greige and has_yarn:
         params['department'] = 'both'
-    elif 'greige' in query_lower:
+    elif has_greige:
         params['department'] = 'greige'
-    elif 'yarn' in query_lower:
+        logger.info(f"Detected GREIGE-only query: {query}")
+    elif has_yarn:
         params['department'] = 'yarn'
+        logger.info(f"Detected YARN-only query: {query}")
+    # Don't set default here - let each query type handler decide
     
     # Detect movement type
     for keyword, entry_type in MOVEMENT_TYPES.items():
@@ -211,6 +239,13 @@ def classify_query(query: str) -> Dict:
     for pattern in AGGREGATION_PATTERNS:
         match = re.search(pattern, query_lower)
         if match:
+            # If no department detected yet, check if it's a generic "total" query
+            if not params['department'] or params['department'] == 'both':
+                # Only default to 'both' if truly no department mentioned
+                if not ('greige' in query_lower or 'yarn' in query_lower):
+                    params['department'] = 'both'
+            
+            logger.info(f"Aggregation query classified - Department: {params['department']}, Query: {query}")
             return {
                 'type': 'aggregation',
                 'confidence': 90,

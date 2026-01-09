@@ -2396,7 +2396,72 @@ See which rules have the most impact on your queries. Ranked by real usage.
                         
                         # Rule Governance section (integrated)
                         gr.Markdown("---")
-                        gr.Markdown("### 🛡️ Rule Governance")
+                        gr.Markdown("### � Conflict Scanner")
+                        conflicts_md = gr.Markdown("Click scan to check overlaps across rules.")
+                        scan_conflicts_btn = gr.Button("Scan for Conflicts", size="sm")
+
+                        def _scan_conflicts():
+                            try:
+                                from src.quick_training import detect_rule_conflicts, load_training_rules
+                                pairs = detect_rule_conflicts()
+                                if not pairs:
+                                    return "✅ No potential conflicts found."
+                                data = load_training_rules().get("rules", [])
+                                out = "| Rule A | Rule B | Similarity |\n|------|------|-----------|\n"
+                                for a, b, score in pairs[:20]:
+                                    a_txt = (data[a-1].get("instruction","") if a-1 < len(data) else "")[:60]
+                                    b_txt = (data[b-1].get("instruction","") if b-1 < len(data) else "")[:60]
+                                    out += f"| #{a} {a_txt}... | #{b} {b_txt}... | {score} |\n"
+                                return out
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+
+                        scan_conflicts_btn.click(_scan_conflicts, outputs=[conflicts_md])
+
+                        gr.Markdown("---")
+                        gr.Markdown("### 💡 Suggestions from Feedback")
+                        suggestions_md = gr.Markdown("Loading suggestions...")
+                        suggest_select = gr.Dropdown(label="Select Suggestion", choices=[], allow_custom_value=True, interactive=True)
+                        add_suggest_btn = gr.Button("➕ Add as Rule", variant="secondary")
+                        suggest_action_msg = gr.Markdown("")
+
+                        def _load_suggestions():
+                            try:
+                                from src.feedback import get_rule_suggestions
+                                sugg = get_rule_suggestions(limit=20)
+                                if not sugg:
+                                    return "No recent suggestions.", []
+                                md = "| Suggestion | Source | Time |\n|-----------|--------|------|\n"
+                                choices = []
+                                for idx, s in enumerate(sugg, 1):
+                                    md += f"| {s.get('suggested_rule','')[:80]} | {s.get('source','')} | {s.get('timestamp','')[:19]} |\n"
+                                    choices.append(str(idx))
+                                return md, choices
+                            except Exception as e:
+                                return f"❌ Error: {e}", []
+
+                        def _add_suggestion(idx_str: str):
+                            try:
+                                idx = int(idx_str)
+                            except Exception:
+                                return "❌ Select a suggestion first"
+                            try:
+                                from src.feedback import get_rule_suggestions
+                                from src.quick_training import add_training_rule
+                                sugg = get_rule_suggestions(limit=20)
+                                if not sugg or idx < 1 or idx > len(sugg):
+                                    return "❌ Invalid selection"
+                                rule_text = sugg[idx-1].get("suggested_rule", "")
+                                ok, msg = add_training_rule(rule_text)
+                                return (f"✅ Added: {msg}" if ok else f"❌ {msg}")
+                            except Exception as e:
+                                return f"❌ Error: {e}"
+
+                        demo.load(_load_suggestions, outputs=[suggestions_md, suggest_select])
+                        add_suggest_btn.click(_add_suggestion, inputs=[suggest_select], outputs=[suggest_action_msg])
+
+                        gr.Markdown("---")
+                        gr.Markdown("### �🛡️ Rule Governance")
                         gr.Markdown("Manage rule lifecycle: owner, priority, status, and conflict detection.")
                         
                         gov_rules_md = gr.Markdown()
@@ -3153,6 +3218,46 @@ Return just the questions, one per line."""
             with gr.Tab("🛠️ Developer"):
                 gr.Markdown("## Developer Tools & Configuration")
                 gr.Markdown("Session monitoring, diagnostics, and observability settings.")
+
+                with gr.Row():
+                    env_status = gr.Markdown("Loading environment status...")
+                    refresh_env_btn = gr.Button("🔄 Refresh Status", size="sm")
+
+                    def _env_status():
+                        try:
+                            # DB check
+                            db_ok = False
+                            db_msg = ""
+                            try:
+                                engine = get_engine()
+                                if engine:
+                                    db_ok = True
+                                    db_msg = "DB connected"
+                                else:
+                                    db_msg = "DB not connected"
+                            except Exception as e:
+                                db_msg = f"DB error: {e}"
+
+                            # LLM provider check
+                            llm_ok = False
+                            llm_msg = ""
+                            try:
+                                cfg = load_config()
+                                llm_cfg = cfg.get('llm', {})
+                                prov = create_provider(llm_cfg.get('provider','openai'))
+                                if prov:
+                                    llm_ok = True
+                                    llm_msg = f"Provider ready ({llm_cfg.get('provider','openai')})"
+                            except Exception as e:
+                                llm_msg = f"LLM error: {e}"
+
+                            icon = lambda ok: "✅" if ok else "❌"
+                            return f"### Environment Status\n- {icon(db_ok)} Database: {db_msg}\n- {icon(llm_ok)} LLM: {llm_msg}"
+                        except Exception as e:
+                            return f"❌ Status error: {e}"
+
+                    refresh_env_btn.click(_env_status, outputs=[env_status])
+                    demo.load(_env_status, outputs=[env_status])
                 
                 # Sub-tab 1: Session & Cache
                 with gr.Tab("📊 Session & Cache"):
@@ -3282,7 +3387,36 @@ Return just the questions, one per line."""
                     
                     with gr.Row():
                         with gr.Column(scale=1):
-                            gr.Markdown("#### 📤 Session Report")
+                            gr.Markdown("#### � ONE-CLICK Export")
+                            gr.Markdown("**Full Diagnostic Bundle** in one button: Session + Queries + Rules + Logs + Env snapshot")
+                            oneclick_export_btn = gr.Button("🚀 Collect & Export Full Bundle", variant="primary", size="lg")
+                            oneclick_status = gr.Markdown("")
+                            oneclick_download = gr.File(label="Download Diagnostic Bundle", visible=False)
+                            
+                            def oneclick_collect_export():
+                                """One-click collect and export full diagnostic bundle."""
+                                try:
+                                    bundle_path = collect_full_session_bundle(include_sensitive=True)
+                                    if bundle_path and Path(bundle_path).exists():
+                                        return (
+                                            f"✅ **Bundle Ready!**\n\n📦 `{Path(bundle_path).name}`\n\n"
+                                            f"Includes: Session · Queries · Training Rules · Logs · Environment · Config",
+                                            bundle_path,
+                                            gr.update(visible=True)
+                                        )
+                                    return "❌ Failed to generate bundle", None, gr.update(visible=False)
+                                except Exception as e:
+                                    logger.error(f"Export error: {e}")
+                                    return f"❌ Error: {str(e)[:100]}", None, gr.update(visible=False)
+                            
+                            oneclick_export_btn.click(oneclick_collect_export, outputs=[oneclick_status, oneclick_download, oneclick_download])
+                    
+                    gr.Markdown("---")
+                    gr.Markdown("### Standard Export Options")
+                    
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            gr.Markdown("#### �📤 Session Report")
                             gr.Markdown("Export current session for Copilot analysis (queries, errors, recommendations).")
                             export_session_btn = gr.Button("📤 Export Session", variant="secondary", size="lg")
                             export_status = gr.Markdown("")

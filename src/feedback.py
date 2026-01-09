@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
+from src.utils.atomic_write import atomic_write_json, atomic_read_json
 
 logger = logging.getLogger(__name__)
 
@@ -25,24 +26,20 @@ def ensure_feedback_dir():
 def load_feedback_data() -> Dict:
     """Load feedback data from file."""
     ensure_feedback_dir()
-    
-    if FEEDBACK_FILE.exists():
-        try:
-            with open(FEEDBACK_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Error loading feedback data: {e}")
-            return {"feedback_events": [], "statistics": {}}
-    
-    return {"feedback_events": [], "statistics": {}}
+    try:
+        data = atomic_read_json(FEEDBACK_FILE, default={"feedback_events": [], "statistics": {}})
+        if data is None:
+            data = {"feedback_events": [], "statistics": {}}
+        return data
+    except Exception as e:
+        logger.error(f"Error loading feedback data: {e}")
+        return {"feedback_events": [], "statistics": {}}
 
 def save_feedback_data(data: Dict):
     """Save feedback data to file."""
     ensure_feedback_dir()
-    
     try:
-        with open(FEEDBACK_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        atomic_write_json(FEEDBACK_FILE, data)
     except Exception as e:
         logger.error(f"Error saving feedback data: {e}")
 
@@ -264,13 +261,11 @@ def _append_rule_suggestion(suggestion: Dict):
     """Append a rule suggestion to the suggestions store."""
     ensure_feedback_dir()
     try:
-        suggestions = []
-        if SUGGESTIONS_FILE.exists():
-            with open(SUGGESTIONS_FILE, 'r', encoding='utf-8') as f:
-                suggestions = json.load(f)
+        suggestions = atomic_read_json(SUGGESTIONS_FILE, default=[])
+        if suggestions is None:
+            suggestions = []
         suggestions.append(suggestion)
-        with open(SUGGESTIONS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(suggestions, f, indent=2, ensure_ascii=False)
+        atomic_write_json(SUGGESTIONS_FILE, suggestions)
     except Exception as e:
         logger.error(f"Error saving rule suggestion: {e}")
 
@@ -279,10 +274,9 @@ def get_rule_suggestions(limit: int = 20) -> List[Dict]:
     """Retrieve recent rule suggestions generated from feedback."""
     ensure_feedback_dir()
     try:
-        if not SUGGESTIONS_FILE.exists():
+        suggestions = atomic_read_json(SUGGESTIONS_FILE, default=[])
+        if not suggestions:
             return []
-        with open(SUGGESTIONS_FILE, 'r', encoding='utf-8') as f:
-            suggestions = json.load(f)
         # Sort newest first
         suggestions = sorted(suggestions, key=lambda s: s.get("timestamp",""), reverse=True)
         return suggestions[:limit]

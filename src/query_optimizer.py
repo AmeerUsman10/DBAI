@@ -12,6 +12,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple, Any
 from difflib import SequenceMatcher
+from src.utils.atomic_write import atomic_write_json, atomic_read_json
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +30,7 @@ def _ensure_cache_dir():
 def _load_cache(cache_file: Path) -> Dict:
     """Load cache from file."""
     try:
-        if cache_file.exists():
-            with open(cache_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {}
+        return atomic_read_json(cache_file, default={})
     except Exception as e:
         logger.error(f"Error loading cache from {cache_file}: {e}")
         return {}
@@ -42,8 +40,7 @@ def _save_cache(cache_file: Path, data: Dict):
     """Save cache to file."""
     try:
         _ensure_cache_dir()
-        with open(cache_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        atomic_write_json(cache_file, data)
     except Exception as e:
         logger.error(f"Error saving cache to {cache_file}: {e}")
 
