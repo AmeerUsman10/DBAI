@@ -5,7 +5,7 @@
       "added_at": "2026-01-04T00:00:00",
       "usage_count": 0,
       "owner": "system",
-      "priority": 2,
+      "priority": 1,
       "status": "approved"
     },
     {
@@ -33,23 +33,39 @@
       "status": "approved"
     },
     {
+      "instruction": "CRITICAL FIX - GREIGE SUMMARY FORMULA ERROR: When user asks for 'greige summary' or 'greige total', ONLY sum the METER column. DO NOT multiply by AC_GWIDTH. CORRECT: SELECT SUM(METER) as 'Greige Total Meters', SUM(AMOUNT) as 'Greige Total PKR' FROM GreigeData. WRONG: SELECT SUM(AC_GWIDTH * METER) - this multiplies width by meters creating massive inflated numbers. WRONG: SELECT AC_GWIDTH * SUM(METER). Always just SUM(METER) independently.",
+      "added_at": "2026-01-09T13:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "TABLE SPECIFICITY - CRITICAL FOR AVOIDING MIX-UPS: When user says 'greige' specifically, query ONLY GreigeData table. When user says 'yarn' specifically, query ONLY YarnData table. WRONG: Querying YarnData when user said 'greige total'. WRONG: Returning YarnData results for a 'greige' question. Always verify table choice matches user's explicit mention. If user says both, use separate queries or subqueries, NOT joins.",
+      "added_at": "2026-01-09T13:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "TOP SUPPLIERS BY ARRIVAL - CRITICAL MULTI-TABLE RULE: When user asks 'top suppliers by arrival', they want suppliers with ARRIVAL data from BOTH Yarn and Greige. You MUST use UNION to combine data. CORRECT: SELECT TOP 10 supplier_name, SUM(total_amount) as 'Total PKR', SUM(total_lbs) as 'Total LBS' FROM (SELECT supplier_name, AMOUNT as total_amount, LBS as total_lbs FROM YarnData WHERE ENTRY_TYPE='Yarn Arrival' UNION ALL SELECT supplier_name, AMOUNT, 0 FROM GreigeData WHERE ENTRY_TYPE='Greige Arrival') GROUP BY supplier_name ORDER BY SUM(total_amount) DESC. Result must show: supplier name, total amount, total LBS, and mention 'Combined Yarn + Greige Arrival data'.",
+      "added_at": "2026-01-09T13:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "SUPPLIER QUERIES - ALWAYS INCLUDE CONTEXT: When returning supplier data, ALWAYS include which table(s) the data comes from. Format results as: supplier_name | metric | source. Example: 'Abdul Sattar | 5,234 LBS | Yarn Arrival' or 'Abdul Sattar | 12,500 PKR | Combined Yarn+Greige'. In response, always state: 'This data combines arrivals from BOTH Yarn and Greige departments' or 'This shows only Yarn arrivals' - be explicit about source.",
+      "added_at": "2026-01-09T13:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
       "instruction": "For 'suppliers' related queries: ALWAYS include supplier name and ID. When asking about TOP suppliers, ORDER BY the relevant metric (value, quantity, count) DESCENDING and use TOP N. Include supplier context in results.",
-      "added_at": "2026-01-09T21:00:00Z",
-      "usage_count": 0,
-      "owner": "system",
-      "priority": 1,
-      "status": "approved"
-    },
-    {
-      "instruction": "For 'ARRIVAL' or 'incoming stock' queries: ARRIVAL refers to purchase orders and incoming inventory transactions. You MUST JOIN suppliers table with YarnData or inventory tables using ENTRY_TYPE='Yarn Arrival'. Always return: supplier name, arrival date, quantity, amount. Multiple related tables REQUIRES JOIN with correct supplier link.",
-      "added_at": "2026-01-09T21:00:00Z",
-      "usage_count": 0,
-      "owner": "system",
-      "priority": 1,
-      "status": "approved"
-    },
-    {
-      "instruction": "For inventory/stock queries: Clearly specify which columns come from which table in SELECT clause. Include supplier identification (supplier name, supplier ID). Format: SELECT supplier_name, entry_type, CONVERT(date, transaction_date) as date, SUM(LBS) as quantity. Show data from BOTH supplier AND transaction tables.",
       "added_at": "2026-01-09T21:00:00Z",
       "usage_count": 0,
       "owner": "system",
@@ -81,14 +97,6 @@
       "status": "approved"
     },
     {
-      "instruction": "For comparison queries: When comparing across tables or time periods, join ALL relevant tables in ONE query. Do NOT return partial data from one table and ignore related tables. Example: supplier comparison must include ALL supplier metrics and transaction details in one result set.",
-      "added_at": "2026-01-09T21:00:00Z",
-      "usage_count": 0,
-      "owner": "system",
-      "priority": 1,
-      "status": "approved"
-    },
-    {
       "instruction": "For TOP X results: Always include ORDER BY DESCENDING before TOP. Format: SELECT TOP 10 ... ORDER BY [metric_column] DESC. Order by the metric that determines 'top' (quantity, amount, count). Tie-breaking: add supplier name as secondary sort.",
       "added_at": "2026-01-09T21:00:00Z",
       "usage_count": 0,
@@ -103,11 +111,19 @@
       "owner": "system",
       "priority": 1,
       "status": "approved"
+    },
+    {
+      "instruction": "CLARIFICATION RESPONSE HANDLING: When user responds with a number (1, 2, 3, etc.) to a clarification prompt, use that to identify which option they chose. NEVER repeat the same clarification prompt back to them. Instead, execute the query for the selected option. If '1' is chosen, generate the SQL for option 1 and execute it immediately. If user provides ambiguous text, ask for clarification once - if they respond with a number, honor that selection.",
+      "added_at": "2026-01-09T13:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
     }
   ],
   "metadata": {
-    "total_rules": 12,
+    "total_rules": 14,
     "last_updated": "2026-01-09T21:00:00Z",
-    "version": "2.0-comprehensive"
+    "version": "3.0-critical-fixes"
   }
 }
