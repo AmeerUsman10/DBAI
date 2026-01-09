@@ -3,26 +3,111 @@
     {
       "instruction": "ALWAYS show units with numeric results. For yarn queries show LBS, for greige show Meters, for amounts show PKR. Format: '1,234,556 LBS' or '500,000 PKR'",
       "added_at": "2026-01-04T00:00:00",
-      "usage_count": 0
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
     },
     {
       "instruction": "CRITICAL SQL SYNTAX - NEVER USE JOIN FOR MULTI-DEPARTMENT QUERIES: When querying YarnData AND GreigeData together, use separate subqueries with ONE column each. CORRECT: SELECT (SELECT COUNT(*) FROM YarnData) as 'Yarn Count', (SELECT COUNT(*) FROM GreigeData) as 'Greige Count'. WRONG: Any JOIN between YarnData and GreigeData - this creates INFLATED COUNTS. Each department metric MUST be its own independent subquery. Each subquery returns EXACTLY ONE value. NO JOIN, NO UNION, NO FULL OUTER JOIN.",
       "added_at": "2026-01-04T11:40:00",
-      "usage_count": 0
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
     },
     {
       "instruction": "MOVEMENT TYPES: Database has 3 inventory movement types in ENTRY_TYPE column: 'Yarn Arrival' (incoming), 'Yarn Issue' (outgoing), 'Yarn Rejection' (returned). When filtering suppliers or generating totals, ALWAYS use WHERE ENTRY_TYPE = '<specific type>' if user specified arrival/issue/rejection. Never mix movement types in one query unless explicitly requested. Examples: WHERE ENTRY_TYPE = 'Yarn Arrival' for arrivals, WHERE ENTRY_TYPE = 'Yarn Issue' for issues.",
       "added_at": "2026-01-04T11:55:00",
-      "usage_count": 0
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
     },
     {
       "instruction": "SEGMENTING BY ENTRY TYPE: When user asks for 'all entry types' or 'breakdown by type' or 'each movement type', use GROUP BY ENTRY_TYPE to show separate rows. CORRECT: SELECT ENTRY_TYPE, SUM(LBS), SUM(AMOUNT) FROM YarnData GROUP BY ENTRY_TYPE. This shows Arrival, Issue, Rejection as separate rows. WRONG: Just summing everything without GROUP BY - that combines all types into one total.",
       "added_at": "2026-01-04T12:30:00",
-      "usage_count": 0
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "For 'suppliers' related queries: ALWAYS include supplier name and ID. When asking about TOP suppliers, ORDER BY the relevant metric (value, quantity, count) DESCENDING and use TOP N. Include supplier context in results.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "For 'ARRIVAL' or 'incoming stock' queries: ARRIVAL refers to purchase orders and incoming inventory transactions. You MUST JOIN suppliers table with YarnData or inventory tables using ENTRY_TYPE='Yarn Arrival'. Always return: supplier name, arrival date, quantity, amount. Multiple related tables REQUIRES JOIN with correct supplier link.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "For inventory/stock queries: Clearly specify which columns come from which table in SELECT clause. Include supplier identification (supplier name, supplier ID). Format: SELECT supplier_name, entry_type, CONVERT(date, transaction_date) as date, SUM(LBS) as quantity. Show data from BOTH supplier AND transaction tables.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "When aggregating data: Always use clear aliases that show units and source. For example: 'Total PKR' for amounts, 'Total Units' for quantities, 'Total LBS' for weights, 'Total Meters' for fabric. Never use cryptic abbreviations. Include data source in response explanation.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "For date filtering: Check schema for available date columns. Use the most relevant date for context (transaction_date, po_date, arrival_date, delivery_date). Include date ranges in WHERE clause. Always CONVERT date columns to date format if needed.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "For JOINs: Use INNER JOIN when both tables MUST match. Use LEFT JOIN only when you need unmatched records from the left table. Always specify join conditions explicitly (ON table1.id = table2.id). Verify relationships in schema before joining.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "For comparison queries: When comparing across tables or time periods, join ALL relevant tables in ONE query. Do NOT return partial data from one table and ignore related tables. Example: supplier comparison must include ALL supplier metrics and transaction details in one result set.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "For TOP X results: Always include ORDER BY DESCENDING before TOP. Format: SELECT TOP 10 ... ORDER BY [metric_column] DESC. Order by the metric that determines 'top' (quantity, amount, count). Tie-breaking: add supplier name as secondary sort.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "For GROUP BY queries: Every non-aggregated column in SELECT must be in GROUP BY. Do not mix aggregated (SUM, COUNT, AVG) and non-aggregated columns without GROUP BY. CORRECT: SELECT supplier_name, SUM(amount) FROM t GROUP BY supplier_name. WRONG: SELECT supplier_name, amount FROM t.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
     }
   ],
   "metadata": {
-    "total_rules": 4,
-    "last_updated": "2026-01-04T12:30:00"
+    "total_rules": 12,
+    "last_updated": "2026-01-09T21:00:00Z",
+    "version": "2.0-comprehensive"
   }
 }

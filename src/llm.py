@@ -195,8 +195,17 @@ CRITICAL INSTRUCTIONS - READ CAREFULLY:
 4. Use SQL Server syntax (MSSQL)
 5. Pay attention to the column metadata and business terms above
 6. Consider learned patterns from past queries
-7. Use appropriate JOINs if needed
+7. Use appropriate JOINs if needed - they are REQUIRED for multi-table answers
 8. Ensure the query is safe and doesn't modify data
+9. ALWAYS include supplier information when querying transactions/inventory
+10. When joining tables, verify relationship fields (supplier_id, transaction_id, etc.)
+
+MULTI-TABLE JOIN RULES (CRITICAL):
+- When user asks about SUPPLIERS + INVENTORY/TRANSACTIONS: Use INNER JOIN linking suppliers to transaction tables
+- Do NOT return supplier data without transaction details or vice versa
+- Use: SELECT supplier_name, [transaction_fields] FROM suppliers INNER JOIN YarnData ON suppliers.supplier_id = YarnData.supplier_id
+- Include ALL related columns from both tables in results, NOT just one table
+- When comparing or aggregating: Include source table identification in aliases
 
 CRITICAL - Column Naming Rules (MUST FOLLOW EXACTLY):
 You MUST use human-readable column aliases with units. DO NOT use names like 'TotalYarnWeight' or 'sum_amount'.
@@ -212,10 +221,17 @@ REQUIRED FORMAT for GREIGE/FABRIC queries (GreigeData table):
   - SUM(AMOUNT) as 'Greige Total PKR'
   - COUNT(*) as 'Greige Count'
 
+REQUIRED FORMAT for SUPPLIER QUERIES:
+  - Include 'supplier_name' or 'supplier_id' in SELECT
+  - Use aliases with source context: 'Total LBS from Supplier', 'Total PKR by Supplier'
+  - Add CONVERT(date, column_name) for date columns
+
 EXAMPLES - Copy this format EXACTLY:
-  ✅ CORRECT: SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData
+  ✅ CORRECT: SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData WHERE ENTRY_TYPE='Yarn Arrival'
+  ✅ CORRECT: SELECT TOP 10 supplier_name, SUM(amount) as 'Total PKR' FROM suppliers JOIN YarnData ON suppliers.supplier_id=YarnData.supplier_id GROUP BY supplier_name ORDER BY SUM(amount) DESC
   ❌ WRONG: SELECT SUM(LBS) as TotalYarnWeight FROM YarnData
   ❌ WRONG: SELECT SUM(LBS) as 'Total_LBS' FROM YarnData
+  ❌ WRONG: SELECT supplier_name FROM suppliers (without transaction data)
 
 SQL Query:"""
             
