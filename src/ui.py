@@ -3029,7 +3029,14 @@ Click the button below to automatically:
 
 Then just say **"testing done"** and the AI will review and help fix issues!
 """)
-                    auto_diag_btn = gr.Button("🚀 Capture & Analyze Everything", variant="primary", size="lg")
+                    col1, col2 = gr.Columns([3, 1])
+                    
+                    with col1:
+                        auto_diag_btn = gr.Button("🚀 Capture & Analyze Everything", variant="primary", size="lg")
+                    
+                    with col2:
+                        fresh_session_btn = gr.Button("🔄 Fresh Session", size="sm", variant="secondary")
+                    
                     auto_diag_output = gr.Markdown()
                     
                     def run_auto_diagnostics_ui():
@@ -3040,7 +3047,17 @@ Then just say **"testing done"** and the AI will review and help fix issues!
                         except Exception as e:
                             return f"❌ **Failed:** {str(e)}"
                     
+                    def clear_session():
+                        """Clear all resolved issues for fresh start."""
+                        try:
+                            from src.resolved_issues_tracker import clear_resolved_issues
+                            clear_resolved_issues()
+                            return "✅ **Fresh session started!**\n\nAll resolved issues cleared. Next diagnostics will show all findings again."
+                        except Exception as e:
+                            return f"❌ **Failed to clear session:** {str(e)}"
+                    
                     auto_diag_btn.click(run_auto_diagnostics_ui, outputs=auto_diag_output)
+                    fresh_session_btn.click(clear_session, outputs=auto_diag_output)
                 
                 gr.Markdown("---")
 

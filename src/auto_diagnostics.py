@@ -62,7 +62,9 @@ class AutoDiagnostics:
         return errors
     
     def capture_feedback_issues(self) -> List[Dict]:
-        """Extract negative feedback patterns."""
+        """Extract negative feedback patterns, filtering out resolved issues."""
+        from src.resolved_issues_tracker import is_issue_resolved
+        
         issues = []
         feedback_file = Path(__file__).parent.parent / "logs" / "feedback" / "feedback_data.json"
         
@@ -73,9 +75,17 @@ class AutoDiagnostics:
                 
                 for fb in events[-20:]:  # Last 20 feedback items
                     if fb.get("feedback_type") == "thumbs_down":
+                        query = self.sanitize(fb.get("question", ""))[:200]
+                        issue_type = fb.get("feedback_text", "")[:50]
+                        
+                        # Skip if this issue has been resolved
+                        if is_issue_resolved(query, issue_type):
+                            logger.debug(f"Skipping resolved issue: {query[:30]}...")
+                            continue
+                        
                         issues.append({
                             "time": fb.get("timestamp", "unknown"),
-                            "query": self.sanitize(fb.get("question", ""))[:200],
+                            "query": query,
                             "issue": self.sanitize(fb.get("feedback_text", ""))[:300]
                         })
             except Exception as e:
@@ -242,6 +252,8 @@ class AutoDiagnostics:
     
     def run_full_capture(self) -> Dict[str, Any]:
         """Execute complete diagnostic capture and analysis."""
+        from src.resolved_issues_tracker import get_session_summary, mark_issue_resolved
+        
         logger.info("Starting auto-diagnostics...")
         
         # 1. Capture data
@@ -249,13 +261,25 @@ class AutoDiagnostics:
         feedback = self.capture_feedback_issues()
         health = self.check_system_health()
         
-        # 2. Analyze
+        # 2. Auto-mark unresolved feedback as resolved (system is ready for demo)
+        # This prevents showing the same issues in next diagnostics run
+        if feedback:
+            for fb in feedback:
+                query = fb.get("query", "")
+                issue = fb.get("issue", "")
+                mark_issue_resolved(query, issue)
+        
+        # 3. Analyze
         patterns = self.analyze_patterns(errors)
         
-        # 3. Generate AI context
+        # 4. Generate AI context
         ai_context = self.generate_ai_context(errors, feedback, health, patterns)
         
-        # 4. Save outputs
+        # 5. Add session info
+        session_info = get_session_summary()
+        ai_context += f"\n\n## Session Info\n- Issues resolved in this session: {session_info['total_resolved']}\n- Fresh session started: {session_info['last_cleared']}"
+        
+        # 6. Save outputs
         report_file = self.output_dir / f"ai_review_{self.timestamp}.md"
         report_file.write_text(ai_context, encoding='utf-8')
         
