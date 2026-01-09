@@ -2981,6 +2981,34 @@ Return just the questions, one per line."""
             with gr.Tab("🛠️ Developer"):
                 gr.Markdown("## Developer Tools & Configuration")
                 gr.Markdown("Session monitoring, diagnostics, and observability settings.")
+                
+                # Auto-Diagnostics Section (Top Priority)
+                with gr.Accordion("🎯 One-Click Auto-Diagnostics", open=True):
+                    gr.Markdown("""
+**Capture everything for AI-assisted debugging and improvement**
+
+Click the button below to automatically:
+- ✅ Capture recent errors and issues
+- ✅ Analyze patterns and generate recommendations
+- ✅ Sanitize all sensitive data
+- ✅ Create AI-ready diagnostic report
+
+Then just say **"testing done"** and the AI will review and help fix issues!
+""")
+                    auto_diag_btn = gr.Button("🚀 Capture & Analyze Everything", variant="primary", size="lg")
+                    auto_diag_output = gr.Markdown()
+                    
+                    def run_auto_diagnostics_ui():
+                        """Wrapper for auto-diagnostics."""
+                        try:
+                            from src.auto_diagnostics import run_auto_diagnostics
+                            return run_auto_diagnostics()
+                        except Exception as e:
+                            return f"❌ **Failed:** {str(e)}"
+                    
+                    auto_diag_btn.click(run_auto_diagnostics_ui, outputs=auto_diag_output)
+                
+                gr.Markdown("---")
 
                 with gr.Row():
                     env_status = gr.Markdown("Loading environment status...")
