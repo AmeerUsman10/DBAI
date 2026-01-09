@@ -356,6 +356,61 @@ class ReportTemplateManager:
         """Create some default templates for demonstration"""
         defaults = [
             ReportTemplate(
+                name="GreigeData Overview",
+                description="Overview of GreigeData by supplier with date and type filtering",
+                sql_template=(
+                    "SELECT SUPP_NAME, DATEPART(month, DOCDATE) AS Month, "
+                    "SUM(METER) AS TotalMeter, SUM(AMOUNT) AS TotalAmount, "
+                    "AVG(PRICE) AS AvgPrice "
+                    "FROM [kam].[dbo].[GreigeData] "
+                    "WHERE DOCDATE BETWEEN '{start_date}' AND '{end_date}' "
+                    "{type_filter} "
+                    "GROUP BY SUPP_NAME, DATEPART(month, DOCDATE) "
+                    "ORDER BY TotalAmount DESC"
+                ),
+                parameters=[
+                    {"name": "start_date", "type": "date", "default": "2024-01-01"},
+                    {"name": "end_date", "type": "date", "default": "2025-12-31"},
+                    {"name": "type_filter", "type": "string", "default": ""}
+                ],
+                sample_questions=[
+                    "show griege overview by supplier this month",
+                    "griege arrival data from Jan to Mar 2025",
+                    "total griege amount by supplier",
+                    "griege data excluding rejections"
+                ],
+                category="GreigeData",
+                database_type="mssql"
+            ),
+            ReportTemplate(
+                name="YarnData Trend",
+                description="Yarndata trends across suppliers with date, type and top N filtering",
+                sql_template=(
+                    "SELECT TOP {top_n} SUPPLIER, DATEPART(year, DOCDATE) AS Year, "
+                    "DATEPART(month, DOCDATE) AS Month, "
+                    "SUM(LBS) AS TotalLBS, SUM(AMOUNT) AS TotalAmount "
+                    "FROM [kam].[dbo].[YarnData] "
+                    "WHERE DOCDATE >= '{start_date}' "
+                    "{type_filter} "
+                    "GROUP BY SUPPLIER, DATEPART(year, DOCDATE), DATEPART(month, DOCDATE) "
+                    "ORDER BY TotalAmount DESC"
+                ),
+                parameters=[
+                    {"name": "start_date", "type": "date", "default": "2024-01-01"},
+                    {"name": "top_n", "type": "int", "default": 10},
+                    {"name": "type_filter", "type": "string", "default": ""}
+                ],
+                sample_questions=[
+                    "show top 5 yarn suppliers by amount this month",
+                    "yarn issue data since Jan 2025",
+                    "total yarn in LBS by supplier",
+                    "yarn trends excluding arrivals",
+                    "top 10 yarn suppliers this year"
+                ],
+                category="YarnData",
+                database_type="mssql"
+            ),
+            ReportTemplate(
                 name="Top N Sales",
                 description="Get top N sales by amount",
                 sql_template="SELECT TOP {top_n} * FROM Sales ORDER BY Amount DESC",
