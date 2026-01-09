@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Tuple
+from src.utils.atomic_write import atomic_write_json, atomic_read_json
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +35,7 @@ def load_training_rules() -> Dict:
 def save_training_rules(rules_data: Dict) -> bool:
     """Save training rules."""
     try:
-        with open(TRAINING_FILE, 'w', encoding='utf-8') as f:
-            json.dump(rules_data, f, indent=2, ensure_ascii=False)
+        atomic_write_json(TRAINING_FILE, rules_data)
         return True
     except Exception as e:
         logger.error(f"Error saving training rules: {e}")
@@ -51,16 +51,11 @@ def _append_rule_audit(action: str, rule_index: int, details: Dict):
             "rule_index": rule_index,
             "details": details or {}
         }
-        data = []
-        if AUDIT_FILE.exists():
-            try:
-                with open(AUDIT_FILE, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-            except Exception:
-                data = []
+        data = atomic_read_json(AUDIT_FILE, default=[])
+        if data is None:
+            data = []
         data.append(event)
-        with open(AUDIT_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        atomic_write_json(AUDIT_FILE, data)
     except Exception:
         pass
 

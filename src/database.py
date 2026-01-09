@@ -14,12 +14,16 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from langchain_community.utilities import SQLDatabase
 from src.llm import validate_sql
+import re
 
 logger = logging.getLogger(__name__)
 
 # Global engine and database instances
 _engine: Optional[Engine] = None
 _sql_database: Optional[SQLDatabase] = None
+
+# Demo safety: maximum rows returned for SELECT queries
+MAX_SELECT_ROWS = 5000
 
 # Multi-database manager (lazy-loaded)
 _db_manager = None
@@ -225,25 +229,49 @@ def run_query(query: str) -> Tuple[bool, Any]:
         return False, "Database engine not available"
     
     try:
-        # Safety net: validate SQL here as well
+        # Preliminary safety checks for demo: allow only a single SELECT (or WITH ... SELECT) statement.
+        # Strip simple SQL comments (single-line -- and block /* */)
+        def _strip_comments(sql_text: str) -> str:
+            sql_text = re.sub(r"/\*.*?\*/", "", sql_text, flags=re.S)
+            sql_text = re.sub(r"--.*?$", "", sql_text, flags=re.M)
+            return sql_text
+
+        stripped = _strip_comments(query).strip()
+        # Split by semicolon and ensure only one non-empty statement
+        parts = [p.strip() for p in stripped.split(";") if p.strip()]
+        if len(parts) != 1:
+            logger.warning("Blocked multi-statement or empty SQL in run_query")
+            return False, "Only single-statement SELECT queries are allowed in the demo"
+
+        first = parts[0].lstrip()
+        if not re.match(r'^(WITH\b|SELECT\b)', first, flags=re.I):
+            logger.warning("Blocked non-SELECT statement in run_query")
+            return False, "Only SELECT queries are allowed in the demo"
+
+        # Additional validator (keeps legacy checks as well)
         is_valid, safety_msg = validate_sql(query)
         if not is_valid:
             logger.warning(f"Query blocked by safety validator in database.run_query: {safety_msg}")
             return False, f"Query blocked: {safety_msg}"
 
         with engine.connect() as conn:
-            result = conn.execute(text(query))
-            
-            # For SELECT queries, fetch all results
+            result = conn.execute(text(parts[0]))
+            # For SELECT queries, fetch up to MAX_SELECT_ROWS rows to avoid memory blowups
             if result.returns_rows:
-                rows = result.fetchall()
+                rows = result.fetchmany(MAX_SELECT_ROWS + 1)
                 columns = result.keys()
-                return True, {"columns": list(columns), "rows": [list(row) for row in rows]}
+                truncated = False
+                if len(rows) > MAX_SELECT_ROWS:
+                    truncated = True
+                    rows = rows[:MAX_SELECT_ROWS]
+                payload = {"columns": list(columns), "rows": [list(row) for row in rows]}
+                if truncated:
+                    payload["_truncated"] = True
+                return True, payload
             else:
-                # For INSERT, UPDATE, DELETE, etc.
                 conn.commit()
                 return True, {"message": f"Query executed successfully. Rows affected: {result.rowcount}"}
-                
+
     except Exception as e:
         error_msg = f"Query execution failed: {str(e)}"
         logger.error(error_msg, exc_info=True)

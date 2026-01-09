@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
+from src.utils.atomic_write import atomic_write_json, atomic_read_json
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -177,10 +178,7 @@ class CorrectionWorkflow:
                 req_id: req.to_dict()
                 for req_id, req in self._requests.items()
             }
-            
-            with open(self._storage_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            
+            atomic_write_json(self._storage_path, data)
             return True
         except Exception as e:
             logger.error(f"Failed to save correction requests: {e}")

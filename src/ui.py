@@ -11,6 +11,7 @@ import gradio as gr
 import yaml
 from pathlib import Path
 from dotenv import load_dotenv, set_key
+import copy
 
 from src.providers import create_provider
 from src.database import reload_engine, get_engine, run_query, get_sql_database, load_metadata, save_metadata
@@ -172,8 +173,23 @@ def save_config(config: dict) -> bool:
     config_path = Path(__file__).parent.parent / "config.yaml"
     
     try:
+        # Do not persist plaintext secrets in config for demo: mask DB password and keep it in process env
+        cfg_copy = dict(config)
+        db_cfg = cfg_copy.get('database', {})
+        passwd = db_cfg.get('password') if isinstance(db_cfg, dict) else None
+        if passwd:
+            try:
+                # Keep password only in process env for the demo session
+                os.environ['DBAI_DB_PASSWORD'] = str(passwd)
+            except Exception:
+                pass
+            # Mask the value written to config file
+            if isinstance(db_cfg, dict):
+                cfg_copy['database'] = dict(db_cfg)
+                cfg_copy['database']['password'] = '***REDACTED***'
+
         with open(config_path, 'w') as f:
-            yaml.dump(config, f, default_flow_style=False)
+            yaml.dump(cfg_copy, f, default_flow_style=False)
         return True
     except Exception as e:
         logger.error(f"Error saving config: {e}")
@@ -1215,6 +1231,49 @@ Keep it concise and factual."""
         history.append({"role": "assistant", "content": response})
         return "", history, message_id, response
 
+
+def session_chat_query(question: str, history: List, persona: str, session_state: dict):
+    """Wrapper to provide per-session isolation for globals during chat handling.
+
+    The wrapper copies relevant session-scoped variables into module globals,
+    calls the main `chat_query`, and then writes the updated globals back
+    into the session_state object for persistence.
+    """
+    global pending_clarification, session_tokens, last_query_info, last_query_result_data, training_mode_enabled, auto_chart_enabled
+
+    # Initialize session container
+    s = session_state or {}
+
+    # Load session values into globals (use shallow copy to avoid aliasing)
+    try:
+        pending_clarification = copy.deepcopy(s.get("pending_clarification", pending_clarification))
+        session_tokens = copy.deepcopy(s.get("session_tokens", session_tokens))
+        last_query_info = copy.deepcopy(s.get("last_query_info", last_query_info))
+        last_query_result_data = s.get("last_query_result_data", last_query_result_data)
+        training_mode_enabled = s.get("training_mode_enabled", training_mode_enabled)
+        auto_chart_enabled = s.get("auto_chart_enabled", auto_chart_enabled)
+    except Exception:
+        # If anything goes wrong, proceed with existing globals
+        pass
+
+    # Call the primary chat handler
+    input_val, updated_history, message_id, response_text = chat_query(question, history, persona)
+
+    # Persist back into session_state
+    try:
+        new_state = {
+            "pending_clarification": copy.deepcopy(pending_clarification),
+            "session_tokens": copy.deepcopy(session_tokens),
+            "last_query_info": copy.deepcopy(last_query_info),
+            "last_query_result_data": last_query_result_data,
+            "training_mode_enabled": training_mode_enabled,
+            "auto_chart_enabled": auto_chart_enabled
+        }
+    except Exception:
+        new_state = session_state or {}
+
+    return input_val, updated_history, message_id, response_text, new_state
+
 # Settings Tab Functions
 def get_available_models(provider: str) -> List[str]:
     """Get available models for the selected provider."""
@@ -1578,15 +1637,16 @@ def build_ui():
                 is_running = gr.State(False)
                 current_message_id = gr.State("")
                 last_response_text = gr.State("")
+                session_state = gr.State({})
                 
                 # Handle button click
                 send_stop_btn.click(
                     lambda: (gr.update(value="⏹ Stop", variant="stop"), True),
                     outputs=[send_stop_btn, is_running]
                 ).then(
-                    chat_query,
-                    inputs=[question_input, chatbot, persona_selector],
-                    outputs=[question_input, chatbot, current_message_id, last_response_text]
+                    session_chat_query,
+                    inputs=[question_input, chatbot, persona_selector, session_state],
+                    outputs=[question_input, chatbot, current_message_id, last_response_text, session_state]
                 ).then(
                     lambda: (False, gr.update(value="Send ▶", variant="primary")),
                     outputs=[is_running, send_stop_btn]
@@ -1596,9 +1656,9 @@ def build_ui():
                     lambda: (gr.update(value="⏹ Stop", variant="stop"), True),
                     outputs=[send_stop_btn, is_running]
                 ).then(
-                    chat_query,
-                    inputs=[question_input, chatbot, persona_selector],
-                    outputs=[question_input, chatbot, current_message_id, last_response_text]
+                    session_chat_query,
+                    inputs=[question_input, chatbot, persona_selector, session_state],
+                    outputs=[question_input, chatbot, current_message_id, last_response_text, session_state]
                 ).then(
                     lambda: (False, gr.update(value="Send ▶", variant="primary")),
                     outputs=[is_running, send_stop_btn]

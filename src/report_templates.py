@@ -12,6 +12,7 @@ from datetime import datetime
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
+from src.utils.atomic_write import atomic_write_json, atomic_read_json
 
 logger = logging.getLogger(__name__)
 
@@ -345,10 +346,7 @@ class ReportTemplateManager:
                 tid: t.to_dict()
                 for tid, t in self._templates.items()
             }
-            
-            with open(self._storage_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            
+            atomic_write_json(self._storage_path, data)
             return True
         except Exception as e:
             logger.error(f"Failed to save templates: {e}")
