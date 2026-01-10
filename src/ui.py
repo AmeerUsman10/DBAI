@@ -5,6 +5,7 @@ Provides a multi-tab interface for chat, settings, training, data import, and di
 import logging
 import os
 import io
+import uuid
 from typing import List, Optional, Tuple
 from datetime import datetime
 import gradio as gr
@@ -27,9 +28,12 @@ from src.session_tracker import get_session_tracker, reset_session_tracker
 from src.query_classifier import classify_query, needs_movement_clarification, get_clarification_for_classification
 from src.query_templates import generate_sql_from_template
 from src.feedback import save_feedback, get_feedback_statistics, format_feedback_for_display, get_recent_feedback, format_recent_feedback, get_rule_suggestions
+from src.training_module import (
+    get_training_manager, TrainingExample, CATEGORY_OPTIONS, COMPLEXITY_LEVELS
+)
 
 # Version tracking - increment by 5 for each significant update
-UI_BUILD_VERSION = 25
+UI_BUILD_VERSION = 26
 from src.dev_notes import load_notes, save_notes, add_quick_note, get_notes_preview
 from src.query_optimizer import (
     cache_query_result, get_cached_result, cache_sql_generation, get_cached_sql,
@@ -3010,6 +3014,450 @@ Return just the questions, one per line."""
                         )
                         demo.load(_load_domain_stats, outputs=[domain_stats_md])
                         demo.load(_load_entities, outputs=[entity_list_md])
+            
+            # Data Training Module Tab
+            with gr.Tab("🎯 Data Training Module"):
+                gr.Markdown("""
+## Knowledge Capture System
+Map business questions to MSSQL/Oracle SQL with complete reasoning and metadata.
+This is not model training—it's a living knowledge base that captures how users talk about data.
+""")
+                
+                with gr.Tabs():
+                    # Example Editor
+                    with gr.Tab("✏️ Example Editor"):
+                        with gr.Row():
+                            with gr.Column(scale=2):
+                                tm_question = gr.Textbox(
+                                    label="Business Question",
+                                    placeholder="Show me the top 5 products by revenue last month",
+                                    lines=2
+                                )
+                                tm_schema = gr.Textbox(
+                                    label="Schema Context (Tables & Columns)",
+                                    placeholder="Products (product_id, product_name, price)\nSales (sale_id, product_id, quantity, sale_date, revenue)",
+                                    lines=4
+                                )
+                                tm_assumptions = gr.Textbox(
+                                    label="Assumptions & Ambiguity Resolution",
+                                    placeholder="'Revenue' means gross revenue (not net). 'Last month' means previous calendar month. 'Top 5' ordered by total revenue descending.",
+                                    lines=3
+                                )
+                                
+                                with gr.Row():
+                                    tm_categories = gr.Dropdown(
+                                        label="Categories (select multiple)",
+                                        choices=CATEGORY_OPTIONS,
+                                        multiselect=True,
+                                        value=[]
+                                    )
+                                    tm_complexity = gr.Dropdown(
+                                        label="Complexity",
+                                        choices=COMPLEXITY_LEVELS,
+                                        value="intermediate"
+                                    )
+                                
+                                with gr.Row():
+                                    tm_processing = gr.Radio(
+                                        label="Processing Type",
+                                        choices=["sql_only", "sql_plus_postprocessing"],
+                                        value="sql_only"
+                                    )
+                                    tm_priority = gr.Slider(
+                                        label="Priority (1-5)",
+                                        minimum=1,
+                                        maximum=5,
+                                        value=3,
+                                        step=1
+                                    )
+                            
+                            with gr.Column(scale=1):
+                                tm_example_id = gr.Textbox(label="Example ID (auto-generated)", interactive=False)
+                                tm_version = gr.Textbox(label="Version", value="1", interactive=False)
+                                tm_validated = gr.Checkbox(label="Validated", value=False)
+                                
+                                gr.Markdown("### Actions")
+                                tm_save_btn = gr.Button("💾 Save Example", variant="primary", size="lg")
+                                tm_new_btn = gr.Button("📄 New Example", size="sm")
+                                tm_delete_btn = gr.Button("🗑️ Delete", size="sm", variant="stop")
+                        
+                        # Dual Engine Outputs
+                        gr.Markdown("### SQL Outputs (Side-by-Side)")
+                        with gr.Row():
+                            with gr.Column():
+                                gr.Markdown("#### MSSQL")
+                                tm_mssql_query = gr.Code(
+                                    label="MSSQL Query",
+                                    language="sql",
+                                    lines=8
+                                )
+                                tm_mssql_explanation = gr.Textbox(
+                                    label="Explanation",
+                                    placeholder="Why this query works for MSSQL...",
+                                    lines=3
+                                )
+                            
+                            with gr.Column():
+                                gr.Markdown("#### Oracle")
+                                tm_oracle_query = gr.Code(
+                                    label="Oracle Query",
+                                    language="sql",
+                                    lines=8
+                                )
+                                tm_oracle_explanation = gr.Textbox(
+                                    label="Explanation",
+                                    placeholder="Why this query works for Oracle...",
+                                    lines=3
+                                )
+                        
+                        tm_save_status = gr.Markdown()
+                        
+                        # Save example logic
+                        def save_training_example(question, schema, assumptions, categories, complexity,
+                                                 processing, priority, mssql_q, mssql_exp, oracle_q, oracle_exp,
+                                                 example_id, validated):
+                            if not question or not schema:
+                                return "❌ Question and Schema are required!"
+                            
+                            if not mssql_q and not oracle_q:
+                                return "❌ At least one SQL query (MSSQL or Oracle) is required!"
+                            
+                            manager = get_training_manager()
+                            
+                            if not example_id:
+                                example_id = str(uuid.uuid4())[:8]
+                            
+                            example = TrainingExample(
+                                id=example_id,
+                                question=question,
+                                schema_context=schema,
+                                mssql_query=mssql_q or "",
+                                mssql_explanation=mssql_exp or "",
+                                oracle_query=oracle_q or "",
+                                oracle_explanation=oracle_exp or "",
+                                categories=categories or [],
+                                complexity=complexity,
+                                assumptions=assumptions or "",
+                                processing_type=processing,
+                                created_at=datetime.now().isoformat(),
+                                updated_at=datetime.now().isoformat(),
+                                version=1,
+                                priority=int(priority),
+                                validated=validated
+                            )
+                            
+                            saved_id = manager.add_example(example)
+                            return f"✅ **Saved!** Example ID: `{saved_id}` (Version {example.version})"
+                        
+                        def clear_example_form():
+                            return ["", "", "", [], "intermediate", "sql_only", 3, "", "", "", "", "", "", 1, False, ""]
+                        
+                        def delete_training_example(example_id):
+                            if not example_id:
+                                return "❌ No example selected to delete!"
+                            
+                            manager = get_training_manager()
+                            if manager.delete_example(example_id):
+                                return f"✅ Deleted example `{example_id}`"
+                            return f"❌ Example `{example_id}` not found!"
+                        
+                        tm_save_btn.click(
+                            save_training_example,
+                            inputs=[tm_question, tm_schema, tm_assumptions, tm_categories, tm_complexity,
+                                   tm_processing, tm_priority, tm_mssql_query, tm_mssql_explanation,
+                                   tm_oracle_query, tm_oracle_explanation, tm_example_id, tm_validated],
+                            outputs=[tm_save_status]
+                        )
+                        
+                        tm_new_btn.click(
+                            clear_example_form,
+                            outputs=[tm_question, tm_schema, tm_assumptions, tm_categories, tm_complexity,
+                                    tm_processing, tm_priority, tm_mssql_query, tm_mssql_explanation,
+                                    tm_oracle_query, tm_oracle_explanation, tm_example_id, tm_version,
+                                    tm_validated, tm_save_status]
+                        )
+                        
+                        tm_delete_btn.click(
+                            delete_training_example,
+                            inputs=[tm_example_id],
+                            outputs=[tm_save_status]
+                        )
+                    
+                    # Query Ingestion & Review
+                    with gr.Tab("📥 Query Review"):
+                        gr.Markdown("""
+### Review Queries from User Interactions
+Queries captured from the Chat tab appear here for review. Fix the SQL and save as canonical examples.
+""")
+                        
+                        tm_review_refresh_btn = gr.Button("🔄 Load Pending Reviews", variant="primary")
+                        tm_review_list = gr.Dropdown(label="Pending Reviews", choices=[], interactive=True)
+                        
+                        with gr.Row():
+                            with gr.Column():
+                                tm_review_question = gr.Textbox(label="Original Question", interactive=False)
+                                tm_review_schema = gr.Textbox(label="Schema Used", interactive=False, lines=3)
+                                tm_review_ai_response = gr.Code(label="AI Generated SQL", language="sql", interactive=False)
+                                tm_review_feedback = gr.Textbox(label="User Feedback", interactive=False)
+                                tm_review_correction = gr.Textbox(label="User Correction", interactive=False, lines=2)
+                            
+                            with gr.Column():
+                                gr.Markdown("### Convert to Training Example")
+                                tm_review_to_example_btn = gr.Button("✅ Convert to Example", variant="primary")
+                                tm_review_skip_btn = gr.Button("⏭️ Mark Reviewed (Skip)", variant="secondary")
+                        
+                        tm_review_status = gr.Markdown()
+                        
+                        def load_pending_reviews():
+                            manager = get_training_manager()
+                            pending = manager.get_ingested_for_review()
+                            
+                            if not pending:
+                                return gr.Dropdown(choices=[], value=None), "No pending reviews."
+                            
+                            choices = [f"{q.id}: {q.question[:50]}..." for q in pending]
+                            return gr.Dropdown(choices=choices, value=choices[0] if choices else None), f"Found {len(pending)} pending reviews."
+                        
+                        def show_review_details(selected):
+                            if not selected:
+                                return "", "", "", "", ""
+                            
+                            query_id = selected.split(":")[0]
+                            manager = get_training_manager()
+                            query = manager.ingested.get(query_id)
+                            
+                            if not query:
+                                return "", "", "", "", ""
+                            
+                            ai_sql = query.ai_response.get("result", "") if isinstance(query.ai_response, dict) else str(query.ai_response)
+                            
+                            return (
+                                query.question,
+                                query.schema_used,
+                                ai_sql,
+                                query.user_feedback,
+                                query.user_correction or ""
+                            )
+                        
+                        def mark_reviewed_skip(selected):
+                            if not selected:
+                                return "❌ No query selected!"
+                            
+                            query_id = selected.split(":")[0]
+                            manager = get_training_manager()
+                            manager.mark_reviewed(query_id)
+                            return f"✅ Marked `{query_id}` as reviewed."
+                        
+                        tm_review_refresh_btn.click(
+                            load_pending_reviews,
+                            outputs=[tm_review_list, tm_review_status]
+                        )
+                        
+                        tm_review_list.change(
+                            show_review_details,
+                            inputs=[tm_review_list],
+                            outputs=[tm_review_question, tm_review_schema, tm_review_ai_response,
+                                    tm_review_feedback, tm_review_correction]
+                        )
+                        
+                        tm_review_skip_btn.click(
+                            mark_reviewed_skip,
+                            inputs=[tm_review_list],
+                            outputs=[tm_review_status]
+                        )
+                    
+                    # Coverage & Stats
+                    with gr.Tab("📊 Coverage"):
+                        gr.Markdown("### Training Data Coverage Analysis")
+                        
+                        tm_coverage_refresh_btn = gr.Button("🔄 Refresh Stats", variant="primary")
+                        tm_coverage_display = gr.Markdown()
+                        
+                        def show_coverage_stats():
+                            manager = get_training_manager()
+                            stats = manager.get_coverage_stats()
+                            
+                            output = f"""
+## Coverage Statistics
+
+**Total Examples:** {stats['total_examples']}  
+**Validated:** {stats['validated']}  
+**Pending Review:** {stats['needs_review']}
+
+### By Category
+"""
+                            for cat, count in sorted(stats['by_category'].items(), key=lambda x: x[1], reverse=True):
+                                output += f"- **{cat}**: {count}\n"
+                            
+                            output += "\n### By Complexity\n"
+                            for complexity, count in sorted(stats['by_complexity'].items()):
+                                output += f"- **{complexity}**: {count}\n"
+                            
+                            output += "\n### By Engine Coverage\n"
+                            output += f"- **Both MSSQL & Oracle**: {stats['by_engine']['both']}\n"
+                            output += f"- **MSSQL only**: {stats['by_engine']['mssql']}\n"
+                            output += f"- **Oracle only**: {stats['by_engine']['oracle']}\n"
+                            
+                            output += "\n### By Priority\n"
+                            for priority in sorted(stats['by_priority'].keys(), reverse=True):
+                                output += f"- **Priority {priority}**: {stats['by_priority'][priority]}\n"
+                            
+                            # Coverage gaps
+                            output += "\n### 🚨 Coverage Gaps\n"
+                            missing_categories = [cat for cat in CATEGORY_OPTIONS if cat not in stats['by_category']]
+                            if missing_categories:
+                                output += "**Missing categories:**\n"
+                                for cat in missing_categories:
+                                    output += f"- {cat}\n"
+                            else:
+                                output += "✅ All categories have at least one example!\n"
+                            
+                            return output
+                        
+                        tm_coverage_refresh_btn.click(
+                            show_coverage_stats,
+                            outputs=[tm_coverage_display]
+                        )
+                    
+                    # Regression Testing
+                    with gr.Tab("🧪 Regression Tests"):
+                        gr.Markdown("""
+### Validate AI Against Canonical Examples
+Run test questions and compare AI output against your saved training examples.
+""")
+                        
+                        tm_test_questions = gr.Textbox(
+                            label="Test Questions (one per line)",
+                            placeholder="Show me top 5 products by revenue\nWhat are the monthly sales totals?",
+                            lines=6
+                        )
+                        tm_run_tests_btn = gr.Button("▶️ Run Regression Tests", variant="primary", size="lg")
+                        tm_test_results = gr.Markdown()
+                        
+                        def run_regression_tests(questions_text):
+                            if not questions_text.strip():
+                                return "❌ Please enter test questions!"
+                            
+                            questions = [q.strip() for q in questions_text.split('\n') if q.strip()]
+                            manager = get_training_manager()
+                            results = manager.run_regression_test(questions)
+                            
+                            output = f"""
+## Regression Test Results
+
+**Total Tests:** {results['total_tests']}  
+**Passed:** {results['passed']} ✅  
+**Failed:** {results['failed']} ❌
+
+### Details
+"""
+                            for detail in results['details']:
+                                status = "✅ PASS" if detail.get('passed') else "❌ FAIL"
+                                output += f"\n#### {status}: {detail['question']} ({detail['engine']})\n"
+                                
+                                if 'error' in detail:
+                                    output += f"**Error:** {detail['error']}\n"
+                                elif not detail.get('passed'):
+                                    output += f"**Expected:**\n```sql\n{detail.get('expected', '')}\n```\n"
+                                    output += f"**Generated:**\n```sql\n{detail.get('generated', '')}\n```\n"
+                            
+                            return output
+                        
+                        tm_run_tests_btn.click(
+                            run_regression_tests,
+                            inputs=[tm_test_questions],
+                            outputs=[tm_test_results]
+                        )
+                    
+                    # Browse & Search
+                    with gr.Tab("🔍 Browse Examples"):
+                        gr.Markdown("### Search and Browse Training Examples")
+                        
+                        with gr.Row():
+                            tm_search_query = gr.Textbox(label="Search", placeholder="Enter keywords...")
+                            tm_search_btn = gr.Button("🔍 Search", variant="primary")
+                        
+                        with gr.Row():
+                            tm_filter_category = gr.Dropdown(label="Filter by Category", choices=["All"] + CATEGORY_OPTIONS, value="All")
+                            tm_filter_complexity = gr.Dropdown(label="Filter by Complexity", choices=["All"] + COMPLEXITY_LEVELS, value="All")
+                        
+                        tm_examples_list = gr.Dropdown(label="Examples", choices=[], interactive=True)
+                        tm_load_example_btn = gr.Button("📂 Load Selected Example")
+                        
+                        tm_browse_status = gr.Markdown()
+                        
+                        def search_and_filter(query, category, complexity):
+                            manager = get_training_manager()
+                            
+                            if query.strip():
+                                examples = manager.search_examples(query)
+                            else:
+                                cat_filter = None if category == "All" else category
+                                comp_filter = None if complexity == "All" else complexity
+                                examples = manager.list_examples(category=cat_filter, complexity=comp_filter)
+                            
+                            if not examples:
+                                return gr.Dropdown(choices=[], value=None), f"No examples found."
+                            
+                            choices = [f"{e.id}: {e.question[:60]}..." for e in examples]
+                            return gr.Dropdown(choices=choices, value=choices[0] if choices else None), f"Found {len(examples)} examples."
+                        
+                        def load_selected_example(selected):
+                            if not selected:
+                                return [""] * 14 + ["Loaded example"]
+                            
+                            example_id = selected.split(":")[0]
+                            manager = get_training_manager()
+                            example = manager.get_example(example_id)
+                            
+                            if not example:
+                                return [""] * 14 + ["Example not found"]
+                            
+                            # Return values for all fields
+                            return [
+                                example.question,
+                                example.schema_context,
+                                example.assumptions,
+                                example.categories,
+                                example.complexity,
+                                example.processing_type,
+                                example.priority,
+                                example.mssql_query,
+                                example.mssql_explanation,
+                                example.oracle_query,
+                                example.oracle_explanation,
+                                example.id,
+                                str(example.version),
+                                example.validated,
+                                f"Loaded example `{example.id}` (v{example.version})"
+                            ]
+                        
+                        tm_search_btn.click(
+                            search_and_filter,
+                            inputs=[tm_search_query, tm_filter_category, tm_filter_complexity],
+                            outputs=[tm_examples_list, tm_browse_status]
+                        )
+                        
+                        tm_filter_category.change(
+                            search_and_filter,
+                            inputs=[tm_search_query, tm_filter_category, tm_filter_complexity],
+                            outputs=[tm_examples_list, tm_browse_status]
+                        )
+                        
+                        tm_filter_complexity.change(
+                            search_and_filter,
+                            inputs=[tm_search_query, tm_filter_category, tm_filter_complexity],
+                            outputs=[tm_examples_list, tm_browse_status]
+                        )
+                        
+                        tm_load_example_btn.click(
+                            load_selected_example,
+                            inputs=[tm_examples_list],
+                            outputs=[tm_question, tm_schema, tm_assumptions, tm_categories, tm_complexity,
+                                    tm_processing, tm_priority, tm_mssql_query, tm_mssql_explanation,
+                                    tm_oracle_query, tm_oracle_explanation, tm_example_id, tm_version,
+                                    tm_validated, tm_save_status]
+                        )
             
             # Developer Tab (merged from Developer Tools + Developer Settings)
             with gr.Tab("🛠️ Developer"):

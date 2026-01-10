@@ -65,8 +65,7 @@ def main():
             server_name="127.0.0.1",
             server_port=7860,
             share=False,
-            show_error=True,
-            theme=gr.themes.Default()
+            show_error=True
         )
     except Exception as e:
         logging.error(f"Failed to start application: {e}", exc_info=True)
