@@ -3477,13 +3477,11 @@ Click the button below to automatically:
 
 Then just say **"testing done"** and the AI will review and help fix issues!
 """)
-                    col1, col2 = gr.Columns([3, 1])
-                    
-                    with col1:
-                        auto_diag_btn = gr.Button("🚀 Capture & Analyze Everything", variant="primary", size="lg")
-                    
-                    with col2:
-                        fresh_session_btn = gr.Button("🔄 Fresh Session", size="sm", variant="secondary")
+                    with gr.Row():
+                        with gr.Column(scale=3):
+                            auto_diag_btn = gr.Button("🚀 Capture & Analyze Everything", variant="primary", size="lg")
+                        with gr.Column(scale=1):
+                            fresh_session_btn = gr.Button("🔄 Fresh Session", size="sm", variant="secondary")
                     
                     auto_diag_output = gr.Markdown()
                     
