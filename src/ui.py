@@ -3399,318 +3399,88 @@ Run test questions and compare AI output against your saved training examples.
                                     tm_validated, tm_save_status]
                         )
             
-            # Developer Tab (merged from Developer Tools + Developer Settings)
+                    # Developer Tab Functions
+                    def export_session_report():
+                        """Export session report for quick Copilot sharing."""
+                        try:
+                            tracker = get_session_tracker()
+                            report_path = tracker.export_for_copilot()
+                            if report_path:
+                                return (
+                                    f"✅ **Session Report Exported**\n\nFile: `{report_path}`\n\nDownload below and share with Copilot for analysis.",
+                                    report_path,
+                                    gr.update(visible=True)
+                                )
+                            else:
+                                return "❌ Export failed", None, gr.update(visible=False)
+                        except Exception as e:
+                            return f"❌ Error: {str(e)}", None, gr.update(visible=False)
+                    
+                    def collect_full_diagnostics():
+                        """Collect comprehensive diagnostic bundle."""
+                        try:
+                            from src.diagnostics import collect_full_session_bundle
+                            bundle_path = collect_full_session_bundle(include_sensitive=True)
+                            if bundle_path:
+                                return (
+                                    f"✅ **Diagnostic Bundle Created**\n\nBundle: `{bundle_path}`\n\nIncludes: session data, logs, config, training rules, DB snapshot, environment info.",
+                                    bundle_path,
+                                    gr.update(visible=True)
+                                )
+                            else:
+                                # Fallback to basic diagnostics
+                                from src.diagnostics import collect_diagnostics
+                                basic_path = collect_diagnostics()
+                                return (
+                                    f"⚠️ **Basic Diagnostics Collected**\n\nFile: `{basic_path}`\n\n(Full bundle unavailable, using text report)",
+                                    basic_path,
+                                    gr.update(visible=True)
+                                )
+                        except Exception as e:
+                            return f"❌ Error: {str(e)}", None, gr.update(visible=False)
+            
+            # Developer Tab (Simplified)
             with gr.Tab("🛠️ Developer"):
-                gr.Markdown("## Developer Tools & Configuration")
-                gr.Markdown("Session monitoring, diagnostics, and observability settings.")
-                
-                # Auto-Diagnostics Section (Top Priority)
-                with gr.Accordion("🎯 One-Click Auto-Diagnostics", open=True):
+                gr.Markdown("## Developer Tools")
+                gr.Markdown("Quick diagnostics and system monitoring.")
+
+                # Main Diagnostics Section
+                with gr.Accordion("🎯 Auto-Diagnostics", open=True):
                     gr.Markdown("""
-**Capture everything for AI-assisted debugging and improvement**
+**One-click diagnostics for AI-assisted debugging**
 
-Click the button below to automatically:
-- ✅ Capture recent errors and issues
-- ✅ Analyze patterns and generate recommendations
-- ✅ Sanitize all sensitive data
-- ✅ Create AI-ready diagnostic report
-
-Then just say **"testing done"** and the AI will review and help fix issues!
+Automatically captures errors, analyzes patterns, and generates recommendations.
 """)
                     with gr.Row():
-                        with gr.Column(scale=3):
-                            auto_diag_btn = gr.Button("🚀 Capture & Analyze Everything", variant="primary", size="lg")
-                        with gr.Column(scale=1):
-                            fresh_session_btn = gr.Button("🔄 Fresh Session", size="sm", variant="secondary")
-                    
-                    auto_diag_output = gr.Markdown()
-                    
-                    def run_auto_diagnostics_ui():
-                        """Wrapper for auto-diagnostics."""
-                        try:
-                            from src.auto_diagnostics import run_auto_diagnostics
-                            return run_auto_diagnostics()
-                        except Exception as e:
-                            return f"❌ **Failed:** {str(e)}"
-                    
-                    def clear_session():
-                        """Clear all resolved issues for fresh start."""
-                        try:
-                            from src.resolved_issues_tracker import clear_resolved_issues
-                            clear_resolved_issues()
-                            return "✅ **Fresh session started!**\n\nAll resolved issues cleared. Next diagnostics will show all findings again."
-                        except Exception as e:
-                            return f"❌ **Failed to clear session:** {str(e)}"
-                    
-                    auto_diag_btn.click(run_auto_diagnostics_ui, outputs=auto_diag_output)
-                    fresh_session_btn.click(clear_session, outputs=auto_diag_output)
-                
-                gr.Markdown("---")
+                        diag_btn = gr.Button("🚀 Run Diagnostics", variant="primary", size="lg")
+                        fresh_btn = gr.Button("🔄 Fresh Session", size="sm")
 
-                with gr.Row():
-                    env_status = gr.Markdown("Loading environment status...")
-                    refresh_env_btn = gr.Button("🔄 Refresh Status", size="sm")
+                    diag_output = gr.Markdown()
 
-                    def _env_status():
-                        try:
-                            # DB check
-                            db_ok = False
-                            db_msg = ""
-                            try:
-                                engine = get_engine()
-                                if engine:
-                                    db_ok = True
-                                    db_msg = "DB connected"
-                                else:
-                                    db_msg = "DB not connected"
-                            except Exception as e:
-                                db_msg = f"DB error: {e}"
+                    diag_btn.click(run_auto_diagnostics_ui, outputs=diag_output)
+                    fresh_btn.click(clear_session, outputs=diag_output)
 
-                            # LLM provider check
-                            llm_ok = False
-                            llm_msg = ""
-                            try:
-                                cfg = load_config()
-                                llm_cfg = cfg.get('llm', {})
-                                prov = create_provider(llm_cfg.get('provider','openai'))
-                                if prov:
-                                    llm_ok = True
-                                    llm_msg = f"Provider ready ({llm_cfg.get('provider','openai')})"
-                            except Exception as e:
-                                llm_msg = f"LLM error: {e}"
+                # Quick Status Section
+                with gr.Accordion("📊 System Status", open=False):
+                    status_display = gr.Markdown()
+                    refresh_btn = gr.Button("🔄 Refresh", size="sm")
 
-                            icon = lambda ok: "✅" if ok else "❌"
-                            return f"### Environment Status\n- {icon(db_ok)} Database: {db_msg}\n- {icon(llm_ok)} LLM: {llm_msg}"
-                        except Exception as e:
-                            return f"❌ Status error: {e}"
+                    refresh_btn.click(_env_status, outputs=status_display)
+                    demo.load(_env_status, outputs=status_display)
 
-                    refresh_env_btn.click(_env_status, outputs=[env_status])
-                    demo.load(_env_status, outputs=[env_status])
-                
-                # Sub-tab 1: Session & Cache
-                with gr.Tab("📊 Session & Cache"):
+                # Export Section
+                with gr.Accordion("📦 Export Data", open=False):
+                    gr.Markdown("Export session data for analysis or debugging.")
+
                     with gr.Row():
-                        with gr.Column(scale=1):
-                            gr.Markdown("### Session Summary")
-                            
-                            session_summary = gr.Markdown("Loading session data...")
-                            
-                            def get_current_session_summary():
-                                """Get current session summary."""
-                                try:
-                                    summary = session_tracker.get_session_summary()
-                                    
-                                    avg_time = summary.get('avg_response_time', 0)
-                                    avg_time_str = f"{avg_time:.0f}ms" if avg_time else 'N/A'
-                                    
-                                    output = f"""
-**Session ID:** `{summary['session_id']}`  
-**Duration:** {summary['duration_minutes']:.1f} minutes  
-**Total Queries:** {summary['total_queries']}  
-**Successful:** {summary['successful_queries']} ✅  
-**Failed:** {summary['failed_queries']} ❌  
-**Success Rate:** {summary['success_rate']:.1f}%  
-**Avg Response Time:** {avg_time_str}  
-**Training Events:** {summary['training_events']}  
-**Errors:** {summary['errors']}  
-"""
-                                    
-                                    recommendations = session_tracker._generate_recommendations()
-                                    if recommendations:
-                                        output += "\n### 💡 Recommendations\n"
-                                        for rec in recommendations:
-                                            output += f"- {rec}\n"
-                                    
-                                    return output
-                                except Exception as e:
-                                    return f"❌ Error: {str(e)}"
-                            
-                            # Cache Statistics Section
-                            gr.Markdown("---")
-                            gr.Markdown("### Cache Performance")
-                            cache_stats_display = gr.Markdown("Loading cache stats...")
-                            clear_cache_btn = gr.Button("🗑️ Clear All Cache", size="sm", variant="stop")
-                            cache_action_status = gr.Markdown("")
-                            
-                            def show_cache_stats():
-                                """Display cache performance statistics."""
-                                try:
-                                    stats = get_cache_stats()
-                                    
-                                    result_cache = stats.get('result_cache', {})
-                                    sql_cache = stats.get('sql_cache', {})
-                                    cache_size = stats.get('cache_size_mb', 0)
-                                    
-                                    output = "#### 💾 Result Cache\n"
-                                    output += f"**Cached Queries:** {result_cache.get('total_entries', 0)}\n\n"
-                                    output += f"**Cache Hits:** {result_cache.get('total_hits', 0)}\n\n"
-                                    
-                                    if result_cache.get('most_popular'):
-                                        output += f"**Most Popular:** {result_cache['most_popular'][:50]}... ({result_cache.get('most_popular_hits', 0)} hits)\n\n"
-                                    
-                                    output += "\n#### 🔤 SQL Cache\n"
-                                    output += f"**Cached SQL Queries:** {sql_cache.get('total_entries', 0)}\n\n"
-                                    output += f"**Reuse Count:** {sql_cache.get('total_reuses', 0)}\n\n"
-                                    
-                                    if sql_cache.get('most_reused'):
-                                        output += f"**Most Reused:** {sql_cache['most_reused'][:50]}... ({sql_cache.get('most_reused_count', 0)} reuses)\n\n"
-                                    
-                                    output += f"\n**Total Cache Size:** {cache_size:.2f} MB\n"
-                                    
-                                    # Calculate token savings estimate
-                                    total_hits = result_cache.get('total_hits', 0) + sql_cache.get('total_reuses', 0)
-                                    tokens_saved = total_hits * 50  # Estimate 50 tokens saved per hit
-                                    cost_saved = (tokens_saved / 1000) * 0.002  # $0.002 per 1K tokens
-                                    
-                                    output += f"\n#### 💰 Savings\n"
-                                    output += f"**Est. Tokens Saved:** ~{tokens_saved:,}\n\n"
-                                    output += f"**Est. Cost Saved:** ${cost_saved:.4f}\n"
-                                    
-                                    return output
-                                except Exception as e:
-                                    logger.error(f"Cache stats error: {e}")
-                                    return f"❌ Error: {str(e)}"
-                            
-                            def clear_cache_action():
-                                """Clear all cached data."""
-                                try:
-                                    success = clear_all_cache()
-                                    if success:
-                                        return "✅ Cache cleared successfully!"
-                                    return "❌ Failed to clear cache"
-                                except Exception as e:
-                                    return f"❌ Error: {str(e)}"
-                            
-                            clear_cache_btn.click(clear_cache_action, outputs=[cache_action_status])
-                            
-                            # Feedback Analytics Section
-                            gr.Markdown("---")
-                            gr.Markdown("### Feedback Analytics")
-                            
-                            feedback_stats_display = gr.Markdown("No feedback data yet.")
-                            recent_feedback_display = gr.Markdown("")
-                            
-                            def show_feedback_analytics():
-                                """Display feedback analytics."""
-                                try:
-                                    stats = get_feedback_statistics()
-                                    recent = get_recent_feedback(limit=5)
-                                    
-                                    stats_md = format_feedback_for_display(stats)
-                                    recent_md = format_recent_feedback(recent)
-                                    
-                                    return stats_md, recent_md
-                                except Exception as e:
-                                    logger.error(f"Feedback analytics error: {e}")
-                                    return f"❌ Error: {str(e)}", ""
-                            
-                            # Auto-load all session data on page load
-                            demo.load(get_current_session_summary, outputs=[session_summary])
-                            demo.load(show_cache_stats, outputs=[cache_stats_display])
-                            demo.load(show_feedback_analytics, outputs=[feedback_stats_display, recent_feedback_display])
-                
-                with gr.Tab("📦 Diagnostics & Export"):
-                    gr.Markdown("### Export Options")
-                    gr.Markdown("Choose the right export for your needs: Quick session report or comprehensive diagnostic bundle.")
-                    
-                    with gr.Row():
-                        with gr.Column(scale=1):
-                            gr.Markdown("#### � ONE-CLICK Export")
-                            gr.Markdown("**Full Diagnostic Bundle** in one button: Session + Queries + Rules + Logs + Env snapshot")
-                            oneclick_export_btn = gr.Button("🚀 Collect & Export Full Bundle", variant="primary", size="lg")
-                            oneclick_status = gr.Markdown("")
-                            oneclick_download = gr.File(label="Download Diagnostic Bundle", visible=False)
-                            
-                            def oneclick_collect_export():
-                                """One-click collect and export full diagnostic bundle."""
-                                try:
-                                    bundle_path = collect_full_session_bundle(include_sensitive=True)
-                                    if bundle_path and Path(bundle_path).exists():
-                                        return (
-                                            f"✅ **Bundle Ready!**\n\n📦 `{Path(bundle_path).name}`\n\n"
-                                            f"Includes: Session · Queries · Training Rules · Logs · Environment · Config",
-                                            bundle_path,
-                                            gr.update(visible=True)
-                                        )
-                                    return "❌ Failed to generate bundle", None, gr.update(visible=False)
-                                except Exception as e:
-                                    logger.error(f"Export error: {e}")
-                                    return f"❌ Error: {str(e)[:100]}", None, gr.update(visible=False)
-                            
-                            oneclick_export_btn.click(oneclick_collect_export, outputs=[oneclick_status, oneclick_download, oneclick_download])
-                    
-                    gr.Markdown("---")
-                    gr.Markdown("### Standard Export Options")
-                    
-                    with gr.Row():
-                        with gr.Column(scale=1):
-                            gr.Markdown("#### �📤 Session Report")
-                            gr.Markdown("Export current session for Copilot analysis (queries, errors, recommendations).")
-                            export_session_btn = gr.Button("📤 Export Session", variant="secondary", size="lg")
-                            export_status = gr.Markdown("")
-                            export_file_download = gr.File(label="Download Session Report", visible=False)
-                    
-                            def export_session_report():
-                                """Export session report for quick Copilot sharing."""
-                                try:
-                                    report_path = session_tracker.export_for_copilot()
-                                    if report_path:
-                                        return (
-                                            f"✅ **Session Report Exported**\n\nFile: `{report_path}`\n\nDownload below and share with Copilot for analysis.",
-                                            report_path,
-                                            gr.update(visible=True)
-                                        )
-                                    else:
-                                        return "❌ Export failed", None, gr.update(visible=False)
-                                except Exception as e:
-                                    return f"❌ Error: {str(e)}", None, gr.update(visible=False)
-                            
-                            export_session_btn.click(export_session_report, outputs=[export_status, export_file_download, export_file_download])
-                        
-                        with gr.Column(scale=1):
-                            gr.Markdown("#### 🔍 Full Diagnostic Bundle")
-                            gr.Markdown("Complete package: session + config + logs + training data + environment snapshot.")
-                            diagnostics_btn = gr.Button("🔍 Collect Full Diagnostics", variant="primary", size="lg")
-                            diagnostics_status = gr.Markdown("")
-                            diagnostics_download = gr.File(label="Download Diagnostics Bundle", visible=False)
-                            
-                            def collect_full_diagnostics():
-                                """Collect comprehensive diagnostic bundle."""
-                                try:
-                                    bundle_path = collect_full_session_bundle(include_sensitive=True)
-                                    if bundle_path:
-                                        return (
-                                            f"✅ **Diagnostic Bundle Created**\n\nBundle: `{bundle_path}`\n\nIncludes: session data, logs, config, training rules, DB snapshot, environment info.",
-                                            bundle_path,
-                                            gr.update(visible=True)
-                                        )
-                                    else:
-                                        # Fallback to basic diagnostics
-                                        basic_path = collect_diagnostics()
-                                        return (
-                                            f"⚠️ **Basic Diagnostics Collected**\n\nFile: `{basic_path}`\n\n(Full bundle unavailable, using text report)",
-                                            basic_path,
-                                            gr.update(visible=True)
-                                        )
-                                except Exception as e:
-                                    return f"❌ Error: {str(e)}", None, gr.update(visible=False)
-                            
-                            diagnostics_btn.click(collect_full_diagnostics, outputs=[diagnostics_status, diagnostics_download, diagnostics_download])
-                    
-                    gr.Markdown("---")
-                    gr.Markdown("### 💡 Usage Guide")
-                    gr.Markdown("""
-**When to use Session Report:**
-- Quick bug reports to Copilot
-- Sharing recent query issues
-- Performance questions
+                        session_export_btn = gr.Button("📤 Session Report", variant="secondary")
+                        full_export_btn = gr.Button("🔍 Full Diagnostics", variant="primary")
 
-**When to use Full Diagnostics:**
-- Connection/configuration problems
-- Training/learning issues  
-- System-wide debugging
-- Comprehensive troubleshooting
-""")
+                    export_status = gr.Markdown()
+                    export_file = gr.File(visible=False)
+
+                    session_export_btn.click(export_session_report, outputs=[export_status, export_file, export_file])
+                    full_export_btn.click(collect_full_diagnostics, outputs=[export_status, export_file, export_file])
 
     
     return demo
