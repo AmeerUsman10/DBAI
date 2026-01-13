@@ -21,7 +21,6 @@ from src.query_validator import validate_query_and_results, ResultsQualityChecke
 from src.telemetry import TelemetryLogger
 from src.uploader import process_excel_files, check_table_exists, import_dataframe_to_db
 from src.diagnostics import collect_diagnostics, collect_full_session_bundle
-from src.clarity import analyze_query_clarity, needs_clarification
 from src.learnings import save_learning, get_learning_stats
 from src.quick_training import add_training_rule, get_training_stats, format_rules_display, update_rule, delete_rule, load_training_rules
 from src.session_tracker import get_session_tracker, reset_session_tracker
@@ -34,7 +33,6 @@ from src.training_module import (
 
 # Version tracking - increment by 5 for each significant update
 UI_BUILD_VERSION = 26
-from src.dev_notes import load_notes, save_notes, add_quick_note, get_notes_preview
 from src.query_optimizer import (
     cache_query_result, get_cached_result, cache_sql_generation, get_cached_sql,
     get_cache_stats, clear_expired_cache, clear_all_cache
