@@ -19,16 +19,41 @@ def setup_logging():
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Console handler with Unicode-safe emit to avoid Windows cp1252 crashes
+    class SafeStreamHandler(logging.StreamHandler):
+        def emit(self, record):
+            try:
+                super().emit(record)
+            except UnicodeEncodeError:
+                # Formatting first to avoid relying on super() after encoding failure
+                try:
+                    msg = self.format(record)
+                except Exception:
+                    msg = str(record)
+                stream = self.stream
+                # Try writing with replacement for unencodable characters
+                try:
+                    stream.write(msg + self.terminator)
+                    stream.flush()
+                except Exception:
+                    try:
+                        safe_msg = msg.encode(getattr(stream, 'encoding', 'utf-8') or 'utf-8', errors='replace').decode(getattr(stream, 'encoding', 'utf-8') or 'utf-8', errors='replace')
+                        stream.write(safe_msg + self.terminator)
+                        stream.flush()
+                    except Exception:
+                        # Give up silently to avoid crashing the app due to logging
+                        pass
+
+    console_handler = SafeStreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
     
-    # Rotating file handler for diagnostics
+    # Rotating file handler for diagnostics (force UTF-8 encoding)
     file_handler = RotatingFileHandler(
         log_dir / "diagnostics.log",
         maxBytes=5*1024*1024,  # 5 MB
-        backupCount=3
+        backupCount=3,
+        encoding='utf-8'
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)

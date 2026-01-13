@@ -476,6 +476,9 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
     execution_data = None
     error_data = None
     
+    # Initialize multi-table intelligence system early
+    mti = None
+    
     # Check if this is a response to a clarification request (user typed a number 1-4)
     if pending_clarification["question"]:
         # Extract number from input like "1", "1.", "1)", "(1)", etc.
@@ -734,7 +737,7 @@ Your response:"""
             history.append({"role": "assistant", "content": response})
             return "", history, message_id, response
         
-        # Initialize multi-table intelligence system
+        # Initialize multi-table intelligence system (moved to top of function)
         try:
             mti = MultiTableIntelligence()
         except Exception as e:
