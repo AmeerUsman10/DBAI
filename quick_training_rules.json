@@ -1,0 +1,241 @@
+{
+  "rules": [
+    {
+      "instruction": "ALWAYS show units with numeric results. For yarn queries show LBS, for greige show Meters, for amounts show PKR. Format: '1,234,556 LBS' or '500,000 PKR'",
+      "added_at": "2026-01-04T00:00:00",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "CRITICAL SQL SYNTAX - NEVER USE JOIN FOR MULTI-DEPARTMENT QUERIES: When querying YarnData AND GreigeData together, use separate subqueries with ONE column each. CORRECT: SELECT (SELECT COUNT(*) FROM YarnData) as 'Yarn Count', (SELECT COUNT(*) FROM GreigeData) as 'Greige Count'. WRONG: Any JOIN between YarnData and GreigeData - this creates INFLATED COUNTS. Each department metric MUST be its own independent subquery. Each subquery returns EXACTLY ONE value. NO JOIN, NO UNION, NO FULL OUTER JOIN.",
+      "added_at": "2026-01-04T11:40:00",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "MOVEMENT TYPES: Database has 3 inventory movement types in ENTRY_TYPE column: 'Yarn Arrival' (incoming), 'Yarn Issue' (outgoing), 'Yarn Rejection' (returned). When filtering suppliers or generating totals, ALWAYS use WHERE ENTRY_TYPE = '<specific type>' if user specified arrival/issue/rejection. Never mix movement types in one query unless explicitly requested. Examples: WHERE ENTRY_TYPE = 'Yarn Arrival' for arrivals, WHERE ENTRY_TYPE = 'Yarn Issue' for issues.",
+      "added_at": "2026-01-04T11:55:00",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "SEGMENTING BY ENTRY TYPE: When user asks for 'all entry types' or 'breakdown by type' or 'each movement type', use GROUP BY ENTRY_TYPE to show separate rows. CORRECT: SELECT ENTRY_TYPE, SUM(LBS), SUM(AMOUNT) FROM YarnData GROUP BY ENTRY_TYPE. This shows Arrival, Issue, Rejection as separate rows. WRONG: Just summing everything without GROUP BY - that combines all types into one total.",
+      "added_at": "2026-01-04T12:30:00",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "CRITICAL FIX - GREIGE SUMMARY FORMULA ERROR: When user asks for 'greige summary' or 'greige total', ONLY sum the METER column. DO NOT multiply by AC_GWIDTH. CORRECT: SELECT SUM(METER) as 'Greige Total Meters', SUM(AMOUNT) as 'Greige Total PKR' FROM GreigeData. WRONG: SELECT SUM(AC_GWIDTH * METER) - this multiplies width by meters creating massive inflated numbers. WRONG: SELECT AC_GWIDTH * SUM(METER). Always just SUM(METER) independently.",
+      "added_at": "2026-01-09T13:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "TABLE SPECIFICITY - CRITICAL FOR AVOIDING MIX-UPS: When user says 'greige' specifically, query ONLY GreigeData table. When user says 'yarn' specifically, query ONLY YarnData table. WRONG: Querying YarnData when user said 'greige total'. WRONG: Returning YarnData results for a 'greige' question. Always verify table choice matches user's explicit mention. If user says both, use separate queries or subqueries, NOT joins.",
+      "added_at": "2026-01-09T13:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "TOP SUPPLIERS BY ARRIVAL - CRITICAL MULTI-TABLE RULE: When user asks 'top suppliers by arrival', they want suppliers with ARRIVAL data from BOTH Yarn and Greige. You MUST use UNION to combine data. CORRECT: SELECT TOP 10 supplier_name, SUM(total_amount) as 'Total PKR', SUM(total_lbs) as 'Total LBS' FROM (SELECT supplier_name, AMOUNT as total_amount, LBS as total_lbs FROM YarnData WHERE ENTRY_TYPE='Yarn Arrival' UNION ALL SELECT supplier_name, AMOUNT, 0 FROM GreigeData WHERE ENTRY_TYPE='Greige Arrival') GROUP BY supplier_name ORDER BY SUM(total_amount) DESC. Result must show: supplier name, total amount, total LBS, and mention 'Combined Yarn + Greige Arrival data'.",
+      "added_at": "2026-01-09T13:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "SUPPLIER QUERIES - ALWAYS INCLUDE CONTEXT: When returning supplier data, ALWAYS include which table(s) the data comes from. Format results as: supplier_name | metric | source. Example: 'Abdul Sattar | 5,234 LBS | Yarn Arrival' or 'Abdul Sattar | 12,500 PKR | Combined Yarn+Greige'. In response, always state: 'This data combines arrivals from BOTH Yarn and Greige departments' or 'This shows only Yarn arrivals' - be explicit about source.",
+      "added_at": "2026-01-09T13:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "For 'suppliers' related queries: ALWAYS include supplier name and ID. When asking about TOP suppliers, ORDER BY the relevant metric (value, quantity, count) DESCENDING and use TOP N. Include supplier context in results.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "When aggregating data: Always use clear aliases that show units and source. For example: 'Total PKR' for amounts, 'Total Units' for quantities, 'Total LBS' for weights, 'Total Meters' for fabric. Never use cryptic abbreviations. Include data source in response explanation.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "For date filtering: Check schema for available date columns. Use the most relevant date for context (transaction_date, po_date, arrival_date, delivery_date). Include date ranges in WHERE clause. Always CONVERT date columns to date format if needed.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "For JOINs: Use INNER JOIN when both tables MUST match. Use LEFT JOIN only when you need unmatched records from the left table. Always specify join conditions explicitly (ON table1.id = table2.id). Verify relationships in schema before joining.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "For TOP X results: Always include ORDER BY DESCENDING before TOP. Format: SELECT TOP 10 ... ORDER BY [metric_column] DESC. Order by the metric that determines 'top' (quantity, amount, count). Tie-breaking: add supplier name as secondary sort.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "For GROUP BY queries: Every non-aggregated column in SELECT must be in GROUP BY. Do not mix aggregated (SUM, COUNT, AVG) and non-aggregated columns without GROUP BY. CORRECT: SELECT supplier_name, SUM(amount) FROM t GROUP BY supplier_name. WRONG: SELECT supplier_name, amount FROM t.",
+      "added_at": "2026-01-09T21:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "CLARIFICATION RESPONSE HANDLING: When user responds with a number (1, 2, 3, etc.) to a clarification prompt, use that to identify which option they chose. NEVER repeat the same clarification prompt back to them. Instead, execute the query for the selected option. If '1' is chosen, generate the SQL for option 1 and execute it immediately. If user provides ambiguous text, ask for clarification once - if they respond with a number, honor that selection.",
+      "added_at": "2026-01-09T13:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "SUMMARY TOTALS - AMBIGUOUS QUERY HANDLER: When user says 'show summary totals' or 'summary', this is ambiguous. ASK FOR CLARIFICATION: 'Do you want summary for (1) Yarn only, (2) Greige only, or (3) Both combined?' Then wait for their numbered response. NEVER assume - always ask. Once they choose, execute that option.",
+      "added_at": "2026-01-09T13:45:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "EXACT SQL PATTERNS - TOP SUPPLIERS BY ARRIVAL (USE THIS EXACTLY): User query: 'Top suppliers by ARRIVAL'. ALWAYS generate this SQL structure: SELECT TOP 10 supplier_name, SUM(AMOUNT) as 'Total PKR', SUM(LBS) as 'Total LBS from Yarn', (SELECT SUM(AMOUNT) FROM GreigeData WHERE supplier_name=s.supplier_name AND ENTRY_TYPE='Greige Arrival') as 'Total PKR from Greige' FROM YarnData s WHERE ENTRY_TYPE='Yarn Arrival' GROUP BY supplier_name ORDER BY SUM(AMOUNT) DESC. Then state: 'Top 10 suppliers by arrival (Yarn + Greige combined)'",
+      "added_at": "2026-01-09T13:45:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "EXACT SQL PATTERNS - GREIGE SUMMARY (USE THIS EXACTLY): User query: 'greige summary' or 'greige total'. ALWAYS generate: SELECT SUM(METER) as 'Greige Total Meters', SUM(AMOUNT) as 'Greige Total PKR', COUNT(*) as 'Greige Count' FROM GreigeData. Response must state: 'Greige Department Summary'. DO NOT multiply by AC_GWIDTH. DO NOT include Yarn data.",
+      "added_at": "2026-01-09T13:45:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "EXACT SQL PATTERNS - YARN SUMMARY (USE THIS EXACTLY): User query: 'yarn summary' or 'yarn total' or 'total yarn movement'. ALWAYS generate: SELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', COUNT(*) as 'Yarn Count', ENTRY_TYPE FROM YarnData GROUP BY ENTRY_TYPE. Response must state: 'Yarn Department Summary by Movement Type'. Always include ENTRY_TYPE to show Arrival, Issue, Rejection separately.",
+      "added_at": "2026-01-09T13:45:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "CRITICAL VALIDATION - TABLE NAME MATCHING: Before generating SQL, verify table name matches user's intent. If user says 'greige', table MUST be 'GreigeData' ONLY. If user says 'yarn', table MUST be 'YarnData' ONLY. If user says 'supplier' or 'top 5' or 'summary' without table specification, ASK for clarification. NEVER guess which table. EXAMPLES WRONG: User says 'greige total' but SQL queries YarnData - BLOCKED. User says 'greiege total' (typo) but returns Yarn - BLOCKED.",
+      "added_at": "2026-01-09T13:45:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "MULTI-TABLE INTELLIGENCE - KEYWORD DETECTION: Greige keywords: greige, fabric, cloth, meters, grey, graige, woven, textile fabric. Yarn keywords: yarn, lbs, bags, weight, counts, cotton, polyester, thread, spun. If query contains ONLY greige keywords → query GreigeData. If ONLY yarn keywords → query YarnData. If BOTH or NEITHER → ask for clarification.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "DATA SOURCE LABELING - MANDATORY: Every query result MUST include a data source label. Format: 'Data Source: Greige Fabric (GreigeData table)' or 'Data Source: Yarn/Thread (YarnData table)' or 'Data Sources: Combined from Greige + Yarn tables'. This label must appear in the conversational response before the data table.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "SOURCE COLUMN FOR COMBINED QUERIES: When querying BOTH GreigeData AND YarnData in a single result set, ALWAYS add a 'Source' column. Example: SELECT 'Greige' as Source, SUM(METER) as Total FROM GreigeData UNION ALL SELECT 'Yarn' as Source, SUM(LBS) as Total FROM YarnData. This prevents user confusion about which table each row came from.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "GREIGE-SPECIFIC QUERIES - EXAMPLES: 'total greige meters' → SELECT SUM(METER) FROM GreigeData; 'greige inventory' → SELECT COUNT(*), SUM(METER), SUM(AMOUNT) FROM GreigeData; 'greige suppliers' → SELECT DISTINCT supplier_name FROM GreigeData; 'greige by quality' → SELECT QUALITY, SUM(METER) FROM GreigeData GROUP BY QUALITY. Always use GreigeData table and Meter as the primary metric.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "YARN-SPECIFIC QUERIES - EXAMPLES: 'total yarn lbs' → SELECT SUM(LBS) FROM YarnData; 'yarn inventory in bags' → SELECT SUM(BAGS), SUM(LBS) FROM YarnData; 'yarn suppliers' → SELECT DISTINCT supplier_name FROM YarnData; 'yarn by count' → SELECT COUNTS, SUM(LBS) FROM YarnData GROUP BY COUNTS. Always use YarnData table and LBS/BAGS as primary metrics.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "COMBINED QUERIES - OVERALL/COMPLETE PATTERNS: When user says 'overall summary', 'complete inventory', 'total inventory', 'all departments', query BOTH tables with Source column. Example: SELECT 'Greige' as Source, COUNT(*) as Records, SUM(AMOUNT) as 'Total PKR' FROM GreigeData UNION ALL SELECT 'Yarn' as Source, COUNT(*), SUM(AMOUNT) FROM YarnData. Always label which table each row represents.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "AMBIGUOUS SUPPLIER QUERIES: 'top suppliers', 'supplier ranking', 'best vendors' without greige/yarn specification → ASK: 'Would you like supplier data from: 1. Greige (Fabric), 2. Yarn, or 3. Both combined?' Wait for numeric response (1/2/3), then execute chosen option. Never assume which department user wants.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "UNIT CONSISTENCY IN RESULTS: Greige results must show units in METERS (not inches, yards, etc.). Yarn results must show LBS and BAGS (not kg, tons, etc.). Amount columns always show PKR. Format numbers with thousand separators: 1,234,567 LBS or 987,654 Meters. Column aliases must include units: 'Total Meters', 'Total LBS', 'Total PKR'.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "TYPO TOLERANCE - GREIGE VARIATIONS: Common misspellings of 'greige': greiege, griege, graige, gray, grey, grige. If user types any variation, interpret as 'greige' and query GreigeData. In response, use correct spelling 'Greige' and mention you interpreted their query as greige fabric data.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    }
+  ],
+  "metadata": {
+    "total_rules": 30,
+    "last_updated": "2026-01-13T00:00:00Z",
+    "version": "4.0-multi-table-intelligence"
+  }
+}
