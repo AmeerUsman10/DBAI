@@ -21,6 +21,7 @@ VAGUE_PATTERNS = [
     (r'^show\s+\w+$', 'show_vague', 'Show command without specifics'),
     (r'^list\s+\w+$', 'list_vague', 'List command without details'),
     (r'^get\s+\w+$', 'get_vague', 'Get command without specifics'),
+    (r'\b(supplier|arrival|total|summary)\b', 'table_ambiguous', 'Query could apply to multiple tables (GreigeData or YarnData)'),
 ]
 
 # Ambiguous terms that need clarification
@@ -86,6 +87,12 @@ CLARIFICATION_TEMPLATES = {
         "Compare quality grades by meters",
         "List all quality grades with counts"
     ],
+    'table_ambiguous': [
+        "Show data from GreigeData (greige fabric)",
+        "Show data from YarnData (yarn/raw materials)",
+        "Show combined data from both GreigeData and YarnData",
+        "Show comparison between GreigeData and YarnData"
+    ],
     'generic': [
         "Show all matching records",
         "Show summary totals",
@@ -131,7 +138,10 @@ def analyze_query_clarity(query: str) -> Tuple[int, str, List[str]]:
     # Check for vague patterns
     for pattern, pattern_type, description in VAGUE_PATTERNS:
         if re.search(pattern, query_lower):
-            score -= 25
+            if pattern_type == 'table_ambiguous':
+                score -= 35  # Higher penalty for table ambiguity
+            else:
+                score -= 25
             reasons.append(description)
             vague_type = pattern_type
             break

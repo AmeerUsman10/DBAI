@@ -172,6 +172,12 @@ Instructions:
 6. Ensure the query is safe and doesn't modify data (SELECT only)
 7. Use appropriate JOINs if multiple tables are needed
 8. Use clear, descriptive column aliases in the SELECT clause
+9. For textile manufacturing: GreigeData = greige fabric, YarnData = yarn/raw materials
+10. Common aggregations: SUM(METER) for meters, SUM(LBS) for weight, SUM(AMOUNT) for currency
+11. Movement types: ARRIVAL=incoming, ISSUE=outgoing, TRANSFER=internal moves
+12. Include units in column aliases: 'Total Meters', 'Total LBS', 'Total PKR'
+13. When summarizing, show both count and totals
+14. For supplier analysis, group by SUPPLIER and order by the main metric
 
 SQL Query:"""
             

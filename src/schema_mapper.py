@@ -215,8 +215,8 @@ def format_mappings_for_prompt() -> str:
         
         if mappings["column_aliases"]:
             output += "Column Mappings (what users call things):\n"
-            for alias, info in mappings["column_aliases"].items():
-                output += f"  - When user says '{alias}' → use table '{info['table']}', column '{info['column']}'\n"
+            for alias, actual in mappings["column_aliases"].items():
+                output += f"  - When user says '{alias}' → use column '{actual}'\n"
             output += "\n"
         
         return output

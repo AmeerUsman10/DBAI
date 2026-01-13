@@ -478,22 +478,26 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
     error_data = None
     
     # Check if this is a response to a clarification request (user typed a number 1-4)
-    if pending_clarification["question"] and question.strip().isdigit():
-        choice_num = int(question.strip())
-        if 1 <= choice_num <= len(pending_clarification["options"]):
-            # User selected an option - use the clarified query
-            original_query = pending_clarification["original_query"]
-            question = pending_clarification["options"][choice_num - 1]
-            
-            # Clear pending state but remember original for learning
-            pending_clarification["question"] = None
-            pending_clarification["options"] = []
-            # Keep original_query for learning after successful execution
-            try:
-                # Memoize this clarification choice for the session
-                session_tracker.remember_clarification(original_query, question)
-            except Exception:
-                pass
+    if pending_clarification["question"]:
+        # Extract number from input like "1", "1.", "1)", "(1)", etc.
+        import re
+        match = re.match(r'^\s*[\(\[]?\s*(\d+)\s*[\.\)\]\s]*\s*$', question.strip())
+        if match:
+            choice_num = int(match.group(1))
+            if 1 <= choice_num <= len(pending_clarification["options"]):
+                # User selected an option - use the clarified query
+                original_query = pending_clarification["original_query"]
+                question = pending_clarification["options"][choice_num - 1]
+                
+                # Clear pending state but remember original for learning
+                pending_clarification["question"] = None
+                pending_clarification["options"] = []
+                # Keep original_query for learning after successful execution
+                try:
+                    # Memoize this clarification choice for the session
+                    session_tracker.remember_clarification(original_query, question)
+                except Exception:
+                    pass
     
     # Resolve persona overlay for prompt shaping
     persona_overlay = ""
