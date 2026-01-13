@@ -103,7 +103,7 @@ def safe_json_loads(json_str: str) -> Optional[Any]:
 
 def make_sql_chain(llm, db):
     """
-    Create a SQL query generation chain with enhanced context.
+    Create a SQL query generation chain with generic schema mapping and example-based learning.
     
     Args:
         llm: Language model instance
@@ -113,135 +113,76 @@ def make_sql_chain(llm, db):
         SQL query chain function
     """
     try:
-        from src.database import load_metadata
-        from src.learnings import get_relevant_learnings, format_learnings_for_prompt
-        from src.quick_training import get_training_rules_for_prompt, get_approved_rules, get_relevant_approved_rules
+        from src.schema_discovery import get_table_info_string
+        from src.schema_mapper import format_mappings_for_prompt, get_all_mappings
+        from src.example_queries import get_relevant_examples, format_examples_for_prompt
+        from src.database import get_engine
         
         # Get schema information
         schema = db.get_table_info()
         
-        # Load metadata for enhanced context
-        metadata = load_metadata()
+        # Get database type for determining SQL dialect
+        engine = get_engine()
+        db_type = "mssql"  # Default, will be detected from engine if possible
         
-        # Build enhanced prompt template
-        def build_enhanced_prompt(question: str, persona_overlay: str = "") -> Tuple[str, list]:
-            # Get relevant learnings for this question
-            learnings = get_relevant_learnings(question, limit=3)
-            learnings_text = format_learnings_for_prompt(learnings)
+        # Build generic prompt template
+        def build_generic_prompt(question: str, persona_overlay: str = "") -> Tuple[str, list]:
+            # Get schema mappings
+            mappings = get_all_mappings()
+            mappings_text = format_mappings_for_prompt()
             
-            # Get quick training rules
-            # Build training rules section and track applied rule indices
-            # Use a small, relevant subset of rules for this question
-            relevant_rules = get_relevant_approved_rules(question, max_rules=3)
-            training_rules = ""
-            applied_indices = []
-            if relevant_rules:
-                training_rules = "\n### User-Defined Training Rules (Approved):\nThe user has provided the following specific instructions on how to interpret queries:\n\n"
-                for global_idx, rule in relevant_rules:
-                    training_rules += f"{global_idx}. {rule['instruction']}\n"
-                    applied_indices.append(global_idx)
-                training_rules += "\nIMPORTANT: Follow these rules precisely when generating SQL queries.\n"
+            # Get relevant examples
+            examples = get_relevant_examples(question, limit=3)
+            examples_text = format_examples_for_prompt(examples)
             
-            # Build metadata context
-            metadata_context = ""
-            if metadata.get("tables"):
-                metadata_context = "\n\nCOLUMN METADATA & BUSINESS CONTEXT:\n"
-                for table_name, table_data in metadata["tables"].items():
-                    metadata_context += f"\n{table_name}:\n"
-                    
-                    # Add column descriptions
-                    if table_data.get("columns"):
-                        metadata_context += "  Columns:\n"
-                        for col, desc in table_data["columns"].items():
-                            metadata_context += f"    - {col}: {desc}\n"
-                    
-                    # Add business terms
-                    if table_data.get("business_terms"):
-                        metadata_context += "  Business Terms:\n"
-                        for term, meaning in table_data["business_terms"].items():
-                            metadata_context += f"    - {term}: {meaning}\n"
-                    
-                    # Add common query patterns
-                    if table_data.get("common_queries"):
-                        metadata_context += "  Common Patterns:\n"
-                        for pattern in table_data["common_queries"]:
-                            # Handle both old format (vague/interpretation) and new format (pattern/intent)
-                            if isinstance(pattern, dict):
-                                if 'vague' in pattern and 'interpretation' in pattern:
-                                    metadata_context += f"    - \"{pattern['vague']}\" usually means: {pattern['interpretation']}\n"
-                                elif 'pattern' in pattern and 'intent' in pattern:
-                                    metadata_context += f"    - \"{pattern['pattern']}\" usually means: {pattern['intent']}\n"
+            # Track which examples were used (for usage tracking)
+            example_ids = [ex.get("id") for ex in examples]
             
-            # Build full prompt
+            # Build persona section
             persona_section = f"\n\nPERSONA OVERLAY:\n{persona_overlay}\n" if persona_overlay else ""
+            
+            # Determine SQL dialect from engine or config
+            sql_dialect = "SQL Server (MSSQL)"  # Default
+            try:
+                if engine:
+                    dialect = engine.dialect.name
+                    if dialect == "oracle":
+                        sql_dialect = "Oracle"
+                    elif dialect == "mysql":
+                        sql_dialect = "MySQL"
+            except:
+                pass
 
-            enhanced_template = f"""Given the database schema below, write a SQL Server query to answer the user's question.
+            generic_template = f"""Given the database schema below, write a {sql_dialect} query to answer the user's question.
 
 Database Schema:
 {schema}
-{metadata_context}
 {persona_section}
+{mappings_text}
+{examples_text}
 
-{learnings_text}
+User Question: {question}
 
-{training_rules}
-
-Question: {question}
-
-CRITICAL INSTRUCTIONS - READ CAREFULLY:
-1. Generate ONLY ONE SQL query - nothing else
-2. NO explanations, NO comments, NO multiple queries
-3. Answer EXACTLY what the user asked - don't add extra information
-4. Use SQL Server syntax (MSSQL)
-5. Pay attention to the column metadata and business terms above
-6. Consider learned patterns from past queries
-7. Use appropriate JOINs if needed - they are REQUIRED for multi-table answers
-8. Ensure the query is safe and doesn't modify data
-9. ALWAYS include supplier information when querying transactions/inventory
-10. When joining tables, verify relationship fields (supplier_id, transaction_id, etc.)
-
-MULTI-TABLE JOIN RULES (CRITICAL):
-- When user asks about SUPPLIERS + INVENTORY/TRANSACTIONS: Use INNER JOIN linking suppliers to transaction tables
-- Do NOT return supplier data without transaction details or vice versa
-- Use: SELECT supplier_name, [transaction_fields] FROM suppliers INNER JOIN YarnData ON suppliers.supplier_id = YarnData.supplier_id
-- Include ALL related columns from both tables in results, NOT just one table
-- When comparing or aggregating: Include source table identification in aliases
-
-CRITICAL - Column Naming Rules (MUST FOLLOW EXACTLY):
-You MUST use human-readable column aliases with units. DO NOT use names like 'TotalYarnWeight' or 'sum_amount'.
-
-REQUIRED FORMAT for YARN queries (YarnData table):
-  - SUM(LBS) as 'Yarn Total LBS'
-  - SUM(AMOUNT) as 'Yarn Total PKR'
-  - SUM(BAGS) as 'Yarn Total Bags'
-  - COUNT(*) as 'Yarn Count'
-
-REQUIRED FORMAT for GREIGE/FABRIC queries (GreigeData table):
-  - SUM(METER) as 'Greige Total Meters'
-  - SUM(AMOUNT) as 'Greige Total PKR'
-  - COUNT(*) as 'Greige Count'
-
-REQUIRED FORMAT for SUPPLIER QUERIES:
-  - Include 'supplier_name' or 'supplier_id' in SELECT
-  - Use aliases with source context: 'Total LBS from Supplier', 'Total PKR by Supplier'
-  - Add CONVERT(date, column_name) for date columns
-
-EXAMPLES - Copy this format EXACTLY:
-  ✅ CORRECT: SELECT SUM(LBS) as 'Yarn Total LBS' FROM YarnData WHERE ENTRY_TYPE='Yarn Arrival'
-  ✅ CORRECT: SELECT TOP 10 supplier_name, SUM(amount) as 'Total PKR' FROM suppliers JOIN YarnData ON suppliers.supplier_id=YarnData.supplier_id GROUP BY supplier_name ORDER BY SUM(amount) DESC
-  ❌ WRONG: SELECT SUM(LBS) as TotalYarnWeight FROM YarnData
-  ❌ WRONG: SELECT SUM(LBS) as 'Total_LBS' FROM YarnData
-  ❌ WRONG: SELECT supplier_name FROM suppliers (without transaction data)
+Instructions:
+1. Use actual table/column names from schema (not aliases in the query itself)
+2. Apply mappings to understand what the user means when they use natural language terms
+3. Follow patterns from example queries above
+4. Generate {sql_dialect} syntax as appropriate
+5. Return ONLY SQL query, no explanations, no comments
+6. Ensure the query is safe and doesn't modify data (SELECT only)
+7. Use appropriate JOINs if multiple tables are needed
+8. Use clear, descriptive column aliases in the SELECT clause
 
 SQL Query:"""
             
-            return enhanced_template, applied_indices
+            return generic_template, example_ids
         
         # Simple chain that formats prompt and calls LLM
         def sql_chain(inputs: dict) -> dict:
             question = inputs.get("question", "")
             persona_overlay = inputs.get("persona_overlay", "")
-            formatted_prompt, applied_indices = build_enhanced_prompt(question, persona_overlay)
+            formatted_prompt, example_ids = build_generic_prompt(question, persona_overlay)
+            
             # Log prompt metadata (hash only)
             try:
                 from src.session_tracker import get_session_tracker
@@ -256,6 +197,7 @@ SQL Query:"""
                 )
             except Exception:
                 pass
+            
             response = llm.invoke(formatted_prompt)
             
             # Extract content from response
@@ -267,7 +209,8 @@ SQL Query:"""
                 result = str(response)
             
             # Return both result and raw response for token tracking
-            return {"result": result, "response": response, "rules_applied": applied_indices}
+            # Note: example_ids can be used to track which examples were applied
+            return {"result": result, "response": response, "examples_applied": example_ids}
         
         return sql_chain
         
@@ -404,45 +347,16 @@ def extract_sql_from_response(response: str) -> str:
 
 def fix_column_aliases(sql: str) -> str:
     """
-    Fix column aliases to use human-readable format with units.
-    Replaces technical names like 'TotalYarnWeight' with 'Yarn Total LBS'.
+    Fix column aliases to use human-readable format.
+    Generic version - no domain-specific assumptions.
     
     Args:
         sql: SQL query string
         
     Returns:
-        SQL with corrected column aliases
+        SQL with corrected column aliases (currently passes through unchanged)
     """
-    import re
-    
-    # Pattern to match AS alias (with or without quotes)
-    # Matches: AS TotalYarnWeight, AS 'TotalYarnWeight', AS "TotalYarnWeight", AS Total_LBS, etc.
-    
-    # Fix common yarn aggregates
-    sql = re.sub(r'\bAS\s+["\']?TotalYarnWeight["\']?', "AS 'Yarn Total LBS'", sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bAS\s+["\']?Total_?Yarn_?Weight["\']?', "AS 'Yarn Total LBS'", sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bAS\s+["\']?YarnTotal["\']?', "AS 'Yarn Total LBS'", sql, flags=re.IGNORECASE)
-    
-    sql = re.sub(r'\bAS\s+["\']?TotalYarnAmount["\']?', "AS 'Yarn Total PKR'", sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bAS\s+["\']?Total_?Yarn_?Amount["\']?', "AS 'Yarn Total PKR'", sql, flags=re.IGNORECASE)
-    
-    sql = re.sub(r'\bAS\s+["\']?TotalBags["\']?', "AS 'Yarn Total Bags'", sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bAS\s+["\']?Total_?Bags["\']?', "AS 'Yarn Total Bags'", sql, flags=re.IGNORECASE)
-    
-    # Fix greige aggregates
-    sql = re.sub(r'\bAS\s+["\']?TotalMeters?["\']?', "AS 'Greige Total Meters'", sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bAS\s+["\']?Total_?Meters?["\']?', "AS 'Greige Total Meters'", sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bAS\s+["\']?GreigeTotal["\']?', "AS 'Greige Total Meters'", sql, flags=re.IGNORECASE)
-    
-    sql = re.sub(r'\bAS\s+["\']?TotalGreigeAmount["\']?', "AS 'Greige Total PKR'", sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bAS\s+["\']?Total_?Greige_?Amount["\']?', "AS 'Greige Total PKR'", sql, flags=re.IGNORECASE)
-    
-    # Fix generic amount/total patterns
-    sql = re.sub(r'\bAS\s+["\']?TotalAmount["\']?', "AS 'Total PKR'", sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\bAS\s+["\']?Total_?Amount["\']?', "AS 'Total PKR'", sql, flags=re.IGNORECASE)
-    
-    # Fix generic LBS patterns when not already fixed
-    sql = re.sub(r'\bAS\s+["\']?Total_?LBS["\']?(?!\s*FROM\s+YarnData)', "AS 'Total LBS'", sql, flags=re.IGNORECASE)
-    
+    # Generic version - no hardcoded domain-specific fixes
+    # Users can define their own alias preferences through examples
     return sql
 
