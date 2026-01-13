@@ -3442,6 +3442,96 @@ Run test questions and compare AI output against your saved training examples.
                 gr.Markdown("## Developer Tools")
                 gr.Markdown("Quick diagnostics and system monitoring.")
 
+                # Developer Tab Functions (defined inline for scope)
+                def run_auto_diagnostics_ui():
+                    """Wrapper for auto-diagnostics."""
+                    try:
+                        from src.auto_diagnostics import run_auto_diagnostics
+                        return run_auto_diagnostics()
+                    except Exception as e:
+                        return f"❌ **Failed:** {str(e)}"
+                
+                def clear_session():
+                    """Clear all resolved issues for fresh start."""
+                    try:
+                        from src.resolved_issues_tracker import clear_resolved_issues
+                        clear_resolved_issues()
+                        return "✅ **Fresh session started!**\n\nAll resolved issues cleared. Next diagnostics will show all findings again."
+                    except Exception as e:
+                        return f"❌ **Failed to clear session:** {str(e)}"
+                
+                def _env_status():
+                    try:
+                        # DB check
+                        db_ok = False
+                        db_msg = ""
+                        try:
+                            engine = get_engine()
+                            if engine:
+                                db_ok = True
+                                db_msg = "DB connected"
+                            else:
+                                db_msg = "DB not connected"
+                        except Exception as e:
+                            db_msg = f"DB error: {e}"
+
+                        # LLM provider check
+                        llm_ok = False
+                        llm_msg = ""
+                        try:
+                            cfg = load_config()
+                            llm_cfg = cfg.get('llm', {})
+                            prov = create_provider(llm_cfg.get('provider','openai'))
+                            if prov:
+                                llm_ok = True
+                                llm_msg = f"Provider ready ({llm_cfg.get('provider','openai')})"
+                        except Exception as e:
+                            llm_msg = f"LLM error: {e}"
+
+                        icon = lambda ok: "✅" if ok else "❌"
+                        return f"### Environment Status\n- {icon(db_ok)} Database: {db_msg}\n- {icon(llm_ok)} LLM: {llm_msg}"
+                    except Exception as e:
+                        return f"❌ Status error: {e}"
+                
+                def export_dev_session_report():
+                    """Export session report for quick Copilot sharing."""
+                    try:
+                        tracker = get_session_tracker()
+                        report_path = tracker.export_for_copilot()
+                        if report_path:
+                            return (
+                                f"✅ **Session Report Exported**\n\nFile: `{report_path}`\n\nDownload below and share with Copilot for analysis.",
+                                report_path,
+                                gr.update(visible=True)
+                            )
+                        else:
+                            return "❌ Export failed", None, gr.update(visible=False)
+                    except Exception as e:
+                        return f"❌ Error: {str(e)}", None, gr.update(visible=False)
+                
+                def collect_dev_full_diagnostics():
+                    """Collect comprehensive diagnostic bundle."""
+                    try:
+                        from src.diagnostics import collect_full_session_bundle
+                        bundle_path = collect_full_session_bundle(include_sensitive=True)
+                        if bundle_path:
+                            return (
+                                f"✅ **Diagnostic Bundle Created**\n\nBundle: `{bundle_path}`\n\nIncludes: session data, logs, config, training rules, DB snapshot, environment info.",
+                                bundle_path,
+                                gr.update(visible=True)
+                            )
+                        else:
+                            # Fallback to basic diagnostics
+                            from src.diagnostics import collect_diagnostics
+                            basic_path = collect_diagnostics()
+                            return (
+                                f"⚠️ **Basic Diagnostics Collected**\n\nFile: `{basic_path}`\n\n(Full bundle unavailable, using text report)",
+                                basic_path,
+                                gr.update(visible=True)
+                            )
+                    except Exception as e:
+                        return f"❌ Error: {str(e)}", None, gr.update(visible=False)
+
                 # Main Diagnostics Section
                 with gr.Accordion("🎯 Auto-Diagnostics", open=True):
                     gr.Markdown("""
@@ -3477,8 +3567,8 @@ Automatically captures errors, analyzes patterns, and generates recommendations.
                     export_status = gr.Markdown()
                     export_file = gr.File(visible=False)
 
-                    session_export_btn.click(export_session_report, outputs=[export_status, export_file, export_file])
-                    full_export_btn.click(collect_full_diagnostics, outputs=[export_status, export_file, export_file])
+                    session_export_btn.click(export_dev_session_report, outputs=[export_status, export_file, export_file])
+                    full_export_btn.click(collect_dev_full_diagnostics, outputs=[export_status, export_file, export_file])
 
     
     return demo
