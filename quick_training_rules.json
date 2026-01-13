@@ -159,11 +159,83 @@
       "owner": "system",
       "priority": 1,
       "status": "approved"
+    },
+    {
+      "instruction": "MULTI-TABLE INTELLIGENCE - KEYWORD DETECTION: Greige keywords: greige, fabric, cloth, meters, grey, graige, woven, textile fabric. Yarn keywords: yarn, lbs, bags, weight, counts, cotton, polyester, thread, spun. If query contains ONLY greige keywords → query GreigeData. If ONLY yarn keywords → query YarnData. If BOTH or NEITHER → ask for clarification.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "DATA SOURCE LABELING - MANDATORY: Every query result MUST include a data source label. Format: 'Data Source: Greige Fabric (GreigeData table)' or 'Data Source: Yarn/Thread (YarnData table)' or 'Data Sources: Combined from Greige + Yarn tables'. This label must appear in the conversational response before the data table.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "SOURCE COLUMN FOR COMBINED QUERIES: When querying BOTH GreigeData AND YarnData in a single result set, ALWAYS add a 'Source' column. Example: SELECT 'Greige' as Source, SUM(METER) as Total FROM GreigeData UNION ALL SELECT 'Yarn' as Source, SUM(LBS) as Total FROM YarnData. This prevents user confusion about which table each row came from.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "GREIGE-SPECIFIC QUERIES - EXAMPLES: 'total greige meters' → SELECT SUM(METER) FROM GreigeData; 'greige inventory' → SELECT COUNT(*), SUM(METER), SUM(AMOUNT) FROM GreigeData; 'greige suppliers' → SELECT DISTINCT supplier_name FROM GreigeData; 'greige by quality' → SELECT QUALITY, SUM(METER) FROM GreigeData GROUP BY QUALITY. Always use GreigeData table and Meter as the primary metric.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "YARN-SPECIFIC QUERIES - EXAMPLES: 'total yarn lbs' → SELECT SUM(LBS) FROM YarnData; 'yarn inventory in bags' → SELECT SUM(BAGS), SUM(LBS) FROM YarnData; 'yarn suppliers' → SELECT DISTINCT supplier_name FROM YarnData; 'yarn by count' → SELECT COUNTS, SUM(LBS) FROM YarnData GROUP BY COUNTS. Always use YarnData table and LBS/BAGS as primary metrics.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "COMBINED QUERIES - OVERALL/COMPLETE PATTERNS: When user says 'overall summary', 'complete inventory', 'total inventory', 'all departments', query BOTH tables with Source column. Example: SELECT 'Greige' as Source, COUNT(*) as Records, SUM(AMOUNT) as 'Total PKR' FROM GreigeData UNION ALL SELECT 'Yarn' as Source, COUNT(*), SUM(AMOUNT) FROM YarnData. Always label which table each row represents.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "AMBIGUOUS SUPPLIER QUERIES: 'top suppliers', 'supplier ranking', 'best vendors' without greige/yarn specification → ASK: 'Would you like supplier data from: 1. Greige (Fabric), 2. Yarn, or 3. Both combined?' Wait for numeric response (1/2/3), then execute chosen option. Never assume which department user wants.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 1,
+      "status": "approved"
+    },
+    {
+      "instruction": "UNIT CONSISTENCY IN RESULTS: Greige results must show units in METERS (not inches, yards, etc.). Yarn results must show LBS and BAGS (not kg, tons, etc.). Amount columns always show PKR. Format numbers with thousand separators: 1,234,567 LBS or 987,654 Meters. Column aliases must include units: 'Total Meters', 'Total LBS', 'Total PKR'.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
+    },
+    {
+      "instruction": "TYPO TOLERANCE - GREIGE VARIATIONS: Common misspellings of 'greige': greiege, griege, graige, gray, grey, grige. If user types any variation, interpret as 'greige' and query GreigeData. In response, use correct spelling 'Greige' and mention you interpreted their query as greige fabric data.",
+      "added_at": "2026-01-13T00:00:00Z",
+      "usage_count": 0,
+      "owner": "system",
+      "priority": 2,
+      "status": "approved"
     }
   ],
   "metadata": {
-    "total_rules": 20,
-    "last_updated": "2026-01-09T13:45:00Z",
-    "version": "3.2-exact-sql-patterns"
+    "total_rules": 30,
+    "last_updated": "2026-01-13T00:00:00Z",
+    "version": "4.0-multi-table-intelligence"
   }
 }

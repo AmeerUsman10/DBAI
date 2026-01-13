@@ -1,0 +1,229 @@
+# Domain Knowledge Configuration for DBAI
+# Defines business entities, table mappings, and ambiguity resolution rules
+
+entities:
+  greige:
+    table: "GreigeData"
+    description: "Greige fabric data - raw unfinished fabric from suppliers"
+    keywords:
+      - "greige"
+      - "griege"
+      - "greiege"
+      - "graige"
+      - "gray"
+      - "grey"
+      - "fabric"
+      - "cloth"
+      - "grey fabric"
+      - "meters"
+    metrics:
+      METER: "Total meters of greige fabric"
+      AMOUNT: "Total PKR value"
+      AC_GWIDTH: "Actual greige width"
+      PRICE: "Price per unit"
+    movement_types:
+      - "ARRIVAL"
+      - "ISSUE"
+      - "RETURN"
+    
+  yarn:
+    table: "YarnData"
+    description: "Yarn data - thread/yarn from suppliers"
+    keywords:
+      - "yarn"
+      - "thread"
+      - "string"
+      - "lbs"
+      - "bags"
+      - "cotton"
+      - "polyester"
+    metrics:
+      LBS: "Weight in pounds"
+      BAGS: "Number of bags"
+      AMOUNT: "Total PKR value"
+      PRICE: "Price per unit"
+    movement_types:
+      - "ARRIVAL"
+      - "ISSUE"
+      - "RETURN"
+
+# Ambiguous query patterns that need clarification
+ambiguous_patterns:
+  - pattern: "(?i)(total|summary|all)(?!.*(greige|griege|yarn))"
+    entities: ["greige", "yarn"]
+    clarification: |
+      I found data in both **Greige** and **Yarn** tables. Which would you like to see?
+      
+      1. Greige totals only
+      2. Yarn totals only
+      3. Both (combined summary)
+    
+  - pattern: "(?i)(arrival|incoming|received)(?!.*(greige|griege|yarn))"
+    entities: ["greige", "yarn"]
+    clarification: |
+      I can show arrival data from:
+      
+      1. Greige arrivals (fabric)
+      2. Yarn arrivals (thread)
+      3. Both arrivals (combined)
+    
+  - pattern: "(?i)(supplier|vendor)(?!.*(greige|griege|yarn))"
+    entities: ["greige", "yarn"]
+    clarification: |
+      Suppliers exist in both tables. Show suppliers for:
+      
+      1. Greige (fabric suppliers)
+      2. Yarn (thread suppliers)
+      3. Both (all suppliers)
+    
+  - pattern: "(?i)(stock|inventory)(?!.*(greige|griege|yarn))"
+    entities: ["greige", "yarn"]
+    clarification: |
+      Stock data available for:
+      
+      1. Greige stock
+      2. Yarn stock
+      3. Both (complete inventory)
+
+# Multi-table query patterns that should automatically query both
+auto_combine_patterns:
+  - pattern: "(?i)(overall).*(summary|total|report|inventory)"
+    action: "query_both"
+    message: "Showing combined data from both Greige and Yarn:"
+  
+  - pattern: "(?i)(complete).*(inventory|summary|total|report)"
+    action: "query_both"
+    message: "Showing combined data from both Greige and Yarn:"
+  
+  - pattern: "(?i)(total).*(inventory)"
+    action: "query_both"
+    message: "Showing combined data from both Greige and Yarn:"
+  
+  - pattern: "(?i)(all departments)"
+    action: "query_both"
+    message: "Showing combined data from both Greige and Yarn:"
+  
+  - pattern: "(?i)(company|business|organization).*(summary|total|stock)"
+    action: "query_both"
+    message: "Here's the complete summary across all inventory:"
+
+# Table-specific keywords for automatic routing
+table_routing:
+  GreigeData:
+    must_contain:
+      - "(?i)greige"
+      - "(?i)griege"
+      - "(?i)greiege"
+      - "(?i)graige"
+      - "(?i)fabric"
+      - "(?i)cloth"
+    metrics_keywords:
+      - "meter"
+      - "metres"
+      - "fabric width"
+  
+  YarnData:
+    must_contain:
+      - "(?i)yarn"
+      - "(?i)thread"
+    metrics_keywords:
+      - "lbs"
+      - "pounds"
+      - "bags"
+      - "weight"
+
+# Result labeling templates
+result_labels:
+  single_table:
+    greige: "📊 **Data Source:** Greige Fabric (GreigeData table)"
+    yarn: "📊 **Data Source:** Yarn/Thread (YarnData table)"
+  
+  multi_table: "📊 **Data Sources:** Combined from Greige + Yarn tables"
+  
+  column_prefix:
+    greige: "Greige_"
+    yarn: "Yarn_"
+    combined: "Source"  # Add a 'Source' column when combining
+
+# Training rule templates for this domain
+training_templates:
+  greige_summary:
+    pattern: "(?i)greige.*(total|summary)"
+    sql_template: "SELECT SUM(METER) as 'Total Meters', SUM(AMOUNT) as 'Total PKR', COUNT(*) as 'Record Count' FROM GreigeData"
+    explanation: "Greige summary shows total meters, PKR value, and record count"
+  
+  yarn_summary:
+    pattern: "(?i)yarn.*(total|summary)"
+    sql_template: "SELECT SUM(LBS) as 'Total LBS', SUM(BAGS) as 'Total Bags', SUM(AMOUNT) as 'Total PKR', COUNT(*) as 'Record Count' FROM YarnData"
+    explanation: "Yarn summary shows total weight, bags, PKR value, and record count"
+  
+  combined_summary:
+    pattern: "(?i)(overall|both|all).*(total|summary)"
+    sql_template: |
+      SELECT 
+        'Greige' as Source,
+        SUM(METER) as Quantity,
+        'Meters' as Unit,
+        SUM(AMOUNT) as Total_PKR
+      FROM GreigeData
+      UNION ALL
+      SELECT 
+        'Yarn' as Source,
+        SUM(LBS) as Quantity,
+        'LBS' as Unit,
+        SUM(AMOUNT) as Total_PKR
+      FROM YarnData
+    explanation: "Combined summary with data from both Greige and Yarn, clearly labeled by source"
+
+# Edge case handling
+edge_cases:
+  empty_qualifier:
+    # When user just says "total" without greige/yarn
+    default_action: "ask_clarification"
+    fallback: "greige"  # If clarification fails, default to greige
+  
+  conflicting_keywords:
+    # When query contains both greige and yarn keywords
+    action: "query_both"
+    message: "Query mentions both Greige and Yarn - showing combined results"
+  
+  movement_type_ambiguity:
+    # When asking about arrival/issue/return without specifying table
+    action: "ask_which_table"
+    
+  supplier_queries:
+    # Always ask which table for supplier queries unless explicit
+    auto_clarify: true
+    show_source_column: true
+
+# LLM Prompt Enhancement
+prompt_additions:
+  context_reminder: |
+    **CRITICAL DOMAIN KNOWLEDGE:**
+    - GreigeData = Fabric data (measured in METERS)
+    - YarnData = Thread/Yarn data (measured in LBS and BAGS)
+    - ALWAYS specify which table data comes from
+    - If query is ambiguous, ask which table first
+    - For "total" or "summary" without qualifier → ASK which table or show both
+  
+  result_format_reminder: |
+    **RESULT FORMATTING:**
+    - Always add source label: "📊 Data Source: [Greige/Yarn/Both]"
+    - For combined queries, add 'Source' column to distinguish rows
+    - Include units (Meters/LBS/Bags) in column names
+    - Format PKR amounts with thousand separators
+
+# Clarification response handling
+clarification_handling:
+  numeric_responses:
+    "1": "option_1"
+    "2": "option_2"
+    "3": "option_3"
+  
+  text_responses:
+    greige: "option_1"
+    yarn: "option_2"
+    both: "option_3"
+    all: "option_3"
+  
+  default_if_unclear: "option_3"  # Show both if user response is unclear

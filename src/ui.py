@@ -46,6 +46,7 @@ from src.bookmarks import (
     load_bookmarks, save_bookmark, get_bookmark, update_bookmark_usage,
     delete_bookmark, get_bookmarks_by_folder, get_most_used_bookmarks, search_bookmarks
 )
+from src.multi_table_intelligence import MultiTableIntelligence
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -574,6 +575,77 @@ Your response:"""
                 logger.error(f"Conversation handling error: {e}")
                 # Fall through to normal query handling if conversation fails
         
+        # Check for multi-table ambiguity FIRST (before clarity check)
+        target_entity = None
+        result_label = None
+        if mti:
+            try:
+                mti_analysis = mti.analyze_query(question)
+                
+                # If multi-table clarification needed
+                if mti_analysis["needs_clarification"]:
+                    # Check for remembered choice first
+                    try:
+                        remembered = session_tracker.get_clarification(question)
+                    except Exception:
+                        remembered = None
+                    
+                    if remembered:
+                        # Parse the remembered response to get target entity
+                        parsed = mti.parse_clarification_response(remembered)
+                        if parsed:
+                            target_entity = parsed
+                            logger.info(f"Applied memoized multi-table choice: {target_entity}")
+                        else:
+                            # Invalid remembered choice, ask again
+                            remembered = None
+                    
+                    if not remembered:
+                        # Present multi-table clarification options
+                        response = f"I'd like to clarify which data you need for: **\"{question}\"**\n\n"
+                        
+                        # Get clarification message from config
+                        clarification_msg = mti_analysis.get("clarification_message", "Please specify which data:")
+                        response += f"{clarification_msg}\n\n"
+                        
+                        # Add numbered options
+                        tables = mti_analysis["target_tables"]
+                        for i, table in enumerate(tables, 1):
+                            # Get friendly name from config
+                            entity_name = table.replace("Data", "").title()
+                            response += f"**{i}.** {entity_name}\n"
+                        
+                        response += "\n*Simply reply with the number that matches your intent.*"
+                        
+                        # Store clarification state
+                        pending_clarification["question"] = question
+                        pending_clarification["options"] = tables
+                        pending_clarification["original_query"] = question
+                        pending_clarification["type"] = "multi_table"
+                        
+                        # Track clarification request
+                        session_tracker.track_query(
+                            user_question=question,
+                            clarity_analysis={"score": 50, "needs_clarification": True, "reason": "Multi-table ambiguity"},
+                            llm_interaction=None,
+                            execution=None,
+                            response={"type": "clarification_request", "text": response},
+                            performance={"total_time_ms": int((time.time() - start_time) * 1000)},
+                            error=None
+                        )
+                        
+                        history.append({"role": "user", "content": question})
+                        history.append({"role": "assistant", "content": response})
+                        
+                        return "", history, message_id, response
+                else:
+                    # No clarification needed, use detected target
+                    target_entity = mti_analysis.get("target_entity")
+                    result_label = mti_analysis.get("result_label")
+                    logger.info(f"Multi-table intelligence: target_entity={target_entity}, label={result_label}")
+            except Exception as e:
+                logger.warning(f"Multi-table intelligence analysis failed: {e}")
+        
         # Skip clarity check if breakdown detected or high-confidence template
         skip_clarity = (
             classification.get('params', {}).get('breakdown') or 
@@ -661,6 +733,13 @@ Your response:"""
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": response})
             return "", history, message_id, response
+        
+        # Initialize multi-table intelligence system
+        try:
+            mti = MultiTableIntelligence()
+        except Exception as e:
+            logger.warning(f"Multi-table intelligence initialization failed: {e}")
+            mti = None
         
         # Track tokens for this response
         response_tokens = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
@@ -794,7 +873,7 @@ Your response:"""
         if not sql_query:
             logger.info(f"⚠️ Template not available, using LLM generation")
             # Generate SQL using LLM
-            sql_chain = make_sql_chain(current_llm, db)
+            sql_chain = make_sql_chain(current_llm, db, target_entity=target_entity)
             sql_response_obj = sql_chain({"question": question, "persona_overlay": persona_overlay, "message_id": message_id})
             
             # Extract token usage from SQL generation
@@ -999,11 +1078,17 @@ Keep it concise and factual."""
                     response_tokens['completion_tokens'] += explain_tokens['completion_tokens']
                     response_tokens['total_tokens'] += explain_tokens['total_tokens']
                     
-                    conversational_response = f"{conversational_text}\n\n---\n\n"
+                    conversational_response = f"{conversational_text}\n\n"
                     
                 except Exception as e:
                     logger.warning(f"Failed to generate conversational response: {e}")
                     # Continue with just the data table
+            
+            # Add data source label if available
+            if result_label:
+                conversational_response += f"**📊 Data Source:** {result_label}\n\n"
+            
+            conversational_response += "---\n\n"
             
             # Format response with smart unit detection
             response = conversational_response

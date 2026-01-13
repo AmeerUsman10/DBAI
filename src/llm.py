@@ -117,6 +117,7 @@ def make_sql_chain(llm, db):
         from src.schema_mapper import format_mappings_for_prompt, get_all_mappings
         from src.example_queries import get_relevant_examples, format_examples_for_prompt
         from src.database import get_engine
+        from src.multi_table_intelligence import get_multi_table_intelligence
         
         # Get schema information
         schema = db.get_table_info()
@@ -125,8 +126,11 @@ def make_sql_chain(llm, db):
         engine = get_engine()
         db_type = "mssql"  # Default, will be detected from engine if possible
         
+        # Get multi-table intelligence instance
+        mti = get_multi_table_intelligence()
+        
         # Build generic prompt template
-        def build_generic_prompt(question: str, persona_overlay: str = "") -> Tuple[str, list]:
+        def build_generic_prompt(question: str, persona_overlay: str = "", target_entity: str = None) -> Tuple[str, list]:
             # Get schema mappings
             mappings = get_all_mappings()
             mappings_text = format_mappings_for_prompt()
@@ -140,6 +144,13 @@ def make_sql_chain(llm, db):
             
             # Build persona section
             persona_section = f"\n\nPERSONA OVERLAY:\n{persona_overlay}\n" if persona_overlay else ""
+            
+            # Get enhanced domain context for greige/yarn
+            domain_context = ""
+            try:
+                domain_context = mti.get_enhanced_prompt_context(target_entity)
+            except Exception as e:
+                logger.warning(f"Failed to get domain context: {e}")
             
             # Determine SQL dialect from engine or config
             sql_dialect = "SQL Server (MSSQL)"  # Default
@@ -158,6 +169,7 @@ def make_sql_chain(llm, db):
 Database Schema:
 {schema}
 {persona_section}
+{domain_context}
 {mappings_text}
 {examples_text}
 
@@ -172,12 +184,13 @@ Instructions:
 6. Ensure the query is safe and doesn't modify data (SELECT only)
 7. Use appropriate JOINs if multiple tables are needed
 8. Use clear, descriptive column aliases in the SELECT clause
-9. For textile manufacturing: GreigeData = greige fabric, YarnData = yarn/raw materials
+9. **CRITICAL:** If querying both GreigeData and YarnData, add a 'Source' column to identify which table each row comes from
 10. Common aggregations: SUM(METER) for meters, SUM(LBS) for weight, SUM(AMOUNT) for currency
 11. Movement types: ARRIVAL=incoming, ISSUE=outgoing, TRANSFER=internal moves
 12. Include units in column aliases: 'Total Meters', 'Total LBS', 'Total PKR'
 13. When summarizing, show both count and totals
 14. For supplier analysis, group by SUPPLIER and order by the main metric
+15. **NEVER confuse GreigeData (fabric in meters) with YarnData (thread in LBS)**
 
 SQL Query:"""
             
@@ -187,7 +200,9 @@ SQL Query:"""
         def sql_chain(inputs: dict) -> dict:
             question = inputs.get("question", "")
             persona_overlay = inputs.get("persona_overlay", "")
-            formatted_prompt, example_ids = build_generic_prompt(question, persona_overlay)
+            target_entity = inputs.get("target_entity")  # 'greige', 'yarn', or None for both
+            
+            formatted_prompt, example_ids = build_generic_prompt(question, persona_overlay, target_entity)
             
             # Log prompt metadata (hash only)
             try:
