@@ -1,0 +1,117 @@
+{
+  "version": "1.0",
+  "examples": [
+    {
+      "id": "greige_summary_001",
+      "question": "greige summary",
+      "sql": "SELECT SUM(METER) as 'Greige Total Meters', SUM(AMOUNT) as 'Greige Total PKR', COUNT(*) as 'Greige Count' FROM GreigeData",
+      "description": "Summary of greige data with total meters, amount, and record count",
+      "tags": ["greige", "summary", "total", "meters", "pkr", "count"],
+      "success_count": 5,
+      "last_used": "2026-01-13T03:00:00"
+    },
+    {
+      "id": "yarn_summary_001",
+      "question": "yarn summary",
+      "sql": "SELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', COUNT(*) as 'Yarn Count' FROM YarnData",
+      "description": "Summary of yarn data with total weight in LBS, amount, and record count",
+      "tags": ["yarn", "summary", "total", "lbs", "pkr", "count"],
+      "success_count": 5,
+      "last_used": "2026-01-13T03:00:00"
+    },
+    {
+      "id": "top_suppliers_greige_001",
+      "question": "top suppliers greige",
+      "sql": "SELECT TOP 5 SUPPLIER, SUM(METER) as 'Total Meters', SUM(AMOUNT) as 'Total PKR' FROM GreigeData GROUP BY SUPPLIER ORDER BY SUM(METER) DESC",
+      "description": "Top 5 suppliers by total meters in greige data",
+      "tags": ["greige", "suppliers", "top", "ranking", "meters", "pkr"],
+      "success_count": 3,
+      "last_used": "2026-01-13T03:00:00"
+    },
+    {
+      "id": "top_suppliers_yarn_001",
+      "question": "top suppliers yarn",
+      "sql": "SELECT TOP 5 SUPPLIER, SUM(LBS) as 'Total LBS', SUM(AMOUNT) as 'Total PKR' FROM YarnData GROUP BY SUPPLIER ORDER BY SUM(LBS) DESC",
+      "description": "Top 5 suppliers by total LBS in yarn data",
+      "tags": ["yarn", "suppliers", "top", "ranking", "lbs", "pkr"],
+      "success_count": 3,
+      "last_used": "2026-01-13T03:00:00"
+    },
+    {
+      "id": "supplier_top_5_greige_001",
+      "question": "supplier top 5 greige",
+      "sql": "SELECT TOP 5 SUPPLIER, SUM(METER) as 'Total Meters', SUM(AMOUNT) as 'Total PKR' FROM GreigeData GROUP BY SUPPLIER ORDER BY SUM(METER) DESC",
+      "description": "Top 5 greige suppliers by meters",
+      "tags": ["greige", "suppliers", "top", "ranking", "meters"],
+      "success_count": 2,
+      "last_used": "2026-01-13T03:00:00"
+    },
+    {
+      "id": "supplier_top_5_yarn_001",
+      "question": "supplier top 5 yarn",
+      "sql": "SELECT TOP 5 SUPPLIER, SUM(LBS) as 'Total LBS', SUM(AMOUNT) as 'Total PKR' FROM YarnData GROUP BY SUPPLIER ORDER BY SUM(LBS) DESC",
+      "description": "Top 5 yarn suppliers by LBS",
+      "tags": ["yarn", "suppliers", "top", "ranking", "lbs"],
+      "success_count": 2,
+      "last_used": "2026-01-13T03:00:00"
+    },
+    {
+      "id": "top_suppliers_arrival_greige_001",
+      "question": "Top suppliers by ARRIVAL (incoming stock)",
+      "sql": "SELECT TOP 5 SUPPLIER, SUM(METER) as 'Total Meters', SUM(AMOUNT) as 'Total PKR' FROM GreigeData WHERE MOVEMENT = 'ARRIVAL' GROUP BY SUPPLIER ORDER BY SUM(METER) DESC",
+      "description": "Top suppliers by arrival movement in greige data",
+      "tags": ["greige", "suppliers", "arrival", "incoming", "meters", "pkr"],
+      "success_count": 1,
+      "last_used": "2026-01-13T03:00:00"
+    },
+    {
+      "id": "top_suppliers_arrival_yarn_001",
+      "question": "Top suppliers by ARRIVAL (incoming stock)",
+      "sql": "SELECT TOP 5 SUPPLIER, SUM(LBS) as 'Total LBS', SUM(AMOUNT) as 'Total PKR' FROM YarnData WHERE MOVEMENT = 'ARRIVAL' GROUP BY SUPPLIER ORDER BY SUM(LBS) DESC",
+      "description": "Top suppliers by arrival movement in yarn data",
+      "tags": ["yarn", "suppliers", "arrival", "incoming", "lbs", "pkr"],
+      "success_count": 1,
+      "last_used": "2026-01-13T03:00:00"
+    },
+    {
+      "id": "total_yarn_movement_001",
+      "question": "total yarn movement",
+      "sql": "SELECT MOVEMENT, SUM(LBS) as 'Total LBS', SUM(AMOUNT) as 'Total PKR', COUNT(*) as 'Count' FROM YarnData GROUP BY MOVEMENT ORDER BY SUM(LBS) DESC",
+      "description": "Total yarn by movement type showing LBS, PKR, and count",
+      "tags": ["yarn", "movement", "total", "lbs", "pkr", "group"],
+      "success_count": 2,
+      "last_used": "2026-01-13T03:00:00"
+    },
+    {
+      "id": "greige_total_001",
+      "question": "greige total",
+      "sql": "SELECT SUM(METER) as 'Greige Total Meters', SUM(AMOUNT) as 'Greige Total PKR', COUNT(*) as 'Greige Count' FROM GreigeData",
+      "description": "Total greige metrics",
+      "tags": ["greige", "total", "meters", "pkr", "count"],
+      "success_count": 1,
+      "last_used": "2026-01-13T03:00:00"
+    },
+    {
+      "id": "show_summary_totals_greige_001",
+      "question": "Show summary totals",
+      "sql": "SELECT SUM(METER) as 'Greige Total Meters', SUM(AMOUNT) as 'Greige Total PKR', COUNT(*) as 'Greige Count' FROM GreigeData",
+      "description": "Summary totals for greige data",
+      "tags": ["greige", "summary", "total", "meters", "pkr"],
+      "success_count": 1,
+      "last_used": "2026-01-13T03:00:00"
+    },
+    {
+      "id": "show_summary_totals_yarn_001",
+      "question": "Show summary totals",
+      "sql": "SELECT SUM(LBS) as 'Yarn Total LBS', SUM(AMOUNT) as 'Yarn Total PKR', COUNT(*) as 'Yarn Count' FROM YarnData",
+      "description": "Summary totals for yarn data",
+      "tags": ["yarn", "summary", "total", "lbs", "pkr"],
+      "success_count": 1,
+      "last_used": "2026-01-13T03:00:00"
+    }
+  ],
+  "metadata": {
+    "total_examples": 12,
+    "last_updated": "2026-01-13T03:00:00"
+  }
+}

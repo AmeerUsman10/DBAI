@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "last_updated": null,
+  "description": "Database metadata - auto-populated from schema discovery. Add descriptions and notes as needed.",
+  
+  "tables": {},
+  
+  "notes": "This file can be auto-populated from schema discovery. You can add descriptions, business context, and notes here if desired. It's optional - the system works with just schema mappings and example queries."
+}
