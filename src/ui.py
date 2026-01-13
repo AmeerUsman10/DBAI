@@ -25,11 +25,13 @@ from src.learnings import save_learning, get_learning_stats
 from src.quick_training import add_training_rule, get_training_stats, format_rules_display, update_rule, delete_rule, load_training_rules
 from src.session_tracker import get_session_tracker, reset_session_tracker
 from src.query_classifier import classify_query, needs_movement_clarification, get_clarification_for_classification
-from src.query_templates import generate_sql_from_template
+from src.pipeline import QueryPipeline
+from src.ui_formatters import format_result_as_html_table
 from src.feedback import save_feedback, get_feedback_statistics, format_feedback_for_display, get_recent_feedback, format_recent_feedback, get_rule_suggestions
 from src.training_module import (
     get_training_manager, TrainingExample, CATEGORY_OPTIONS, COMPLEXITY_LEVELS
 )
+from src.schema_health import get_schema_health_report, format_health_report_markdown
 
 # Version tracking - increment by 5 for each significant update
 UI_BUILD_VERSION = 26
@@ -60,7 +62,7 @@ pending_clarification = {"question": None, "options": [], "original_query": None
 last_query_info = {"question": None, "sql": None, "result": None}  # For corrections
 last_query_result_data = None  # Store result data for CSV export
 training_mode_enabled = False  # Live training mode toggle
-auto_chart_enabled = False  # Auto-chart visualization toggle
+pipeline = None  # Global pipeline instance
 
 # Persona definitions
 PERSONAS = {
@@ -330,121 +332,10 @@ def extract_token_usage(response) -> dict:
     
     return tokens
 
-def is_conversational_query(question: str, last_question: str = None) -> bool:
-    """
-    Detect if user is asking a conversational question vs a data query.
-    
-    Returns True if conversational (no SQL needed), False if data query.
-    """
-    question_lower = question.lower()
-    
-    # Strong conversational indicators
-    conversational_patterns = [
-        r'\b(the above|these results?|that data|this table|previous)\b',
-        r'\b(why|how come|explain|what does (this|that|it) mean)\b',
-        r'\b(different|same|changed|not matching)\b',
-        r'\b(you (said|showed|returned|gave))\b',
-        r'\b(earlier|before|last time)\b',
-        r'^(why|how|what) (is|are|did|does)',
-        r'\btell me (about|why|how)\b'
-    ]
-    
-    import re
-    for pattern in conversational_patterns:
-        if re.search(pattern, question_lower):
-            return True
-    
-    # If very short and no data keywords, likely conversational
-    if len(question.split()) < 5:
-        data_keywords = ['total', 'sum', 'count', 'show', 'list', 'get', 'find', 'top', 'supplier', 'yarn', 'greige']
-        has_data_keyword = any(keyword in question_lower for keyword in data_keywords)
-        if not has_data_keyword:
-            return True
-    
-    return False
 
 
-def format_result_as_table(rows, columns):
-    """Format query result as markdown table."""
-    if not rows or not columns:
-        return "No results found."
-    
-    # Create markdown table
-    table = "| " + " | ".join(columns) + " |\n"
-    table += "| " + " | ".join(["---"] * len(columns)) + " |\n"
-    
-    for row in rows[:100]:  # Limit to 100 rows for display
-        table += "| " + " | ".join(str(val) if val is not None else "" for val in row) + " |\n"
-    
-    if len(rows) > 100:
-        table += f"\n*Showing first 100 of {len(rows)} results*"
-    
-    return table
 
 
-def create_simple_chart(rows, columns):
-    """
-    Create a simple text-based chart for numeric data.
-    Detects numeric columns and creates a basic bar chart visualization.
-    """
-    try:
-        if not rows or len(rows) > 50:  # Only chart small datasets
-            return None
-        
-        # Find numeric columns
-        numeric_cols = []
-        for i, col in enumerate(columns):
-            try:
-                # Check if column has numeric values
-                sample_values = [row[i] for row in rows[:5] if row[i] is not None]
-                if sample_values and all(isinstance(v, (int, float)) or str(v).replace('.','').replace('-','').isdigit() for v in sample_values):
-                    numeric_cols.append(i)
-            except:
-                continue
-        
-        if not numeric_cols or len(numeric_cols) == 0:
-            return None
-        
-        # Simple text-based bar chart
-        label_col = 0  # First column as label
-        value_col = numeric_cols[0]  # First numeric column as value
-        
-        chart = "\n### 📊 Quick Visualization\n\n"
-        chart += f"**{columns[label_col]}** vs **{columns[value_col]}**\n\n"
-        
-        # Get data
-        data_points = []
-        for row in rows[:10]:  # Max 10 bars
-            label = str(row[label_col])[:20] if row[label_col] else "Unknown"
-            try:
-                value = float(row[value_col]) if row[value_col] else 0
-                data_points.append((label, value))
-            except:
-                continue
-        
-        if not data_points:
-            return None
-        
-        # Find max value for scaling
-        max_val = max(v for _, v in data_points)
-        if max_val == 0:
-            return None
-        
-        # Create horizontal bar chart
-        chart += "```\n"
-        for label, value in data_points:
-            bar_length = int((value / max_val) * 40)  # Scale to 40 chars max
-            bar = "█" * bar_length
-            chart += f"{label:20} {bar} {value:,.0f}\n"
-        chart += "```\n"
-        
-        chart += "\n*Auto-generated chart (first 10 rows)*\n"
-        
-        return chart
-        
-    except Exception as e:
-        logger.debug(f"Chart generation skipped: {e}")
-        return None
 
 
 def chat_query(question: str, history: List, persona: str = "default") -> Tuple[str, List, str, str]:
@@ -527,781 +418,101 @@ def chat_query(question: str, history: List, persona: str = "default") -> Tuple[
         classification = {'type': 'unknown', 'confidence': 0, 'params': {}}
     logger.info(f"Query classified as: {classification['type']} (confidence: {classification['confidence']}%)")
     
-    # Analyze query clarity (skip if already clarified above)
-    if not pending_clarification.get("original_query"):
-        
-        # Check if this is a conversational query (not a data request)
-        is_conversation = is_conversational_query(question, last_query_info.get("question"))
-
-        if is_conversation:
-            # Handle as conversation - use LLM directly without SQL
-            try:
-                conversation_prompt = f"""The user is asking a conversational question about previous results or context.
-
-User's question: "{question}"
-
-Previous query: "{last_query_info.get('question', 'None')}"
-Previous result (first 500 chars): "{str(last_query_info.get('result', ''))[:500]}"
-
-Respond conversationally and naturally. If they're comparing results or asking for clarification, explain based on the context shown above. Do NOT generate SQL. Just have a helpful conversation.
-
-Your response:"""
-                
-                conversation_response = current_llm.invoke(conversation_prompt)
-                response_text = conversation_response.content if hasattr(conversation_response, 'content') else str(conversation_response)
-                
-                # Extract tokens
-                conv_tokens = extract_token_usage(conversation_response)
-                session_tokens['prompt'] += conv_tokens['prompt_tokens']
-                session_tokens['completion'] += conv_tokens['completion_tokens']
-                session_tokens['total'] += conv_tokens['total_tokens']
-                
-                response = f"{response_text}\n\n<sub>💬 Conversational response · 🔹 Tokens: {conv_tokens['total_tokens']} · Session: {session_tokens['total']:,}</sub>"
-                
-                # Track conversation
-                total_time_ms = int((time.time() - start_time) * 1000)
-                session_tracker.track_query(
-                    user_question=question,
-                    clarity_analysis=None,
-                    llm_interaction={"provider": provider_name, "model": model, "type": "conversation", "tokens": conv_tokens},
-                    execution=None,
-                    response={"type": "conversation", "text": response},
-                    performance={"total_time_ms": total_time_ms, "tokens": conv_tokens},
-                    error=None
-                )
-                
-                history.append({"role": "user", "content": question})
-                history.append({"role": "assistant", "content": response})
-                return "", history, message_id, response
-                
-            except Exception as e:
-                logger.error(f"Conversation handling error: {e}")
-                # Fall through to normal query handling if conversation fails
-        
-        # Check for multi-table ambiguity FIRST (before clarity check)
-        target_entity = None
-        result_label = None
-        if mti:
-            try:
-                mti_analysis = mti.analyze_query(question)
-                
-                # If multi-table clarification needed
-                if mti_analysis["needs_clarification"]:
-                    # Check for remembered choice first
-                    try:
-                        remembered = session_tracker.get_clarification(question)
-                    except Exception:
-                        remembered = None
-                    
-                    if remembered:
-                        # Parse the remembered response to get target entity
-                        parsed = mti.parse_clarification_response(remembered)
-                        if parsed:
-                            target_entity = parsed
-                            logger.info(f"Applied memoized multi-table choice: {target_entity}")
-                        else:
-                            # Invalid remembered choice, ask again
-                            remembered = None
-                    
-                    if not remembered:
-                        # Present multi-table clarification options
-                        response = f"I'd like to clarify which data you need for: **\"{question}\"**\n\n"
-                        
-                        # Get clarification message from config
-                        clarification_msg = mti_analysis.get("clarification_message", "Please specify which data:")
-                        response += f"{clarification_msg}\n\n"
-                        
-                        # Add numbered options
-                        tables = mti_analysis["target_tables"]
-                        for i, table in enumerate(tables, 1):
-                            # Get friendly name from config
-                            entity_name = table.replace("Data", "").title()
-                            response += f"**{i}.** {entity_name}\n"
-                        
-                        response += "\n*Simply reply with the number that matches your intent.*"
-                        
-                        # Store clarification state
-                        pending_clarification["question"] = question
-                        pending_clarification["options"] = tables
-                        pending_clarification["original_query"] = question
-                        pending_clarification["type"] = "multi_table"
-                        
-                        # Track clarification request
-                        session_tracker.track_query(
-                            user_question=question,
-                            clarity_analysis={"score": 50, "needs_clarification": True, "reason": "Multi-table ambiguity"},
-                            llm_interaction=None,
-                            execution=None,
-                            response={"type": "clarification_request", "text": response},
-                            performance={"total_time_ms": int((time.time() - start_time) * 1000)},
-                            error=None
-                        )
-                        
-                        history.append({"role": "user", "content": question})
-                        history.append({"role": "assistant", "content": response})
-                        
-                        return "", history, message_id, response
-                else:
-                    # No clarification needed, use detected target
-                    target_entity = mti_analysis.get("target_entity")
-                    result_label = mti_analysis.get("result_label")
-                    logger.info(f"Multi-table intelligence: target_entity={target_entity}, label={result_label}")
-            except Exception as e:
-                logger.warning(f"Multi-table intelligence analysis failed: {e}")
-        
-        # Skip clarity check if breakdown detected or high-confidence template
-        skip_clarity = (
-            classification.get('params', {}).get('breakdown') or 
-            classification['confidence'] >= 80
-        )
-        
-        if not skip_clarity:
-            # If we've previously clarified this exact query in this session, reuse the choice
-            try:
-                remembered = session_tracker.get_clarification(question)
-            except Exception:
-                remembered = None
-            if remembered:
-                # Re-run classification with the remembered clarified intent
-                question = remembered
-                try:
-                    classification = classify_query(question)
-                    classification.setdefault('type', 'unknown')
-                    classification.setdefault('confidence', 0)
-                    classification.setdefault('params', {})
-                except Exception as e:
-                    logger.error(f"Re-classification error after memoized clarification: {e}")
-                    classification = {'type': 'unknown', 'confidence': 0, 'params': {}}
-            
-            clarity_score, reason, clarifications = analyze_query_clarity(question)
-            
-            # Track clarity analysis
-            clarity_data = {
-                "score": clarity_score,
-                "needs_clarification": needs_clarification(clarity_score, threshold=70),
-                "reason": reason,
-                "clarifications_offered": clarifications
-            }
-            
-            # If query needs clarification (score < 70)
-            if needs_clarification(clarity_score, threshold=70) and clarifications:
-                # Store clarification state
-                pending_clarification["question"] = question
-                pending_clarification["options"] = clarifications
-                pending_clarification["original_query"] = question
-                
-                # Generate clarification message
-                response = f"I'd like to better understand your query: **\"{question}\"**\n\n"
-                response += f"Could you clarify which of these you're looking for?\n\n"
-                
-                for i, option in enumerate(clarifications, 1):
-                    response += f"**{i}.** {option}\n"
-                
-                response += "\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
-                
-                # Track clarification request
-                session_tracker.track_query(
-                    user_question=question,
-                    clarity_analysis=clarity_data,
-                    llm_interaction=None,
-                    execution=None,
-                    response={"type": "clarification_request", "text": response},
-                    performance={"total_time_ms": int((time.time() - start_time) * 1000)},
-                    error=None
-                )
-                
-                history.append({"role": "user", "content": question})
-                history.append({"role": "assistant", "content": response})
-                
-                return "", history, message_id, response
-    
+    # Process via Pipeline
     try:
-        # Load config and initialize provider if needed
-        config = load_config()
-        llm_config = config.get('llm', {})
-        
-        provider_name = llm_config.get('provider', 'openai')
-        model = llm_config.get('model', 'gpt-4o-mini')
-        temperature = llm_config.get('temperature', 0.1)
-        max_tokens = llm_config.get('max_tokens', 2000)
-        
-        if current_provider is None or current_llm is None:
-            current_provider = create_provider(provider_name)
-            current_llm = current_provider.get_llm(model, temperature, max_tokens)
-        
-        # Get database
-        db = get_sql_database()
-        if not db:
-            response = "❌ Database not available. Please check your database settings."
-            history.append({"role": "user", "content": question})
-            history.append({"role": "assistant", "content": response})
-            return "", history, message_id, response
-        
-        # Initialize multi-table intelligence system (moved to top of function)
-        try:
-            mti = MultiTableIntelligence()
-        except Exception as e:
-            logger.warning(f"Multi-table intelligence initialization failed: {e}")
-            mti = None
-        
-        # Track tokens for this response
-        response_tokens = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-        
-        # LOG: User question
-        logger.info(f"USER QUERY: {question}")
-        
-        # CHECK CACHE FIRST - Skip for faster responses and token savings
-        cached_result = get_cached_result(question, fuzzy_match=True)
-        if cached_result:
-            sql_query, result, cache_metadata = cached_result
-            logger.info(f"⚡ CACHE HIT! Skipping SQL generation and execution")
-            
-            # Format cached result
-            if result and 'rows' in result and 'columns' in result:
-                response = f"### Query Result (from cache)\n\n"
-                response += format_result_as_table(result['rows'], result['columns'])
-                response += f"\n\n<sub>⚡ Loaded from cache · 0 tokens used · Saved {cache_metadata.get('tokens_saved', 50)} tokens</sub>"
-            else:
-                response = str(result)
-                response += "\n\n<sub>⚡ Loaded from cache · 0 tokens used</sub>"
-            
-            # Track cache hit
-            session_tracker.track_query(
-                user_question=question,
-                clarity_analysis=None,
-                llm_interaction={"provider": "cache", "type": "cache_hit", "tokens": {"total_tokens": 0}},
-                execution={"method": "cache", "success": True},
-                response={"type": "cached", "text": response},
-                performance={"total_time_ms": int((time.time() - start_time) * 1000), "tokens": {"total_tokens": 0}},
-                error=None
-            )
+        # Extract choice if relevant
+        choice_num = None
+        if pending_clarification.get("question"):
+            import re
+            match = re.match(r'^\s*[\(\[]?\s*(\d+)\s*[\.\)\]\s]*\s*$', question.strip())
+            if match:
+                choice_num = int(match.group(1))
 
-            # Append cache stats footer
-            try:
-                stats = get_cache_stats() or {}
-                rc = stats.get("result_cache", {})
-                sc = stats.get("sql_cache", {})
-                size_mb = stats.get("cache_size_mb", 0)
-                response += (
-                    f"\n\n<sub>🗄️ Cache: results={rc.get('total_entries',0)}, hits={rc.get('total_hits',0)} · "
-                    f"sql={sc.get('total_entries',0)}, reuses={sc.get('total_reuses',0)} · size={size_mb:.2f}MB</sub>"
-                )
-            except Exception:
-                pass
+        # Call the modular pipeline
+        pipeline_result = pipeline.process_query(question, persona_overlay, choice=choice_num)
 
-            # Audit event for cache hit
-            try:
-                TelemetryLogger.log_audit_event({
-                    "session_id": session_tracker.session_id,
-                    "message_id": message_id,
-                    "question": question,
-                    "provider": "cache",
-                    "model": "n/a",
-                    "generation_method": "cache",
-                    "tokens_total": 0,
-                    "sql_query": sql_query,
-                    "success": True,
-                    "execution_time_ms": int((time.time() - start_time) * 1000),
-                    "cache_hit": True,
-                    "safety_blocked": False
-                })
-            except Exception:
-                pass
+        # Handle different output types from pipeline
+        if pipeline_result["type"] == "clarification":
+            # Present clarification options
+            response = f"I'd like to clarify your request: **\"{question}\"**\n\n"
+            response += f"{pipeline_result['message']}\n\n"
+            
+            for i, option in enumerate(pipeline_result["options"], 1):
+                response += f"**{i}.** {option}\n"
+            
+            response += "\n*Simply reply with the number that matches your intent.*"
+            
+            # Update state
+            pending_clarification["question"] = question
+            pending_clarification["options"] = pipeline_result["options"]
+            pending_clarification["original_query"] = question
+            pending_clarification["type"] = pipeline_result.get("subtype", "general")
             
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": response})
             return "", history, message_id, response
-        
-        # HYBRID APPROACH: Try template-based generation first
-        # (classification already done before clarity check)
-        sql_query = None
-        llm_raw_response = None
-        generation_method = "llm"  # Default
-        
-        # Check if needs movement type clarification (via classification, not clarity system)
-        if needs_movement_clarification(classification):
-            # If we have a remembered choice for this query, skip asking and apply it
-            try:
-                remembered = session_tracker.get_clarification(question)
-            except Exception:
-                remembered = None
-            if remembered:
-                # Apply remembered clarified intent
-                question = remembered
-                logger.info(f"Applied memoized clarification: '{remembered}'")
-                # Continue without prompting for clarification
-            else:
-                # Use classification-based clarification
-                clarifications = get_clarification_for_classification(classification)
-                
-                # Store clarification state
-                pending_clarification["question"] = question
-                pending_clarification["options"] = clarifications
-                pending_clarification["original_query"] = question
-                
-                # Generate clarification message
-                response = f"I'd like to better understand your query: **\"{question}\"**\n\n"
-                response += f"Could you clarify which of these you're looking for?\n\n"
-                
-                for i, option in enumerate(clarifications, 1):
-                    response += f"**{i}.** {option}\n"
-                
-                response += "\n*Simply reply with the number (1-4) that matches your intent, or rephrase your question.*"
-                
-                # Track clarification request
-                session_tracker.track_query(
-                    user_question=question,
-                    clarity_analysis={"score": classification['confidence'], "needs_clarification": True, "reason": "Movement type required for supplier ranking"},
-                    llm_interaction=None,
-                    execution=None,
-                    response={"type": "clarification_request", "text": response},
-                    performance={"total_time_ms": int((time.time() - start_time) * 1000)},
-                    error=None
-                )
-                
-                history.append({"role": "user", "content": question})
-                history.append({"role": "assistant", "content": response})
-                
-                return "", history, message_id, response
-        
-        # Try template generation for high-confidence classifications
-        if classification['confidence'] >= 80:
-            template_sql = generate_sql_from_template(classification)
-            if template_sql:
-                sql_query = template_sql
-                generation_method = "template"
-                logger.info(f"✅ Using TEMPLATE generation (no LLM needed)")
-        
-        # Fall back to LLM if template didn't work
-        if not sql_query:
-            logger.info(f"⚠️ Template not available, using LLM generation")
-            # Generate SQL using LLM
-            sql_chain = make_sql_chain(current_llm, db, target_entity=target_entity)
-            sql_response_obj = sql_chain({"question": question, "persona_overlay": persona_overlay, "message_id": message_id})
-            
-            # Extract token usage from SQL generation
-            if isinstance(sql_response_obj, dict) and 'response' in sql_response_obj:
-                tokens = extract_token_usage(sql_response_obj['response'])
-                response_tokens['prompt_tokens'] += tokens['prompt_tokens']
-                response_tokens['completion_tokens'] += tokens['completion_tokens']
-                response_tokens['total_tokens'] += tokens['total_tokens']
-            
-            # Extract SQL from response
-            if isinstance(sql_response_obj, dict):
-                sql_query = sql_response_obj.get('result', '')
-                llm_raw_response = str(sql_response_obj)
-                # Track applied rules for per-rule impact analytics
-                applied_rules = sql_response_obj.get('rules_applied', []) or []
-            else:
-                sql_query = str(sql_response_obj)
-                llm_raw_response = sql_query
-            
-            # LOG: Raw LLM response before extraction
-            logger.debug(f"LLM RAW RESPONSE: {sql_query[:500]}")
-            
-            sql_query = extract_sql_from_response(sql_query)
-        
-        # LOG: Generated SQL query
-        logger.info(f"GENERATED SQL ({generation_method}): {sql_query}")
 
-        # SAFETY CHECK: Validate SQL before execution
-        is_valid, safety_msg = validate_sql(sql_query)
-        if not is_valid:
-            # Prepare blocked response with guidance
-            response = (
-                f"❌ Query blocked by safety guardrails: {safety_msg}\n\n"
-                "Only single-statement SELECT queries are allowed. "
-                "Please rephrase your request or use a safer query." 
+        elif pipeline_result["type"] == "success":
+            # Format successful data result
+            sql_query = pipeline_result["sql"]
+            result = pipeline_result["result"]
+            method = pipeline_result["method"]
+            
+            # Use the new modular formatter
+            response = format_result_as_html_table(
+                result.get('rows', []), 
+                result.get('columns', []), 
+                result_label=pipeline_result.get("label")
             )
-
-            # Track attempted execution (blocked)
-            execution_data = {
-                "sql_query": sql_query,
-                "success": False,
-                "blocked_by_safety": True,
-                "reason": safety_msg,
-                "execution_time_ms": 0
+            
+            # Add insights if available
+            insights = pipeline_result.get("insights", "")
+            if insights:
+                response += f"\n\n### ✨ AI Insights\n{insights}"
+            
+            # Add metadata footer
+            method_icon = "⚡" if method == "cache" else ("🤖" if method == "llm" else "⚙️")
+            response += f"\n\n<sub>{method_icon} Generated via {method} · 📊 Sources checked</sub>"
+            
+            # Update last query info for corrections
+            last_query_info = {
+                "message_id": message_id,
+                "question": question,
+                "sql": sql_query,
+                "result": response,
+                "success": True
             }
-
-            # Add generation method indicator
-            method_icon = "⚡" if generation_method == "template" else "🤖"
-            method_text = "Template" if generation_method == "template" else "LLM"
-            response += f"\n\n<sub>{method_icon} Generated via {method_text} · 🚫 Safety blocked</sub>"
-
-            # Track lifecycle and return
-            total_time_ms = int((time.time() - start_time) * 1000)
-            session_tracker.track_query(
-                user_question=question,
-                clarity_analysis=clarity_data,
-                llm_interaction={
-                    "provider": provider_name if generation_method == "llm" else "template",
-                    "model": model if generation_method == "llm" else "rule-based",
-                    "temperature": temperature,
-                    "sql_generated": sql_query,
-                    "tokens": response_tokens,
-                    "generation_method": generation_method
-                },
-                execution=execution_data,
-                response={"type": "error", "text": response, "length_chars": len(response)},
-                performance={
-                    "total_time_ms": total_time_ms,
-                    "query_time_ms": 0,
-                    "tokens": response_tokens
-                },
-                error={"type": "SafetyBlocked", "message": safety_msg}
-            )
-
+            
+            # Store result data for export
+            if result and isinstance(result, dict) and 'rows' in result and 'columns' in result:
+                import pandas as pd
+                global last_query_result_data
+                last_query_result_data = pd.DataFrame(result['rows'], columns=result['columns'])
+            
+            # Update rule usage stats if any rules were applied
+            applied_rules = pipeline_result.get("rules_applied", [])
+            if applied_rules:
+                try:
+                    from src.quick_training import bump_rule_usage
+                    bump_rule_usage(applied_rules)
+                except Exception:
+                    pass
+            
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": response})
             return "", history, message_id, response
-        
-        # Track LLM interaction
-        llm_data = {
-            "provider": provider_name if generation_method == "llm" else "template",
-            "model": model if generation_method == "llm" else "rule-based",
-            "temperature": temperature,
-            "sql_generated": sql_query,
-            "tokens": response_tokens,
-            "generation_method": generation_method  # NEW: track if template or LLM
-        }
-        # Add raw response only if tier 2 enabled
-        from src.session_tracker import get_observability_config
-        config = get_observability_config()
-        if config.get("capture_llm_prompts", False) and llm_raw_response:
-            llm_data["raw_response"] = llm_raw_response
-        
-        # Execute query
-        query_start = time.time()
-        success, result = run_query(sql_query)
-        query_time_ms = int((time.time() - query_start) * 1000)
-        
-        # Track execution
-        execution_data = {
-            "sql_query": sql_query,
-            "success": success,
-            "execution_time_ms": query_time_ms
-        }
-        
-        # QUALITY CHECK: Validate results integrity if query succeeded
-        if success and isinstance(result, dict) and 'rows' in result:
-            try:
-                results_rows = result.get('rows', [])
-                validation_report = validate_query_and_results(sql_query, results_rows, question)
-                
-                # Log validation findings
-                if validation_report["issues"]:
-                    logger.warning(f"Result validation issues: {validation_report['issues']}")
-                if validation_report["warnings"]:
-                    logger.info(f"Result validation warnings: {validation_report['warnings']}")
-                
-                # If critical issues found, flag the result
-                if validation_report["issues"]:
-                    success = False
-                    result = {
-                        "error": f"⚠️ Data quality concerns detected:\n\n" + "\n".join(validation_report["issues"]) + 
-                                "\n\nPlease review the query or contact support."
-                    }
-                    execution_data["success"] = False
-                    execution_data["validation_issues"] = validation_report["issues"]
-                elif validation_report["warnings"]:
-                    # Log warnings but don't fail - show them to user in response
-                    execution_data["validation_warnings"] = validation_report["warnings"]
-            except Exception as e:
-                logger.error(f"Validation check failed: {e}")
-                # Don't fail the query if validation fails, just log it
-        
-        if success:
-            if isinstance(result, dict) and 'rows' in result:
-                execution_data["rows_returned"] = len(result.get('rows', []))
-                execution_data["columns"] = result.get('columns', [])
-                
-                # Add sample data only if tier 2 enabled
-                if config.get("capture_sample_data", False) and result.get('rows'):
-                    execution_data["sample_rows"] = result['rows'][:3]
-                
-                logger.info(f"QUERY SUCCESS: {len(result.get('rows', []))} rows returned")
-                # Log first few rows for debugging
-                if result.get('rows'):
-                    logger.debug(f"SAMPLE RESULTS: {result['rows'][:3]}")
-            else:
-                execution_data["result"] = str(result)
-                logger.info(f"QUERY SUCCESS: {result}")
+
+        elif pipeline_result["type"] == "conversation":
+            response = pipeline_result["text"]
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": response})
+            return "", history, message_id, response
+
         else:
-            execution_data["error_message"] = str(result)
-            logger.error(f"QUERY FAILED: {result}")
-        
-        if success:
-            # Generate conversational explanation first (if data returned)
-            conversational_response = ""
-            
-            if isinstance(result, dict) and 'columns' in result and 'rows' in result and result['rows']:
-                try:
-                    # Create a summary of the data for the LLM
-                    data_summary = {
-                        "user_question": question,
-                        "sql_query": sql_query,
-                        "columns": result['columns'],
-                        "row_count": len(result['rows']),
-                        "sample_rows": result['rows'][:3]  # First 3 rows for context
-                    }
-                    
-                    # Ask LLM to explain the results conversationally
-                    explain_prompt = f"""The user asked: "{question}"
-
-The database returned {len(result['rows'])} rows with these columns: {', '.join(result['columns'])}
-
-Sample data:
-{result['rows'][:3]}
-
-Provide a BRIEF, PROFESSIONAL business summary (1-2 sentences maximum) that:
-1. Directly answers the user's question with specific numbers
-2. Uses professional textile/manufacturing terminology
-3. States facts without commentary or enthusiasm
-
-REQUIREMENTS:
-- Maximum 2 sentences
-- Professional tone (business reporting, not casual chat)
-- No phrases like "quite substantial", "fascinating", "interesting"
-- No exclamation marks
-- Focus on facts: totals, counts, trends
-- Use industry terms: inventory, production, procurement, supply chain
-
-Example good response: "The yarn department has a total inventory of 22.37 million LBS valued at 7.31 billion PKR across 2,784 records."
-
-Example bad response: "The total is quite substantial! It's fascinating to think about..."
-
-Keep it concise and factual."""
-                    
-                    explanation = current_llm.invoke(explain_prompt)
-                    conversational_text = explanation.content if hasattr(explanation, 'content') else str(explanation)
-                    
-                    # Extract token usage from explanation
-                    explain_tokens = extract_token_usage(explanation)
-                    response_tokens['prompt_tokens'] += explain_tokens['prompt_tokens']
-                    response_tokens['completion_tokens'] += explain_tokens['completion_tokens']
-                    response_tokens['total_tokens'] += explain_tokens['total_tokens']
-                    
-                    conversational_response = f"{conversational_text}\n\n"
-                    
-                except Exception as e:
-                    logger.warning(f"Failed to generate conversational response: {e}")
-                    # Continue with just the data table
-            
-            # Add data source label if available
-            if result_label:
-                conversational_response += f"**📊 Data Source:** {result_label}\n\n"
-            
-            conversational_response += "---\n\n"
-            
-            # Format response with smart unit detection
-            response = conversational_response
-            
-            # Add validation warnings if any
-            if execution_data.get("validation_warnings"):
-                warnings_text = "\n".join([f"⚠️ {w}" for w in execution_data["validation_warnings"]])
-                response += f"**Data Quality Notices:**\n{warnings_text}\n\n"
-            
-            # Try to detect column units from metadata or column name
-            def get_column_unit(col_name):
-                """Get unit for a column from metadata or intelligent detection."""
-                # First try metadata
-                try:
-                    metadata = load_metadata()
-                    for table_name, table_data in metadata.get('tables', {}).items():
-                        columns = table_data.get('columns', table_data)
-                        if col_name in columns:
-                            col_info = columns[col_name]
-                            if isinstance(col_info, dict):
-                                unit = col_info.get('unit')
-                                if unit:
-                                    return unit
-                except:
-                    pass
-                
-                # Smart detection from column name (order matters - most specific first!)
-                col_lower = col_name.lower()
-                if 'lbs' in col_lower or 'weight' in col_lower:
-                    return 'LBS'
-                elif 'yarn' in col_lower and 'amount' not in col_lower:
-                    return 'LBS'  # Yarn columns usually refer to weight unless amount
-                elif 'meter' in col_lower or 'greige' in col_lower or 'fabric' in col_lower:
-                    return 'Meters'
-                elif 'bag' in col_lower:
-                    return 'Bags'
-                elif 'amount' in col_lower or 'pkr' in col_lower or 'price' in col_lower:
-                    return 'PKR'
-                
-                return None
-            
-            if isinstance(result, dict):
-                if 'columns' in result and 'rows' in result:
-                    response += f"**Query Results** ({len(result['rows'])} rows)\n\n"
-                    
-                    # Special handling for single aggregate results - format numbers directly in table
-                    is_single_aggregate = len(result['rows']) == 1 and len(result['columns']) == 1
-                    
-                    # Create properly formatted table
-                    if result['rows']:
-                        # For single aggregates, format the value with commas
-                        display_rows = result['rows']
-                        if is_single_aggregate:
-                            value = result['rows'][0][0]
-                            if isinstance(value, (int, float)):
-                                formatted_value = f"{value:,}"
-                                display_rows = [[formatted_value]]
-                        
-                        # Create professional HTML table with styling
-                        response += '<div style="overflow-x: auto; max-height: 600px;">'
-                        response += '<table style="width: 100%; border-collapse: collapse; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">'
-                        
-                        # Header with gradient background
-                        response += '<thead style="position: sticky; top: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">'
-                        response += '<tr>'
-                        for col in result['columns']:
-                            response += f'<th style="padding: 14px 16px; text-align: left; font-weight: 600; border-bottom: 3px solid #5568d3; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px;">{col}</th>'
-                        response += '</tr>'
-                        response += '</thead>'
-                        
-                        # Body with alternating rows
-                        response += '<tbody>'
-                        for idx, row in enumerate(display_rows[:100]):  # Show up to 100 rows
-                            bg_color = "#f8f9fa" if idx % 2 == 0 else "#ffffff"
-                            response += f'<tr style="background-color: {bg_color}; transition: background-color 0.2s;">'
-                            for val in row:
-                                # Format numbers with commas
-                                if isinstance(val, (int, float)):
-                                    formatted_val = f"{val:,.2f}" if isinstance(val, float) else f"{val:,}"
-                                else:
-                                    formatted_val = str(val) if val is not None else ""
-                                response += f'<td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; color: #212529;">{formatted_val}</td>'
-                            response += '</tr>'
-                        response += '</tbody>'
-                        response += '</table>'
-                        response += '</div>\n'
-                        
-                        # Add auto-chart if enabled and data is suitable
-                        global auto_chart_enabled
-                        if auto_chart_enabled and len(result['rows']) <= 50:
-                            chart = create_simple_chart(result['rows'], result['columns'])
-                            if chart:
-                                response += f"\n{chart}\n"
-                        
-                        if len(result['rows']) > 100:
-                            response += f"\n\n*Showing first 100 of {len(result['rows']):,} rows*"
-                else:
-                    response += f"**Result:** {result.get('message', 'Success')}"
-            else:
-                response += f"**Result:** {result}"
-        else:
-            response = f"❌ **Error:** {result}"
-        
-        # Save learning if this was a clarified query
-        if pending_clarification.get("original_query") and success:
-            original = pending_clarification["original_query"]
-            save_learning(original, question, sql_query, "positive")
-            pending_clarification["original_query"] = None  # Clear after saving
-        
-        # Add learning and training stats
-        stats = get_learning_stats()
-        training_stats = get_training_stats()
-        
-        # Add generation method indicator
-        method_icon = "⚡" if generation_method == "template" else "🤖"
-        method_text = "Template" if generation_method == "template" else "LLM"
-        
-        if stats["total"] > 0 or training_stats["total"] > 0:
-            response += f"\n\n<sub>🧠 Knowledge: {stats['total']} learned patterns · {training_stats['total']} training rules · {method_icon} {method_text}</sub>"
-        else:
-            response += f"\n\n<sub>{method_icon} Generated via {method_text}</sub>"
-        
-        # Add token usage info if available (only for OpenAI and LLM generation)
-        if generation_method == "llm" and provider_name == 'openai' and response_tokens['total_tokens'] > 0:
-            session_tokens['prompt'] += response_tokens['prompt_tokens']
-            session_tokens['completion'] += response_tokens['completion_tokens']
-            session_tokens['total'] += response_tokens['total_tokens']
-            
-            response += f"\n\n<sub>🔹 Tokens: {response_tokens['total_tokens']} · Session: {session_tokens['total']:,}</sub>"
-        elif generation_method == "template":
-            response += f"\n\n<sub>⚡ Zero tokens used (template-based)</sub>"
-        
-        # Append cache stats footer for non-cache path
-        try:
-            stats = get_cache_stats() or {}
-            rc = stats.get("result_cache", {})
-            sc = stats.get("sql_cache", {})
-            size_mb = stats.get("cache_size_mb", 0)
-            response += (
-                f"\n\n<sub>🗄️ Cache: results={rc.get('total_entries',0)}, hits={rc.get('total_hits',0)} · "
-                f"sql={sc.get('total_entries',0)}, reuses={sc.get('total_reuses',0)} · size={size_mb:.2f}MB</sub>"
-            )
-        except Exception:
-            pass
-
-        # LOG: Final response sent to user
-        logger.info(f"RESPONSE SENT: {len(response)} chars | Success: {success} | Tokens: {response_tokens.get('total_tokens', 0)}")
-        logger.debug(f"RESPONSE PREVIEW: {response[:200]}")
-        
-        # CACHE SUCCESSFUL QUERIES for future reuse
-        if success and result:
-            try:
-                cache_query_result(
-                    question=question,
-                    sql=sql_query,
-                    result=result,
-                    metadata={
-                        "generation_method": generation_method,
-                        "tokens_used": response_tokens.get('total_tokens', 0),
-                        "tokens_saved": response_tokens.get('total_tokens', 50),  # Estimated savings on reuse
-                        "execution_time_ms": execution_data.get("execution_time_ms", 0) if execution_data else 0
-                    }
-                )
-                logger.info(f"💾 Cached query result for future reuse")
-            except Exception as e:
-                logger.warning(f"Failed to cache result: {e}")
-        
-        # Save last query info for live training mode corrections
-        last_query_info = {
-            "message_id": message_id,
-            "question": question,
-            "sql": sql_query,
-            "result": response,
-            "success": success
-        }
-        
-        # Store result data for export
-        if success and isinstance(result, dict) and 'rows' in result and 'columns' in result:
-            import pandas as pd
-            last_query_result_data = pd.DataFrame(result['rows'], columns=result['columns'])
-        else:
-            last_query_result_data = None
-        
-        # Track complete query lifecycle
-        total_time_ms = int((time.time() - start_time) * 1000)
-        session_tracker.track_query(
-            user_question=question,
-            clarity_analysis=clarity_data,
-            llm_interaction=llm_data,
-            execution=execution_data,
-            response={
-                "type": "data" if success else "error",
-                "text": response,
-                "length_chars": len(response)
-            },
-            performance={
-                "total_time_ms": total_time_ms,
-                "query_time_ms": execution_data.get("execution_time_ms", 0),
-                "tokens": response_tokens
-            },
-            error=None
-        )
-
-        # Update persona stats if custom persona in use
-        try:
-            if persona not in PERSONAS:
-                tokens_total = response_tokens.get("total_tokens", 0)
-                update_persona_stats(persona_id=persona, success=bool(success), tokens=tokens_total)
-        except Exception:
-            pass
+            response = f"❌ **Error:** {pipeline_result.get('error', 'Unknown pipeline state')}"
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": response})
+            return "", history, message_id, response
         
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": response})
@@ -1931,8 +1142,21 @@ def build_ui():
                                 details={"message_id": msg_id, "category": category, "feedback": feedback_text}
                             )
                         
-                        # Create training rule based on category
-                        rule = None
+                    # Create training rule based on category and LLM suggestion
+                    rule = None
+                    try:
+                        from src.correction_detector import get_correction_detector
+                        global current_llm
+                        detector = get_correction_detector(current_llm)
+                        rule = detector.suggest_rule(
+                            question=question,
+                            original_sql=sql,
+                            feedback_text=feedback_text,
+                            category=category
+                        )
+                    except Exception as e:
+                        logger.warning(f"Smarter rule suggestion failed: {e}")
+                        # Fallback to template rules
                         if category == "❌ Wrong Data":
                             if feedback_text.strip():
                                 rule = f"When asked '{question}', ensure data accuracy: {feedback_text}"
@@ -3525,6 +2749,50 @@ Run test questions and compare AI output against your saved training examples.
                         except Exception as e:
                             return f"❌ Error: {str(e)}", None, gr.update(visible=False)
             
+            # System Health Tab
+            with gr.Tab("🏗️ System Health"):
+                gr.Markdown("## System Health Dashboard")
+                gr.Markdown("Monitor your database schema quality and system configuration.")
+                
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        health_refresh_btn = gr.Button("🏥 Run Health Analysis", variant="primary")
+                        health_display = gr.Markdown("Click the button to analyze schema health.")
+                    
+                    with gr.Column(scale=1):
+                        gr.Markdown("### Environment Status")
+                        env_status_display = gr.Markdown("Loading status...")
+                        env_refresh_btn = gr.Button("🔄 Refresh Status", size="sm")
+                
+                def get_combined_health():
+                    report = get_schema_health_report()
+                    return format_health_report_markdown(report)
+                
+                def get_env_status_ui():
+                    # Reuse the logic from developer tab if possible, or define here
+                    try:
+                        db_ok = False
+                        try:
+                            engine = get_engine()
+                            db_ok = bool(engine)
+                        except: pass
+                        
+                        llm_ok = False
+                        try:
+                            from src.llm import load_config
+                            cfg = load_config()
+                            llm_ok = bool(cfg.get('llm', {}).get('provider'))
+                        except: pass
+                        
+                        icon = lambda ok: "✅" if ok else "❌"
+                        return f"- {icon(db_ok)} **Database:** {'Connected' if db_ok else 'Disconnected'}\n- {icon(llm_ok)} **LLM:** {'Ready' if llm_ok else 'Not Configured'}"
+                    except Exception as e:
+                        return f"❌ Error checking status: {e}"
+
+                health_refresh_btn.click(get_combined_health, outputs=[health_display])
+                env_refresh_btn.click(get_env_status_ui, outputs=[env_status_display])
+                demo.load(get_env_status_ui, outputs=[env_status_display])
+
             # Developer Tab (Simplified)
             with gr.Tab("🛠️ Developer"):
                 gr.Markdown("## Developer Tools")
