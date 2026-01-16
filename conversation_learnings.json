@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "learnings": [],
+  "metadata": {
+    "total_learnings": 0,
+    "last_updated": null,
+    "total_queries_processed": 0,
+    "clarifications_provided": 0,
+    "successful_patterns": 0
+  },
+  "categories": {
+    "supplier_queries": [],
+    "amount_calculations": [],
+    "inventory_checks": [],
+    "department_analysis": [],
+    "time_based_queries": []
+  },
+  "notes": {
+    "purpose": "This file stores learned query patterns from user interactions",
+    "learning_triggers": [
+      "User clarifies a vague query",
+      "User refines a query after initial result",
+      "Successful query execution after clarification"
+    ],
+    "usage": "AI references this file to understand common query patterns and user preferences"
+  }
+}

@@ -1,0 +1,13 @@
+gradio>=4.0.0
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-groq>=0.0.1
+langchain-openai>=0.0.5
+langchain-community>=0.0.20
+sqlalchemy>=2.0.0
+pandas>=2.0.0
+openpyxl>=3.0.0
+xlrd>=2.0.1
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
+pyodbc>=4.0.0
