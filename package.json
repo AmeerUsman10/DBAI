@@ -1,0 +1,22 @@
+{
+  "name": "dbai",
+  "version": "1.0.0",
+  "description": "MySQL AI - AI-powered MySQL database assistant with Miro visualization",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@mirohq/miro-api": "^2.2.4"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
