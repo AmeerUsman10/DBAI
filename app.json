@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "BarberApp",
+    "slug": "barber-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0a"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0a0a"
+      },
+      "package": "com.barberapp.phase1",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      ["expo-camera", { "cameraPermission": "Allow BarberApp to access your camera for before/after captures." }],
+      ["expo-image-picker", { "photosPermission": "Allow BarberApp to access your photo library for portfolio uploads." }],
+      ["expo-media-library", { "photosPermission": "Allow BarberApp to save photos to your library." }]
+    ],
+    "scheme": "barberapp",
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
