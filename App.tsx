@@ -3,7 +3,7 @@ import { View, ActivityIndicator, StyleSheet, AppState } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initDb } from './src/database/schema';
-import { getBarber } from './src/database/db';
+import { getBarber, getBookingSettings } from './src/database/db';
 import { flushSyncQueue, getPendingCount } from './src/database/sync';
 import { useStore } from './src/store/useStore';
 import { OnboardingScreen } from './src/screens/onboarding/OnboardingScreen';
@@ -15,6 +15,7 @@ type AppPhase = 'loading' | 'onboarding' | 'main';
 export default function App() {
   const [phase, setPhase] = useState<AppPhase>('loading');
   const setBarber = useStore((s) => s.setBarber);
+  const setCurrency = useStore((s) => s.setCurrency);
   const setSyncStatus = useStore((s) => s.setSyncStatus);
 
   useEffect(() => {
@@ -23,6 +24,9 @@ export default function App() {
       const barber = await getBarber();
       if (barber) {
         setBarber(barber);
+        // Restore persisted currency so every screen shows the right symbol immediately
+        const settings = await getBookingSettings(barber.id);
+        if (settings?.currency) setCurrency(settings.currency);
         setPhase('main');
       } else {
         setPhase('onboarding');
@@ -31,16 +35,13 @@ export default function App() {
     boot();
   }, []);
 
-  // Sync only after DB is ready — gated on phase
+  // Sync gated on phase so it never runs before initDb() completes
   useEffect(() => {
     if (phase === 'loading') return;
 
     async function trySync() {
       const pending = await getPendingCount();
-      if (pending === 0) {
-        setSyncStatus('synced');
-        return;
-      }
+      if (pending === 0) { setSyncStatus('synced'); return; }
       setSyncStatus('pending');
       await flushSyncQueue();
       const remaining = await getPendingCount();

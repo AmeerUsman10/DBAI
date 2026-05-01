@@ -210,7 +210,7 @@ export async function getBlockedDates(barber_id: string): Promise<BlockedDate[]>
 export async function addBlockedDate(barber_id: string, date: string, reason?: string): Promise<BlockedDate> {
   const blocked: BlockedDate = { id: newId(), barber_id, date, reason };
   await getDb().runAsync(
-    'INSERT INTO blocked_dates (id, barber_id, date, reason) VALUES (?, ?, ?, ?)',
+    'INSERT OR IGNORE INTO blocked_dates (id, barber_id, date, reason) VALUES (?, ?, ?, ?)',
     [blocked.id, blocked.barber_id, blocked.date, blocked.reason ?? null]
   );
   await enqueueSyncOp('blocked_dates', blocked.id, 'insert', blocked);

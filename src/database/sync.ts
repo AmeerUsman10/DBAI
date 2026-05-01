@@ -16,8 +16,6 @@ function getSupabase() {
   return supabase;
 }
 
-// Called once during onboarding to create an anonymous Supabase auth account.
-// Stores the session so all subsequent syncs are authenticated.
 export async function signInAnonymously(): Promise<void> {
   const client = getSupabase();
   if (!client) return;
@@ -25,7 +23,7 @@ export async function signInAnonymously(): Promise<void> {
     const { error } = await client.auth.signInAnonymously();
     if (error) console.warn('Anonymous auth failed:', error.message);
   } catch {
-    // No network — sync will remain offline until next foreground
+    // No network — retry on next foreground
   }
 }
 
@@ -63,15 +61,10 @@ export async function flushSyncQueue(): Promise<void> {
   const client = getSupabase();
   if (!client) return;
 
-  // Ensure we have an auth session before attempting writes
   const { data: { session } } = await client.auth.getSession();
-  if (!session) {
-    await signInAnonymously();
-  }
+  if (!session) await signInAnonymously();
 
   const db = getDb();
-
-  // Prune items that have permanently failed
   await db.runAsync('DELETE FROM sync_queue WHERE attempts >= ?', [MAX_ATTEMPTS]);
 
   const items = await db.getAllAsync<SyncQueueItem>(
@@ -81,15 +74,30 @@ export async function flushSyncQueue(): Promise<void> {
   for (const item of items) {
     try {
       const payload = JSON.parse(item.payload);
+
       if (item.operation === 'insert') {
-        await client.from(item.table_name).upsert(payload);
+        // Explicit onConflict so Supabase knows which column to use for upsert resolution
+        const { error } = await client
+          .from(item.table_name)
+          .upsert(payload, { onConflict: 'id' });
+        if (error) throw error;
       } else if (item.operation === 'update') {
-        await client.from(item.table_name).update(payload).eq('id', item.record_id);
+        const { error } = await client
+          .from(item.table_name)
+          .update(payload)
+          .eq('id', item.record_id);
+        if (error) throw error;
       } else if (item.operation === 'delete') {
-        await client.from(item.table_name).delete().eq('id', item.record_id);
+        const { error } = await client
+          .from(item.table_name)
+          .delete()
+          .eq('id', item.record_id);
+        if (error) throw error;
       }
+
       await db.runAsync('DELETE FROM sync_queue WHERE id = ?', [item.id]);
-    } catch {
+    } catch (err) {
+      console.warn('Sync failed for ' + item.table_name + '/' + item.record_id + ':', err);
       await db.runAsync(
         'UPDATE sync_queue SET attempts = attempts + 1 WHERE id = ?',
         [item.id]
