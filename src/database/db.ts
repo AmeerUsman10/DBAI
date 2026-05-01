@@ -2,19 +2,19 @@ import { getDb } from './schema';
 import type {
   Barber, Service, Client, Appointment, Visit, Payment,
   PortfolioItem, Availability, BlockedDate, BookingSettings,
-  CaptureSession, SyncQueueItem
+  CaptureSession
 } from '../types';
 import { enqueueSyncOp } from './sync';
 import uuid from 'react-native-uuid';
 
 const now = () => new Date().toISOString();
-const id = () => uuid.v4() as string;
+const newId = () => uuid.v4() as string;
 
-// ── Barber ─────────────────────────────────────────────────────────────────
+// ── Barber ──────────────────────────────────────────────────────────────────
 
 export async function saveBarber(data: Omit<Barber, 'id' | 'created_at'>): Promise<Barber> {
   const db = getDb();
-  const barber: Barber = { ...data, id: id(), created_at: now() };
+  const barber: Barber = { ...data, id: newId(), created_at: now() };
   await db.runAsync(
     `INSERT OR REPLACE INTO barbers (id, name, shop_name, phone, profile_photo_url, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
@@ -25,25 +25,22 @@ export async function saveBarber(data: Omit<Barber, 'id' | 'created_at'>): Promi
 }
 
 export async function getBarber(): Promise<Barber | null> {
-  const db = getDb();
-  const row = await db.getFirstAsync<Barber>('SELECT * FROM barbers LIMIT 1');
+  const row = await getDb().getFirstAsync<Barber>('SELECT * FROM barbers LIMIT 1');
   return row ?? null;
 }
 
-export async function updateBarber(id: string, data: Partial<Barber>): Promise<void> {
+export async function updateBarber(barberId: string, data: Partial<Barber>): Promise<void> {
   const db = getDb();
   const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
-  const values = [...Object.values(data), id];
-  await db.runAsync(`UPDATE barbers SET ${fields} WHERE id = ?`, values);
-  await enqueueSyncOp('barbers', id, 'update', data);
+  await db.runAsync(`UPDATE barbers SET ${fields} WHERE id = ?`, [...Object.values(data), barberId]);
+  await enqueueSyncOp('barbers', barberId, 'update', data);
 }
 
-// ── Services ────────────────────────────────────────────────────────────────
+// ── Services ─────────────────────────────────────────────────────────────────
 
 export async function createService(data: Omit<Service, 'id'>): Promise<Service> {
-  const db = getDb();
-  const service: Service = { ...data, id: id() };
-  await db.runAsync(
+  const service: Service = { ...data, id: newId() };
+  await getDb().runAsync(
     `INSERT INTO services (id, barber_id, name, price, duration_minutes) VALUES (?, ?, ?, ?, ?)`,
     [service.id, service.barber_id, service.name, service.price, service.duration_minutes]
   );
@@ -52,29 +49,25 @@ export async function createService(data: Omit<Service, 'id'>): Promise<Service>
 }
 
 export async function getServices(barber_id: string): Promise<Service[]> {
-  const db = getDb();
-  return db.getAllAsync<Service>('SELECT * FROM services WHERE barber_id = ?', [barber_id]);
+  return getDb().getAllAsync<Service>('SELECT * FROM services WHERE barber_id = ?', [barber_id]);
 }
 
 export async function updateService(serviceId: string, data: Partial<Service>): Promise<void> {
-  const db = getDb();
   const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
-  await db.runAsync(`UPDATE services SET ${fields} WHERE id = ?`, [...Object.values(data), serviceId]);
+  await getDb().runAsync(`UPDATE services SET ${fields} WHERE id = ?`, [...Object.values(data), serviceId]);
   await enqueueSyncOp('services', serviceId, 'update', data);
 }
 
 export async function deleteService(serviceId: string): Promise<void> {
-  const db = getDb();
-  await db.runAsync('DELETE FROM services WHERE id = ?', [serviceId]);
+  await getDb().runAsync('DELETE FROM services WHERE id = ?', [serviceId]);
   await enqueueSyncOp('services', serviceId, 'delete', {});
 }
 
-// ── Clients ─────────────────────────────────────────────────────────────────
+// ── Clients ──────────────────────────────────────────────────────────────────
 
 export async function createClient(data: Omit<Client, 'id' | 'created_at'>): Promise<Client> {
-  const db = getDb();
-  const client: Client = { ...data, id: id(), created_at: now() };
-  await db.runAsync(
+  const client: Client = { ...data, id: newId(), created_at: now() };
+  await getDb().runAsync(
     `INSERT INTO clients (id, barber_id, name, phone, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
     [client.id, client.barber_id, client.name, client.phone, client.notes ?? null, client.created_at]
   );
@@ -95,18 +88,16 @@ export async function searchClients(barber_id: string, query: string): Promise<C
 }
 
 export async function updateClient(clientId: string, data: Partial<Client>): Promise<void> {
-  const db = getDb();
   const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
-  await db.runAsync(`UPDATE clients SET ${fields} WHERE id = ?`, [...Object.values(data), clientId]);
+  await getDb().runAsync(`UPDATE clients SET ${fields} WHERE id = ?`, [...Object.values(data), clientId]);
   await enqueueSyncOp('clients', clientId, 'update', data);
 }
 
-// ── Appointments ─────────────────────────────────────────────────────────────
+// ── Appointments ──────────────────────────────────────────────────────────────
 
 export async function createAppointment(data: Omit<Appointment, 'id' | 'created_at'>): Promise<Appointment> {
-  const db = getDb();
-  const appt: Appointment = { ...data, id: id(), created_at: now() };
-  await db.runAsync(
+  const appt: Appointment = { ...data, id: newId(), created_at: now() };
+  await getDb().runAsync(
     `INSERT INTO appointments (id, barber_id, client_id, service_id, date, start_time, end_time, status, walk_in, notes, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [appt.id, appt.barber_id, appt.client_id ?? null, appt.service_id, appt.date,
@@ -129,16 +120,15 @@ export async function updateAppointmentStatus(apptId: string, status: Appointmen
   await enqueueSyncOp('appointments', apptId, 'update', { status });
 }
 
-// ── Visits ───────────────────────────────────────────────────────────────────
+// ── Visits ────────────────────────────────────────────────────────────────────
 
 export async function createVisit(data: Omit<Visit, 'id'>): Promise<Visit> {
-  const db = getDb();
-  const visit: Visit = { ...data, id: id() };
-  await db.runAsync(
-    `INSERT INTO visits (id, client_id, appointment_id, date, service_id, amount_paid, payment_method, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [visit.id, visit.client_id, visit.appointment_id ?? null, visit.date,
-     visit.service_id, visit.amount_paid, visit.payment_method, visit.notes ?? null]
+  const visit: Visit = { ...data, id: newId() };
+  await getDb().runAsync(
+    `INSERT INTO visits (id, barber_id, client_id, appointment_id, date, service_id, amount_paid, payment_method, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [visit.id, visit.barber_id, visit.client_id ?? null, visit.appointment_id ?? null,
+     visit.date, visit.service_id, visit.amount_paid, visit.payment_method, visit.notes ?? null]
   );
   await enqueueSyncOp('visits', visit.id, 'insert', visit);
   return visit;
@@ -148,12 +138,10 @@ export async function getVisitsForClient(client_id: string): Promise<Visit[]> {
   return getDb().getAllAsync<Visit>('SELECT * FROM visits WHERE client_id = ? ORDER BY date DESC', [client_id]);
 }
 
+// Direct query on visits — no join needed since visits carry barber_id
 export async function getDailyTotal(barber_id: string, date: string): Promise<number> {
   const row = await getDb().getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(v.amount_paid), 0) as total
-     FROM visits v
-     JOIN appointments a ON a.id = v.appointment_id
-     WHERE a.barber_id = ? AND v.date = ?`,
+    `SELECT COALESCE(SUM(amount_paid), 0) as total FROM visits WHERE barber_id = ? AND date = ?`,
     [barber_id, date]
   );
   return row?.total ?? 0;
@@ -161,23 +149,20 @@ export async function getDailyTotal(barber_id: string, date: string): Promise<nu
 
 export async function getWeeklyTotals(barber_id: string): Promise<{ date: string; total: number }[]> {
   return getDb().getAllAsync<{ date: string; total: number }>(
-    `SELECT v.date, COALESCE(SUM(v.amount_paid), 0) as total
-     FROM visits v
-     JOIN appointments a ON a.id = v.appointment_id
-     WHERE a.barber_id = ?
-       AND v.date >= date('now', '-6 days')
-     GROUP BY v.date
-     ORDER BY v.date ASC`,
+    `SELECT date, COALESCE(SUM(amount_paid), 0) as total
+     FROM visits
+     WHERE barber_id = ? AND date >= date('now', '-6 days')
+     GROUP BY date
+     ORDER BY date ASC`,
     [barber_id]
   );
 }
 
-// ── Portfolio ─────────────────────────────────────────────────────────────────
+// ── Portfolio ──────────────────────────────────────────────────────────────────
 
 export async function createPortfolioItem(data: Omit<PortfolioItem, 'id' | 'created_at'>): Promise<PortfolioItem> {
-  const db = getDb();
-  const item: PortfolioItem = { ...data, id: id(), created_at: now() };
-  await db.runAsync(
+  const item: PortfolioItem = { ...data, id: newId(), created_at: now() };
+  await getDb().runAsync(
     `INSERT INTO portfolio_items (id, barber_id, client_id, visit_id, photo_before_url, photo_after_url, style_tag, visibility, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [item.id, item.barber_id, item.client_id ?? null, item.visit_id ?? null,
@@ -189,8 +174,7 @@ export async function createPortfolioItem(data: Omit<PortfolioItem, 'id' | 'crea
 
 export async function getPortfolioItems(barber_id: string): Promise<PortfolioItem[]> {
   return getDb().getAllAsync<PortfolioItem>(
-    'SELECT * FROM portfolio_items WHERE barber_id = ? ORDER BY created_at DESC',
-    [barber_id]
+    'SELECT * FROM portfolio_items WHERE barber_id = ? ORDER BY created_at DESC', [barber_id]
   );
 }
 
@@ -199,24 +183,22 @@ export async function updatePortfolioVisibility(itemId: string, visibility: 'pub
   await enqueueSyncOp('portfolio_items', itemId, 'update', { visibility });
 }
 
-// ── Availability ──────────────────────────────────────────────────────────────
+// ── Availability ───────────────────────────────────────────────────────────────
 
 export async function saveAvailability(items: Omit<Availability, 'id'>[]): Promise<void> {
   const db = getDb();
   for (const item of items) {
-    const avail: Availability = { ...item, id: id() };
     await db.runAsync(
       `INSERT OR REPLACE INTO availability (id, barber_id, day_of_week, start_time, end_time, is_active)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [avail.id, avail.barber_id, avail.day_of_week, avail.start_time, avail.end_time, avail.is_active ? 1 : 0]
+      [newId(), item.barber_id, item.day_of_week, item.start_time, item.end_time, item.is_active ? 1 : 0]
     );
   }
 }
 
 export async function getAvailability(barber_id: string): Promise<Availability[]> {
   const rows = await getDb().getAllAsync<any>(
-    'SELECT * FROM availability WHERE barber_id = ? ORDER BY day_of_week ASC',
-    [barber_id]
+    'SELECT * FROM availability WHERE barber_id = ? ORDER BY day_of_week ASC', [barber_id]
   );
   return rows.map(r => ({ ...r, is_active: !!r.is_active }));
 }
@@ -226,7 +208,7 @@ export async function getBlockedDates(barber_id: string): Promise<BlockedDate[]>
 }
 
 export async function addBlockedDate(barber_id: string, date: string, reason?: string): Promise<BlockedDate> {
-  const blocked: BlockedDate = { id: id(), barber_id, date, reason };
+  const blocked: BlockedDate = { id: newId(), barber_id, date, reason };
   await getDb().runAsync(
     'INSERT INTO blocked_dates (id, barber_id, date, reason) VALUES (?, ?, ?, ?)',
     [blocked.id, blocked.barber_id, blocked.date, blocked.reason ?? null]
@@ -242,30 +224,29 @@ export async function removeBlockedDate(dateId: string): Promise<void> {
 
 export async function getBookingSettings(barber_id: string): Promise<BookingSettings | null> {
   const row = await getDb().getFirstAsync<any>(
-    'SELECT * FROM booking_settings WHERE barber_id = ?',
-    [barber_id]
+    'SELECT * FROM booking_settings WHERE barber_id = ?', [barber_id]
   );
   if (!row) return null;
   return { ...row, require_deposit: !!row.require_deposit, reminder_enabled: !!row.reminder_enabled };
 }
 
 export async function saveBookingSettings(data: Omit<BookingSettings, 'id'>): Promise<void> {
-  const settings: BookingSettings = { ...data, id: id() };
+  const settings: BookingSettings = { ...data, id: newId() };
   await getDb().runAsync(
     `INSERT OR REPLACE INTO booking_settings
-     (id, barber_id, buffer_minutes, require_deposit, deposit_amount, cancellation_policy_text, reminder_enabled)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+     (id, barber_id, buffer_minutes, require_deposit, deposit_amount, cancellation_policy_text, reminder_enabled, currency)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [settings.id, settings.barber_id, settings.buffer_minutes,
      settings.require_deposit ? 1 : 0, settings.deposit_amount,
-     settings.cancellation_policy_text ?? null, settings.reminder_enabled ? 1 : 0]
+     settings.cancellation_policy_text ?? null, settings.reminder_enabled ? 1 : 0, settings.currency]
   );
   await enqueueSyncOp('booking_settings', settings.barber_id, 'update', data);
 }
 
-// ── Capture Sessions ─────────────────────────────────────────────────────────
+// ── Capture Sessions ───────────────────────────────────────────────────────────
 
 export async function createCaptureSession(data: Omit<CaptureSession, 'id' | 'captured_at'>): Promise<CaptureSession> {
-  const session: CaptureSession = { ...data, id: id(), captured_at: now() };
+  const session: CaptureSession = { ...data, id: newId(), captured_at: now() };
   await getDb().runAsync(
     `INSERT INTO capture_sessions
      (id, barber_id, client_id, appointment_id, photo_before_url, photo_after_url, captured_at, paired, auto_published)
@@ -279,13 +260,12 @@ export async function createCaptureSession(data: Omit<CaptureSession, 'id' | 'ca
 }
 
 export async function updateCaptureSession(sessionId: string, data: Partial<CaptureSession>): Promise<void> {
-  const db = getDb();
   const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
-  await db.runAsync(`UPDATE capture_sessions SET ${fields} WHERE id = ?`, [...Object.values(data), sessionId]);
+  await getDb().runAsync(`UPDATE capture_sessions SET ${fields} WHERE id = ?`, [...Object.values(data), sessionId]);
   await enqueueSyncOp('capture_sessions', sessionId, 'update', data);
 }
 
-// ── App State ─────────────────────────────────────────────────────────────────
+// ── App State ──────────────────────────────────────────────────────────────────
 
 export async function getAppState(key: string): Promise<string | null> {
   const row = await getDb().getFirstAsync<{ value: string }>(
