@@ -25,7 +25,6 @@
       ]
     },
     "plugins": [
-      "expo-router",
       "expo-sqlite",
       ["expo-camera", { "cameraPermission": "Allow BarberApp to access your camera for before/after captures." }],
       ["expo-image-picker", { "photosPermission": "Allow BarberApp to access your photo library for portfolio uploads." }],
@@ -35,9 +34,6 @@
     "web": {
       "bundler": "metro",
       "output": "static"
-    },
-    "experiments": {
-      "typedRoutes": true
     }
   }
 }
