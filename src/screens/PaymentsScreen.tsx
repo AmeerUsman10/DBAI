@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { colors, spacing, radius, minTapTarget } from '../theme/colors';
 import { getDailyTotal, getWeeklyTotals, createVisit, getServices } from '../database/db';
+import { formatPrice } from '../lib/currency';
 import type { PaymentMethod, Service } from '../types';
 
 const METHODS: PaymentMethod[] = ['cash', 'card', 'wallet'];
@@ -11,7 +12,7 @@ const METHODS: PaymentMethod[] = ['cash', 'card', 'wallet'];
 export function PaymentsScreen() {
   const barber = useStore((s) => s.barber);
   const isAdvanced = useStore((s) => s.isAdvanced('payments'));
-  const todayAppts = useStore((s) => s.todayAppointments);
+  const currency = useStore((s) => s.currency);
   const [dailyTotal, setDailyTotal] = useState(0);
   const [weeklyTotals, setWeeklyTotals] = useState<{ date: string; total: number }[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -39,7 +40,7 @@ export function PaymentsScreen() {
   async function recordPayment() {
     if (!barber || !selectedService) return;
     await createVisit({
-      client_id: 'walk-in',
+      barber_id: barber.id,
       date: today,
       service_id: selectedService.id,
       amount_paid: selectedService.price,
@@ -58,7 +59,7 @@ export function PaymentsScreen() {
 
         <View style={styles.heroCard}>
           <Text style={styles.heroLabel}>Today's Earnings</Text>
-          <Text style={styles.heroValue}>${dailyTotal.toFixed(2)}</Text>
+          <Text style={styles.heroValue}>{formatPrice(dailyTotal, currency)}</Text>
         </View>
 
         <TouchableOpacity style={styles.recordBtn} onPress={() => setShowRecordModal(true)}>
@@ -71,13 +72,8 @@ export function PaymentsScreen() {
             <View style={styles.barChart}>
               {weeklyTotals.map(d => (
                 <View key={d.date} style={styles.barWrapper}>
-                  <Text style={styles.barValue}>${d.total.toFixed(0)}</Text>
-                  <View
-                    style={[
-                      styles.bar,
-                      { height: Math.max(4, (d.total / weeklyMax) * 100) }
-                    ]}
-                  />
+                  <Text style={styles.barValue}>{formatPrice(d.total, currency)}</Text>
+                  <View style={[styles.bar, { height: Math.max(4, (d.total / weeklyMax) * 100) }]} />
                   <Text style={styles.barDate}>{d.date.slice(5)}</Text>
                 </View>
               ))}
@@ -87,7 +83,7 @@ export function PaymentsScreen() {
             {services.map(svc => (
               <View key={svc.id} style={styles.serviceRevRow}>
                 <Text style={styles.serviceRevName}>{svc.name}</Text>
-                <Text style={styles.serviceRevPrice}>${svc.price}/cut</Text>
+                <Text style={styles.serviceRevPrice}>{formatPrice(svc.price, currency)}/cut</Text>
               </View>
             ))}
           </View>
@@ -108,7 +104,7 @@ export function PaymentsScreen() {
                   onPress={() => setSelectedService(svc)}
                 >
                   <Text style={[styles.chipText, selectedService?.id === svc.id && styles.chipTextActive]}>
-                    {svc.name} — ${svc.price}
+                    {svc.name} — {formatPrice(svc.price, currency)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -117,7 +113,7 @@ export function PaymentsScreen() {
             {selectedService && (
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>${selectedService.price.toFixed(2)}</Text>
+                <Text style={styles.totalValue}>{formatPrice(selectedService.price, currency)}</Text>
               </View>
             )}
 
@@ -168,8 +164,7 @@ const styles = StyleSheet.create({
   barChart: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 4,
     backgroundColor: colors.surface, borderRadius: radius.md,
-    padding: spacing.md, borderWidth: 1, borderColor: colors.border,
-    height: 160,
+    padding: spacing.md, borderWidth: 1, borderColor: colors.border, height: 160,
   },
   barWrapper: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   barValue: { color: colors.textDim, fontSize: 9 },
