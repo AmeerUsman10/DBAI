@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { colors, spacing, radius, minTapTarget } from '../theme/colors';
 import { getAppointmentsForDate, getDailyTotal, getWeeklyTotals } from '../database/db';
+import { formatPrice } from '../lib/currency';
 import type { Appointment } from '../types';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
@@ -15,6 +16,7 @@ interface Props {
 export function HomeScreen({ onNavigate }: Props) {
   const barber = useStore((s) => s.barber);
   const isAdvanced = useStore((s) => s.isAdvanced('home'));
+  const currency = useStore((s) => s.currency);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [dailyTotal, setDailyTotal] = useState(0);
   const [weeklyTotals, setWeeklyTotals] = useState<{ date: string; total: number }[]>([]);
@@ -35,16 +37,11 @@ export function HomeScreen({ onNavigate }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  };
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const scheduled = appointments.filter(a => a.status === 'scheduled');
   const nextAppt = scheduled[0];
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-
   const noShowRate = appointments.length > 0
     ? Math.round((appointments.filter(a => a.status === 'no_show').length / appointments.length) * 100)
     : 0;
@@ -60,19 +57,17 @@ export function HomeScreen({ onNavigate }: Props) {
         <Text style={styles.date}>{today}</Text>
         <Text style={styles.greeting}>Hey, {barber?.name ?? 'Barber'}</Text>
 
-        {/* Stats Row */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{scheduled.length}</Text>
             <Text style={styles.statLabel}>Appointments</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>${dailyTotal.toFixed(0)}</Text>
+            <Text style={styles.statValue}>{formatPrice(dailyTotal, currency)}</Text>
             <Text style={styles.statLabel}>Today's Earnings</Text>
           </View>
         </View>
 
-        {/* Advanced extras */}
         {isAdvanced && (
           <View style={styles.advancedSection}>
             <Text style={styles.sectionTitle}>This Week</Text>
@@ -80,12 +75,10 @@ export function HomeScreen({ onNavigate }: Props) {
               {weeklyTotals.length > 0
                 ? weeklyTotals.map((d) => (
                     <View key={d.date} style={styles.sparkBar}>
-                      <View
-                        style={[
-                          styles.sparkFill,
-                          { height: Math.max(4, (d.total / Math.max(...weeklyTotals.map(x => x.total), 1)) * 60) }
-                        ]}
-                      />
+                      <View style={[
+                        styles.sparkFill,
+                        { height: Math.max(4, (d.total / Math.max(...weeklyTotals.map(x => x.total), 1)) * 60) }
+                      ]} />
                       <Text style={styles.sparkLabel}>{d.date.slice(5)}</Text>
                     </View>
                   ))
@@ -101,20 +94,16 @@ export function HomeScreen({ onNavigate }: Props) {
           </View>
         )}
 
-        {/* Next Appointment */}
         <Text style={styles.sectionTitle}>Next Appointment</Text>
         {nextAppt ? (
           <View style={styles.apptCard}>
             <Text style={styles.apptTime}>{nextAppt.start_time}</Text>
-            <Text style={styles.apptClient}>
-              {nextAppt.walk_in ? 'Walk-in' : nextAppt.client_id ? 'Client' : 'Unknown'}
-            </Text>
+            <Text style={styles.apptClient}>{nextAppt.walk_in ? 'Walk-in' : 'Client'}</Text>
           </View>
         ) : (
           <Text style={styles.empty}>No upcoming appointments today</Text>
         )}
 
-        {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsGrid}>
           <TouchableOpacity style={styles.actionBtn} onPress={() => onNavigate('appointments')}>
@@ -146,7 +135,7 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: colors.surface, borderRadius: radius.md,
     padding: spacing.md, borderWidth: 1, borderColor: colors.border,
   },
-  statValue: { color: colors.primary, fontSize: 28, fontWeight: '800' },
+  statValue: { color: colors.primary, fontSize: 24, fontWeight: '800' },
   statLabel: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '700', marginTop: spacing.sm },
   apptCard: {
@@ -161,8 +150,7 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1, backgroundColor: colors.surface, borderRadius: radius.md,
     padding: spacing.md, alignItems: 'center', borderWidth: 1,
-    borderColor: colors.border, minHeight: minTapTarget + 20,
-    justifyContent: 'center', gap: 6,
+    borderColor: colors.border, minHeight: minTapTarget + 20, justifyContent: 'center', gap: 6,
   },
   actionIcon: { fontSize: 24 },
   actionLabel: { color: colors.textMuted, fontSize: 12, textAlign: 'center' },
@@ -170,8 +158,7 @@ const styles = StyleSheet.create({
   sparklineRow: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 4,
     backgroundColor: colors.surface, borderRadius: radius.md,
-    padding: spacing.md, borderWidth: 1, borderColor: colors.border,
-    height: 100,
+    padding: spacing.md, borderWidth: 1, borderColor: colors.border, height: 100,
   },
   sparkBar: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   sparkFill: { width: '80%', backgroundColor: colors.primary, borderRadius: 2 },
