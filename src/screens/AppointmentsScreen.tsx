@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  Modal, TextInput, Alert, RefreshControl
+  Modal, TextInput, Alert, RefreshControl, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { useStore } from '../store/useStore';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -11,6 +11,7 @@ import {
   getAppointmentsForDate, createAppointment,
   updateAppointmentStatus, getServices
 } from '../database/db';
+import { formatPrice } from '../lib/currency';
 import type { Appointment, Service, Status } from '../types';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
@@ -25,6 +26,7 @@ const STATUS_COLORS: Record<Status, string> = {
 export function AppointmentsScreen() {
   const barber = useStore((s) => s.barber);
   const isAdvanced = useStore((s) => s.isAdvanced('appointments'));
+  const currency = useStore((s) => s.currency);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayStr());
@@ -141,7 +143,7 @@ export function AppointmentsScreen() {
                   {appt.walk_in ? 'Walk-in' : 'Client'}
                   {isAdvanced && appt.walk_in && <Text style={styles.walkInBadge}> Walk-in</Text>}
                 </Text>
-                {svc && <Text style={styles.slotService}>{svc.name} · ${svc.price}</Text>}
+                {svc && <Text style={styles.slotService}>{svc.name} · {formatPrice(svc.price, currency)}</Text>}
                 {appt.notes ? <Text style={styles.slotNotes}>{appt.notes}</Text> : null}
               </View>
               <View style={styles.slotRight}>
@@ -158,58 +160,60 @@ export function AppointmentsScreen() {
       {/* Add Appointment Modal */}
       <Modal visible={showAddModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>New Appointment</Text>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={styles.modalSheet}>
+              <Text style={styles.modalTitle}>New Appointment</Text>
 
-            <Text style={styles.fieldLabel}>Service</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
-              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                {services.map(svc => (
-                  <TouchableOpacity
-                    key={svc.id}
-                    style={[styles.chip, selectedService?.id === svc.id && styles.chipActive]}
-                    onPress={() => setSelectedService(svc)}
-                  >
-                    <Text style={[styles.chipText, selectedService?.id === svc.id && styles.chipTextActive]}>
-                      {svc.name} ${svc.price}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <Text style={styles.fieldLabel}>Service</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
+                <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                  {services.map(svc => (
+                    <TouchableOpacity
+                      key={svc.id}
+                      style={[styles.chip, selectedService?.id === svc.id && styles.chipActive]}
+                      onPress={() => setSelectedService(svc)}
+                    >
+                      <Text style={[styles.chipText, selectedService?.id === svc.id && styles.chipTextActive]}>
+                        {svc.name} — {formatPrice(svc.price, currency)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+
+              <Text style={styles.fieldLabel}>Start Time (HH:MM)</Text>
+              <TextInput
+                style={styles.input}
+                value={startTime}
+                onChangeText={setStartTime}
+                placeholder="10:00"
+                placeholderTextColor={colors.textDim}
+              />
+
+              <Text style={styles.fieldLabel}>Notes (optional)</Text>
+              <TextInput
+                style={[styles.input, { height: 72 }]}
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+                placeholder="Any notes..."
+                placeholderTextColor={colors.textDim}
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.walkInBtn} onPress={() => addAppointment(true)}>
+                  <Text style={styles.walkInBtnText}>Walk-in (No client)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.addBtn} onPress={() => addAppointment(false)}>
+                  <Text style={styles.addBtnText}>Add Appointment</Text>
+                </TouchableOpacity>
               </View>
-            </ScrollView>
 
-            <Text style={styles.fieldLabel}>Start Time (HH:MM)</Text>
-            <TextInput
-              style={styles.input}
-              value={startTime}
-              onChangeText={setStartTime}
-              placeholder="10:00"
-              placeholderTextColor={colors.textDim}
-            />
-
-            <Text style={styles.fieldLabel}>Notes (optional)</Text>
-            <TextInput
-              style={[styles.input, { height: 72 }]}
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              placeholder="Any notes..."
-              placeholderTextColor={colors.textDim}
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.walkInBtn} onPress={() => addAppointment(true)}>
-                <Text style={styles.walkInBtnText}>Walk-in (No client)</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.addBtn} onPress={() => addAppointment(false)}>
-                <Text style={styles.addBtnText}>Add Appointment</Text>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAddModal(false)}>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAddModal(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 

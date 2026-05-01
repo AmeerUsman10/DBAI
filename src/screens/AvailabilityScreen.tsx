@@ -17,6 +17,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export function AvailabilityScreen() {
   const barber = useStore((s) => s.barber);
   const isAdvanced = useStore((s) => s.isAdvanced('availability'));
+  const storeCurrency = useStore((s) => s.currency);
   const [availability, setAvailability] = useState<Availability[]>([]);
   const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
   const [settings, setSettings] = useState<BookingSettings | null>(null);
@@ -91,6 +92,7 @@ export function AvailabilityScreen() {
       deposit_amount: parseFloat(depositAmount) || 0,
       cancellation_policy_text: cancelPolicy.trim() || undefined,
       reminder_enabled: reminderEnabled,
+      currency: settings?.currency ?? storeCurrency,
     });
     Alert.alert('Saved', 'Settings updated.');
   }

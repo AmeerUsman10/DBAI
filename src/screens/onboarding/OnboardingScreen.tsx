@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, radius, minTapTarget } from '../../theme/colors';
-import { saveBarber, saveAvailability, createService } from '../../database/db';
+import { saveBarber, saveAvailability, createService, saveBookingSettings } from '../../database/db';
 import { signInAnonymously } from '../../database/sync';
 import { useStore } from '../../store/useStore';
 import { CURRENCIES } from '../../lib/currency';
@@ -100,6 +100,15 @@ export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
         created.push(s);
       }
       setServices(created);
+
+      await saveBookingSettings({
+        barber_id: barber.id,
+        buffer_minutes: 0,
+        require_deposit: false,
+        deposit_amount: 0,
+        reminder_enabled: false,
+        currency,
+      });
 
       // Attempt anonymous auth in background — non-blocking
       signInAnonymously().catch(() => {});
