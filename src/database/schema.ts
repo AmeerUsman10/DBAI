@@ -59,7 +59,8 @@ export async function initDb(): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS visits (
       id TEXT PRIMARY KEY,
-      client_id TEXT NOT NULL,
+      barber_id TEXT NOT NULL,
+      client_id TEXT,
       appointment_id TEXT,
       date TEXT NOT NULL,
       service_id TEXT NOT NULL,
@@ -94,7 +95,8 @@ export async function initDb(): Promise<void> {
       day_of_week INTEGER NOT NULL,
       start_time TEXT NOT NULL,
       end_time TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1
+      is_active INTEGER NOT NULL DEFAULT 1,
+      UNIQUE(barber_id, day_of_week)
     );
 
     CREATE TABLE IF NOT EXISTS blocked_dates (
@@ -111,7 +113,8 @@ export async function initDb(): Promise<void> {
       require_deposit INTEGER NOT NULL DEFAULT 0,
       deposit_amount REAL NOT NULL DEFAULT 0,
       cancellation_policy_text TEXT,
-      reminder_enabled INTEGER NOT NULL DEFAULT 0
+      reminder_enabled INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'PKR'
     );
 
     CREATE TABLE IF NOT EXISTS capture_sessions (

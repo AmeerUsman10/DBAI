@@ -31,8 +31,10 @@ export default function App() {
     boot();
   }, []);
 
-  // Sync on app foreground
+  // Sync only after DB is ready — gated on phase
   useEffect(() => {
+    if (phase === 'loading') return;
+
     async function trySync() {
       const pending = await getPendingCount();
       if (pending === 0) {
@@ -51,7 +53,7 @@ export default function App() {
       if (state === 'active') trySync();
     });
     return () => sub.remove();
-  }, []);
+  }, [phase]);
 
   if (phase === 'loading') {
     return (

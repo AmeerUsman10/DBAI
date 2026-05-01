@@ -2,6 +2,7 @@ export type Status = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
 export type PaymentMethod = 'cash' | 'card' | 'wallet';
 export type StyleTag = 'fade' | 'taper' | 'curl' | 'beard' | 'color' | 'other';
 export type Visibility = 'public' | 'private';
+export type Currency = 'PKR' | 'INR' | 'USD' | 'EUR' | 'GBP' | 'AED' | 'SAR';
 
 export interface Barber {
   id: string;
@@ -46,7 +47,8 @@ export interface Appointment {
 
 export interface Visit {
   id: string;
-  client_id: string;
+  barber_id: string;
+  client_id?: string;
   appointment_id?: string;
   date: string;
   service_id: string;
@@ -99,6 +101,7 @@ export interface BookingSettings {
   deposit_amount: number;
   cancellation_policy_text?: string;
   reminder_enabled: boolean;
+  currency: Currency;
 }
 
 export interface CaptureSession {
